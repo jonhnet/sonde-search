@@ -34,7 +34,7 @@ FROM_ADDR = 'Seattle Sonde Notifier <jelson@lectrobox.com>'
 
 TO_ADDRS = [
     'jelson@gmail.com',
-    #'jonh.sondenotify@jonh.net',
+    'jonh.sondenotify@jonh.net',
     
 ]
 SONDEHUB_URL = 'https://sondehub.org/#!mt=Mapnik&mz=9&qm=12h&f={serial}&q={serial}'

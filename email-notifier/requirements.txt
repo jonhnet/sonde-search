@@ -1,0 +1,6 @@
+geographiclib
+pyproj
+boto3
+contextily
+pandas
+sondehub

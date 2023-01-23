@@ -46,9 +46,14 @@ def to_mercator_xy(lat, lon):
     
 def get_latest_sonde():
     now = datetime.datetime.utcnow()
+
+    # get data from all sondes that had a flight today. Sondehub returns 3
+    # points per sonde: first reception, highest reception, and last reception.
     df = pd.DataFrame(sondehub.download(
         datetime_prefix=f"{now.year:4}/{now.month:02}/{now.day:02}")
     )
+
+    # find only sondes in the home area
     local = df.loc[
         (df.lat >= LAT_MIN) &
         (df.lat <= LAT_MAX) &
@@ -58,16 +63,20 @@ def get_latest_sonde():
 
     if DEBUG:
         print(local)
-        
+
+
+    # Reduce 3-points-per-sonde to 1-point-per-sonde: the landing is the one
+    # that's at a low altitude and where the velocity is negative.
     landings = local.loc[
         (local.vel_v < 0) &
         (local.alt < 10000)
-    ].sort_values(by='datetime')
+    ]
 
     if DEBUG:
         print(landings)
 
-    return landings.iloc[-1]
+    # Sort by date and return just the latest landing
+    return landings.sort_values(by='datetime').iloc[-1]
 
 MAP_WHITESPACE = 0.5
 
@@ -117,8 +126,13 @@ def main():
     landing_time = pd.to_datetime(landing['datetime']).tz_convert('US/Pacific')
     dist = round(path['s12'] / METERS_PER_MILE)
     bearing = (round(path['azi1']) + 360) % 360
-    #subj = f"Sonde landed at {landing_time.hour}:{landing_time.minute:02}, {dist}mi from home, bearing {bearing}°"
-    subj = f"Sonde landed {dist}mi from home, bearing {bearing}°"
+
+    # subject line
+    subj = f"{landing_time.month_name()} {landing_time.day} "
+    subj += "morning" if landing_time.hour < 12 else "afternoon"
+    subj += f" sonde landed {dist}mi from home, bearing {bearing}°"
+
+    # body
     body = f'Sonde <a href="{SONDEHUB_URL.format(serial=landing.serial)}">{landing.serial}</a> '
     body += f'was last heard from at {landing_time.strftime("%Y-%m-%d %H:%M:%S")} Pacific time. '
     body += f'It landed near <a href="{GMAP_URL.format(lat=landing.lat, lon=landing.lon)}">{landing.lat}, {landing.lon}</a>, '
@@ -131,6 +145,7 @@ def main():
     image_cid = make_msgid(domain='lectrobox.com')
     body += f'<p><img width="100%" src="cid:{image_cid}">'
 
+    # build mime message including map attachment
     msg = MIMEMultipart('mixed')
     msg['Subject'] = subj
     msg['From'] = FROM_ADDR
@@ -157,27 +172,6 @@ def main():
             'Data': msg.as_string(),
         },
     )
-
-"""
-    client.send_email(
-        Source=FROM_ADDR,
-        Destination={
-            'ToAddresses': TO_ADDRS,
-        },
-        Message={
-            'Subject': {
-                'Charset': 'UTF-8',
-                'Data': subj,
-            },
-            'Body': {
-                'Html': {
-                    'Charset': 'UTF-8',
-                    'Data': body,
-                },
-            },
-        },
-    )
-"""
 
 if __name__ == "__main__":
     main()

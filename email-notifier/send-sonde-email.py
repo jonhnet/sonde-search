@@ -6,6 +6,7 @@ from email.mime.text import MIMEText
 from email.utils import make_msgid
 from geographiclib.geodesic import Geodesic
 from pyproj import Transformer
+import argparse
 import base64
 import boto3
 import contextily as cx
@@ -15,6 +16,7 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 import sondehub
+import sys
 
 cx.set_cache_dir(os.path.expanduser("~/.cache/geotiles"))
 
@@ -27,7 +29,6 @@ HOME_LAT = 47.6485
 HOME_LON = -122.3502
 
 METERS_PER_MILE = 1609.34
-DEBUG = False
 
 AWS_PROFILE = 'cambot-emailer'
 FROM_ADDR = 'Seattle Sonde Notifier <jelson@lectrobox.com>'
@@ -61,7 +62,7 @@ def get_latest_sonde():
         (df.lon <= LON_MAX)
     ]
 
-    if DEBUG:
+    if args.debug:
         print(local)
 
 
@@ -72,7 +73,7 @@ def get_latest_sonde():
         (local.alt < 10000)
     ]
 
-    if DEBUG:
+    if args.debug:
         print(landings)
 
     # Sort by date and return just the latest landing
@@ -90,12 +91,11 @@ def get_limit(points):
     return min_x, min_y, max_x, max_y
 
 
-def get_image(landing):
+def get_image(args, landing):
     home_x, home_y = to_mercator_xy(HOME_LAT, HOME_LON)
     sonde_x, sonde_y = to_mercator_xy(landing['lat'], landing['lon'])
 
-    fig, ax = plt.subplots(figsize=(9, 9))
-    fig.set_dpi(40)
+    fig, ax = plt.subplots(figsize=(12, 12))
     ax.axis('off')
     ax.plot([home_x, sonde_x], [home_y, sonde_y], marker='*')
     min_x, min_y, max_x, max_y = get_limit([
@@ -112,15 +112,15 @@ def get_image(landing):
     )
     fig.tight_layout()
 
-    if DEBUG:
+    if args.debug:
         fig.savefig("test.jpg", bbox_inches='tight')
     return fig
 
 
-def main():
+def main(args):
     landing = get_latest_sonde()
     path = Geodesic.WGS84.Inverse(HOME_LAT, HOME_LON, landing.lat, landing.lon)
-    if DEBUG:
+    if args.debug:
         print(path)
 
     landing_time = pd.to_datetime(landing['datetime']).tz_convert('US/Pacific')
@@ -138,7 +138,7 @@ def main():
     body += f'It landed near <a href="{GMAP_URL.format(lat=landing.lat, lon=landing.lon)}">{landing.lat}, {landing.lon}</a>, '
     body += f'which is about {dist} miles from home at a bearing of {bearing}°.'
 
-    if DEBUG:
+    if args.debug:
         print(subj)
         print(body)
 
@@ -155,7 +155,7 @@ def main():
     msg.attach(alternatives)
 
     img = io.BytesIO()
-    fig = get_image(landing)
+    fig = get_image(args, landing)
     fig.savefig(img, format='jpg', bbox_inches='tight')
     img.seek(0)
     img_att = MIMEImage(img.read(), name='map.jpg')
@@ -165,14 +165,24 @@ def main():
     session = boto3.Session(profile_name=AWS_PROFILE)
     client = session.client('ses', region_name = 'us-west-2')
 
-    client.send_raw_email(
-        Source=FROM_ADDR,
-        Destinations=TO_ADDRS,
-        RawMessage={
-            'Data': msg.as_string(),
-        },
+    if not args.debug:
+        client.send_raw_email(
+            Source=FROM_ADDR,
+            Destinations=TO_ADDRS,
+            RawMessage={
+                'Data': msg.as_string(),
+            },
+        )
+
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '-d', '--debug',
+        default=False,
+        action='store_true',
     )
+    return parser.parse_args(sys.argv[1:])
 
 if __name__ == "__main__":
-    main()
-    
+    args = get_args()
+    main(args)

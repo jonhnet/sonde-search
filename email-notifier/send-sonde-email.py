@@ -54,6 +54,10 @@ def get_latest_sonde():
         datetime_prefix=f"{now.year:4}/{now.month:02}/{now.day:02}")
     )
 
+    # Sometimes lat/lon comes as a string instead of float
+    df.lat = df.lat.astype(float)
+    df.lon = df.lon.astype(float)
+
     # find only sondes in the home area
     local = df.loc[
         (df.lat >= LAT_MIN) &

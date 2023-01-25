@@ -12,9 +12,11 @@ import boto3
 import contextily as cx
 import datetime
 import io
+import json
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
+import requests
 import sondehub
 import sys
 
@@ -36,23 +38,39 @@ FROM_ADDR = 'Seattle Sonde Notifier <jelson@lectrobox.com>'
 TO_ADDRS = [
     'jelson@gmail.com',
     'jonh.sondenotify@jonh.net',
-    
 ]
-SONDEHUB_URL = 'https://sondehub.org/#!mt=Mapnik&mz=9&qm=12h&f={serial}&q={serial}'
+
+SONDEHUB_DATA_URL = 'https://api.v2.sondehub.org/sondes/telemetry?duration=6h'
+SONDEHUB_MAP_URL = 'https://sondehub.org/#!mt=Mapnik&mz=9&qm=12h&f={serial}&q={serial}'
 GMAP_URL = 'https://www.google.com/maps/search/?api=1&query={lat},{lon}'
 
 wgs84_to_mercator = Transformer.from_crs(crs_from='EPSG:4326', crs_to='EPSG:3857')
 def to_mercator_xy(lat, lon):
     return wgs84_to_mercator.transform(lat, lon)
-    
-def get_latest_sonde():
+
+# This is the old-style version that uses the sondehub python API, which goes to
+# sondehub's public S3 bucket for data. However, it's a few hours behind, and
+# we'd like data closer to live.
+def get_sonde_telemetry_s3():
     now = datetime.datetime.utcnow()
 
     # get data from all sondes that had a flight today. Sondehub returns 3
     # points per sonde: first reception, highest reception, and last reception.
-    df = pd.DataFrame(sondehub.download(
+    return pd.DataFrame(sondehub.download(
         datetime_prefix=f"{now.year:4}/{now.month:02}/{now.day:02}")
     )
+
+def get_sonde_telemetry_api():
+    def unpack_list():
+        api_retval = requests.get(SONDEHUB_DATA_URL).json()
+        for sonde, timeblock in api_retval.items():
+            for time, record in timeblock.items():
+                yield record
+    return pd.DataFrame(unpack_list())
+
+def get_latest_sonde():
+    #df = get_sonde_telemetry_s3()
+    df = get_sonde_telemetry_api()
 
     # Sometimes lat/lon comes as a string instead of float
     df.lat = df.lat.astype(float)
@@ -69,9 +87,7 @@ def get_latest_sonde():
     if args.debug:
         print(local)
 
-
-    # Reduce 3-points-per-sonde to 1-point-per-sonde: the landing is the one
-    # that's at a low altitude and where the velocity is negative.
+    # Find only descents:
     landings = local.loc[
         (local.vel_v < 0) &
         (local.alt < 10000)
@@ -82,6 +98,7 @@ def get_latest_sonde():
 
     # Sort by date and return just the latest landing
     return landings.sort_values(by='datetime').iloc[-1]
+
 
 MAP_WHITESPACE = 0.5
 
@@ -137,7 +154,7 @@ def main(args):
     subj += f" sonde landed {dist}mi from home, bearing {bearing}°"
 
     # body
-    body = f'Sonde <a href="{SONDEHUB_URL.format(serial=landing.serial)}">{landing.serial}</a> '
+    body = f'Sonde <a href="{SONDEHUB_MAP_URL.format(serial=landing.serial)}">{landing.serial}</a> '
     body += f'was last heard from at {landing_time.strftime("%Y-%m-%d %H:%M:%S")} Pacific time. '
     body += f'It landed near <a href="{GMAP_URL.format(lat=landing.lat, lon=landing.lon)}">{landing.lat}, {landing.lon}</a>, '
     body += f'which is about {dist} miles from home at a bearing of {bearing}°.'

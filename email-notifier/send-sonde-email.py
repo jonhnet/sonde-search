@@ -11,7 +11,7 @@ CONFIGS = [
             'jelson@gmail.com',
             'jonh.sondenotify@jonh.net',
         ],
-        'max_distance_miles': 200,
+        'max_distance_mi': 200,
     },
 
     # Oakland
@@ -24,7 +24,7 @@ CONFIGS = [
             'jonh.sondenotify@jonh.net',
             'david.jacobowitz+sonde@gmail.com',
         ],
-        'max_distance_miles': 25,
+        'max_distance_mi': 25,
     },
 ]
 
@@ -186,6 +186,9 @@ def get_image(args, config, landing):
 def process(args, sondes, config):
     flight = get_nearest_sonde_flight(sondes, config)
     landing = flight.loc[flight.phase == 'landing'].iloc[0]
+
+    if landing.dist_from_home_mi > config['max_distance_mi']:
+        return
 
     # attempt a geocode
     geo = geocoder.osm(f"{landing.lat}, {landing.lon}")

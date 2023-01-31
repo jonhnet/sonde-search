@@ -38,6 +38,7 @@ import argparse
 import base64
 import boto3
 import contextily as cx
+import dateparser
 import datetime
 import geocoder
 import io
@@ -60,13 +61,11 @@ GMAP_URL = 'https://www.google.com/maps/search/?api=1&query={lat},{lon}'
 # This is the old-style version that uses the sondehub python API, which goes to
 # sondehub's public S3 bucket for data. However, it's a few hours behind, and
 # we'd like data closer to live.
-def get_sonde_telemetry_s3():
-    now = datetime.datetime.utcnow()
-
+def get_sonde_telemetry_s3(date):
     # get data from all sondes that had a flight today. Sondehub returns 3
     # points per sonde: first reception, highest reception, and last reception.
     return pd.DataFrame(sondehub.download(
-        datetime_prefix=f"{now.year:4}/{now.month:02}/{now.day:02}")
+        datetime_prefix=f"{date.year:4}/{date.month:02}/{date.day:02}")
     )
 
 def get_sonde_telemetry_api():
@@ -77,12 +76,16 @@ def get_sonde_telemetry_api():
                 yield record
     return pd.DataFrame(unpack_list())
 
-def get_all_sondes():
-    #sondes = get_sonde_telemetry_s3()
-    sondes = get_sonde_telemetry_api()
+def get_all_sondes(args):
+    if args.date:
+        sondes = get_sonde_telemetry_s3(args.date)
+    else:
+        sondes = get_sonde_telemetry_api()
 
     # Sometimes lat/lon comes as a string instead of float
     sondes = sondes.astype({
+        'alt': float,
+        'vel_v': float,
         'lat': float,
         'lon': float,
     })
@@ -259,12 +262,21 @@ def get_args():
         default=False,
         action='store_true',
     )
-    return parser.parse_args(sys.argv[1:])
+    parser.add_argument(
+        '--date',
+        action='store',
+    )
+    args = parser.parse_args(sys.argv[1:])
+
+    if args.date:
+        args.date = dateparser.parse(args.date)
+
+    return args
 
 def main():
     args = get_args()
 
-    sondes = get_all_sondes()
+    sondes = get_all_sondes(args)
 
     for config in CONFIGS:
         process(args, sondes, config)

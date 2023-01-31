@@ -217,7 +217,7 @@ def process(args, sondes, config):
     if place:
         body += f' It landed in {place}.'
     if geo and geo.address:
-        body += f' The nearest known address is {geo.address}'
+        body += f' The nearest known address is {geo.address}.'
 
     if not args.really_send:
         print(subj)

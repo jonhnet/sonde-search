@@ -24,7 +24,7 @@ CONFIGS = [
             'jonh.sondenotify@jonh.net',
             'david.jacobowitz+sonde@gmail.com',
         ],
-        'max_distance_miles': 75,
+        'max_distance_miles': 25,
     },
 ]
 

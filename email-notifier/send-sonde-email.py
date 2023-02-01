@@ -54,7 +54,7 @@ cx.set_cache_dir(os.path.expanduser("~/.cache/geotiles"))
 
 AWS_PROFILE = 'cambot-emailer'
 METERS_PER_MILE = 1609.34
-SONDEHUB_DATA_URL = 'https://api.v2.sondehub.org/sondes/telemetry?duration=12h'
+SONDEHUB_DATA_URL = 'https://api.v2.sondehub.org/sondes/telemetry?duration=3h'
 SONDEHUB_MAP_URL = 'https://sondehub.org/#!mt=Mapnik&mz=9&qm=12h&f={serial}&q={serial}'
 GMAP_URL = 'https://www.google.com/maps/search/?api=1&query={lat},{lon}'
 
@@ -170,7 +170,7 @@ def get_image(args, config, landing):
 
     cx.add_basemap(
         ax,
-        zoom=9,
+        zoom=10,
         source=cx.providers.OpenStreetMap.Mapnik,
     )
     fig.tight_layout()

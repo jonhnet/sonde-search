@@ -142,15 +142,21 @@ wgs84_to_mercator = Transformer.from_crs(crs_from='EPSG:4326', crs_to='EPSG:3857
 def to_mercator_xy(lat, lon):
     return wgs84_to_mercator.transform(lat, lon)
 
-MAP_WHITESPACE = 0.5
+MAP_WHITESPACE = 0.2
 
 def get_limit(points):
-    min_lat = min([point[0]-MAP_WHITESPACE for point in points])
-    max_lat = max([point[0]+MAP_WHITESPACE for point in points])
-    min_lon = min([point[1]-MAP_WHITESPACE for point in points])
-    max_lon = max([point[1]+MAP_WHITESPACE for point in points])
+    min_lat = min([point[0] for point in points])
+    max_lat = max([point[0] for point in points])
+    min_lon = min([point[1] for point in points])
+    max_lon = max([point[1] for point in points])
     min_x, min_y = to_mercator_xy(min_lat, min_lon)
     max_x, max_y = to_mercator_xy(max_lat, max_lon)
+    x_pad = (max_x - min_x) * MAP_WHITESPACE
+    y_pad = (max_y - min_y) * MAP_WHITESPACE
+    min_x -= x_pad
+    max_x += x_pad
+    min_y -= y_pad
+    max_y += y_pad
     return min_x, min_y, max_x, max_y
 
 
@@ -170,7 +176,7 @@ def get_image(args, config, landing):
 
     cx.add_basemap(
         ax,
-        zoom=10,
+        #zoom=10,
         source=cx.providers.OpenStreetMap.Mapnik,
     )
     fig.tight_layout()

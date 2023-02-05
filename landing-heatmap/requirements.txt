@@ -1,4 +1,0 @@
-pandas
-fastparquet
-pyarrow
-folium

@@ -43,6 +43,7 @@ import datetime
 import geocoder
 import io
 import json
+import matplotlib
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
@@ -50,11 +51,13 @@ import requests
 import sondehub
 import sys
 
+matplotlib.use('Agg')
+
 cx.set_cache_dir(os.path.expanduser("~/.cache/geotiles"))
 
 AWS_PROFILE = 'cambot-emailer'
 METERS_PER_MILE = 1609.34
-SONDEHUB_DATA_URL = 'https://api.v2.sondehub.org/sondes/telemetry?duration=3h'
+SONDEHUB_DATA_URL = 'https://api.v2.sondehub.org/sondes/telemetry?duration=6h'
 SONDEHUB_MAP_URL = 'https://sondehub.org/#!mt=Mapnik&mz=9&qm=12h&f={serial}&q={serial}'
 GMAP_URL = 'https://www.google.com/maps/search/?api=1&query={lat},{lon}'
 
@@ -153,10 +156,11 @@ def get_limit(points):
     max_x, max_y = to_mercator_xy(max_lat, max_lon)
     x_pad = (max_x - min_x) * MAP_WHITESPACE
     y_pad = (max_y - min_y) * MAP_WHITESPACE
-    min_x -= x_pad
-    max_x += x_pad
-    min_y -= y_pad
-    max_y += y_pad
+    max_pad = max(x_pad, y_pad)
+    min_x -= max_pad
+    max_x += max_pad
+    min_y -= max_pad
+    max_y += max_pad
     return min_x, min_y, max_x, max_y
 
 

@@ -37,7 +37,7 @@ def main():
     gdf = gdf.set_crs(epsg=4326)
     gdf = gdf.to_crs(epsg=3857)
 
-    fig, axs = plt.subplots(4, 3, figsize=(40, 30))
+    fig, axs = plt.subplots(4, 3, figsize=(30, 40))
 
     for month in range(12):
         ax = axs[month//3][month%3]

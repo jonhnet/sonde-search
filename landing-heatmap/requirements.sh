@@ -1,1 +1,9 @@
-pip3 install pandas fastparquet pyarrow folium
+pip3 install \
+     contextily \
+     fastparquet \
+     folium \
+     geopandas \
+     pandas \
+     pyarrow \
+
+     

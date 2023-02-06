@@ -1,2 +1,3 @@
-sonde-summaries-2022.parquet
-west-coast-sondes-2022.html
+*.parquet
+*.html
+*.png

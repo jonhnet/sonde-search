@@ -11,7 +11,7 @@ CONFIGS = [
             'jelson@gmail.com',
             'jonh.sondenotify@jonh.net',
         ],
-        'max_distance_mi': 200,
+        'max_distance_mi': 300,
     },
 
     # Oakland
@@ -57,6 +57,7 @@ cx.set_cache_dir(os.path.expanduser("~/.cache/geotiles"))
 
 AWS_PROFILE = 'cambot-emailer'
 METERS_PER_MILE = 1609.34
+METERS_PER_FOOT = 0.3048
 SONDEHUB_DATA_URL = 'https://api.v2.sondehub.org/sondes/telemetry?duration=6h'
 SONDEHUB_MAP_URL = 'https://sondehub.org/#!mt=Mapnik&mz=9&qm=12h&f={serial}&q={serial}'
 GMAP_URL = 'https://www.google.com/maps/search/?api=1&query={lat},{lon}'
@@ -97,11 +98,11 @@ def get_all_sondes(args):
 
     # Mark takeoffs and landings -- the earliest ascent record and latest
     # descent record for each serial number
-    ascents = sondes.loc[(sondes.vel_v > 0) & (sondes.alt < 15000)]
+    ascents = sondes.loc[sondes.vel_v > 0]
     takeoffs = ascents.groupby('serial')['datetime'].idxmin()
     sondes.loc[takeoffs, 'phase'] = 'takeoff'
 
-    descents = sondes.loc[(sondes.vel_v < 0) & (sondes.alt < 15000)]
+    descents = sondes.loc[sondes.vel_v < 0]
     landings = descents.groupby('serial')['datetime'].idxmax()
     sondes.loc[landings, 'phase'] = 'landing'
 
@@ -200,6 +201,8 @@ def process(args, sondes, config):
     if landing.dist_from_home_mi > config['max_distance_mi']:
         return
 
+    last_alt_ft = round(landing['alt'] / METERS_PER_FOOT)
+
     # attempt a geocode
     geo = geocoder.osm(f"{landing.lat}, {landing.lon}")
 
@@ -211,7 +214,7 @@ def process(args, sondes, config):
             place += geo.city + ", "
         place += geo.county
 
-    # can be part of config eventually
+    # timezone can be part of config eventually
     landing_localtime = landing.datetime.tz_convert('US/Pacific')
 
     # subject line
@@ -224,13 +227,17 @@ def process(args, sondes, config):
 
     # body
     body = f'Sonde <a href="{SONDEHUB_MAP_URL.format(serial=landing.serial)}">{landing.serial}</a> '
-    body += f'was last heard at {landing_localtime.strftime("%Y-%m-%d %H:%M:%S")} Pacific time. '
-    body += f'It landed near <a href="{GMAP_URL.format(lat=landing.lat, lon=landing.lon)}">{landing.lat}, {landing.lon}</a>, '
+    body += f'was last heard at {landing_localtime.strftime("%Y-%m-%d %H:%M:%S")} Pacific time '
+    body += f"as it descended through {last_alt_ft:,}'. "
+    body += f'It was last heard at <a href="{GMAP_URL.format(lat=landing.lat, lon=landing.lon)}">{landing.lat}, {landing.lon}</a>, '
     body += f'which is about {landing.dist_from_home_mi} miles from home at a bearing of {landing.bearing_from_home}°.'
     if place:
-        body += f' It landed in {place}.'
+        body += f' It was last heard in {place}.'
     if geo and geo.address:
         body += f' The nearest known address is {geo.address}.'
+
+    if last_alt_ft > 15000:
+        body += ' NOTE: Because its last-heard altitude was so high, its actual landing location is several miles away.'
 
     if not args.really_send:
         print(subj)

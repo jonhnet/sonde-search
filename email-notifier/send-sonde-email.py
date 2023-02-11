@@ -111,19 +111,19 @@ def get_all_sondes(args):
 
 ### Getting the nearest sonde
 
-def get_path(sonde, config):
-    path = Geodesic.WGS84.Inverse(config['home_lat'], config['home_lon'], sonde.lat, sonde.lon)
-    return {
-        'dist_from_home_mi': round(path['s12'] / METERS_PER_MILE),
-        'bearing_from_home': (round(path['azi1']) + 360) % 360,
-    }
-
 def get_nearest_sonde_flight(sondes, config):
-    # Annotate all sondes with distance from home
-    sondes = pd.concat([
-        sondes,
-        pd.DataFrame.from_records(sondes.apply(get_path, config=config, axis=1))
-    ], axis=1)
+    def get_path(sonde):
+        path = Geodesic.WGS84.Inverse(config['home_lat'], config['home_lon'], sonde.lat, sonde.lon)
+        return (
+            round(path['s12'] / METERS_PER_MILE),
+            (round(path['azi1']) + 360) % 360
+        )
+
+    # Annotate all landing records with distance from home
+    sondes[['dist_from_home_mi', 'bearing_from_home']] = sondes.apply(
+        lambda s: get_path(s) if s.phase == 'landing' else (None, None),
+        axis=1,
+        result_type='expand')
 
     #f = sondes.sort_values('dist_from_home_mi')
     #print(f[f.phase == 'landing'].to_string())
@@ -165,13 +165,20 @@ def get_limit(points):
     return min_x, min_y, max_x, max_y
 
 
-def get_image(args, config, landing):
-    home_x, home_y = to_mercator_xy(config['home_lat'], config['home_lon'])
-    sonde_x, sonde_y = to_mercator_xy(landing['lat'], landing['lon'])
-
+def get_image(args, config, flight, landing):
     fig, ax = plt.subplots(figsize=(12, 12))
     ax.axis('off')
-    ax.plot([home_x, sonde_x], [home_y, sonde_y], marker='*')
+
+    # Plot the balloon's path
+    (flight_x, flight_y) = to_mercator_xy(flight.lat, flight.lon)
+    ax.plot(flight_x, flight_y, color='red')
+
+    # Plot a line from home to the landing point
+    home_x, home_y = to_mercator_xy(config['home_lat'], config['home_lon'])
+    sonde_x, sonde_y = to_mercator_xy(landing['lat'], landing['lon'])
+    ax.plot([home_x, sonde_x], [home_y, sonde_y], color='blue', marker='*')
+
+    # Find the limits of the map
     min_x, min_y, max_x, max_y = get_limit([
         [config['home_lat'], config['home_lon']],
         [landing['lat'], landing['lon']],
@@ -256,7 +263,7 @@ def process(args, sondes, config):
     msg.attach(alternatives)
 
     img = io.BytesIO()
-    fig = get_image(args, config, landing)
+    fig = get_image(args, config, flight, landing)
     fig.savefig(img, format='jpg', bbox_inches='tight')
     img.seek(0)
     img_att = MIMEImage(img.read(), name='map.jpg')

@@ -115,8 +115,8 @@ def get_nearest_sonde_flight(sondes, config):
     def get_path(sonde):
         path = Geodesic.WGS84.Inverse(config['home_lat'], config['home_lon'], sonde.lat, sonde.lon)
         return (
-            round(path['s12'] / METERS_PER_MILE),
-            (round(path['azi1']) + 360) % 360
+            path['s12'] / METERS_PER_MILE,
+            (path['azi1'] + 360) % 360
         )
 
     # Annotate all landing records with distance from home
@@ -227,8 +227,8 @@ def process(args, sondes, config):
     # subject line
     subj = f"{landing_localtime.month_name()} {landing_localtime.day} "
     subj += "morning" if landing_localtime.hour < 12 else "afternoon"
-    subj += f" sonde landed {landing.dist_from_home_mi}mi from home,"
-    subj += f" bearing {landing.bearing_from_home}°"
+    subj += f" sonde landed {round(landing.dist_from_home_mi)}mi from home,"
+    subj += f" bearing {round(landing.bearing_from_home)}°"
     if place:
         subj += f" ({place})"
 
@@ -237,18 +237,19 @@ def process(args, sondes, config):
     body += f'was last heard at {landing_localtime.strftime("%Y-%m-%d %H:%M:%S")} Pacific time '
     body += f"as it descended through {last_alt_ft:,}'. "
     body += f'It was last heard at <a href="{GMAP_URL.format(lat=landing.lat, lon=landing.lon)}">{landing.lat}, {landing.lon}</a>, '
-    body += f'which is about {landing.dist_from_home_mi} miles from home at a bearing of {landing.bearing_from_home}°.'
+    body += f'which is about {round(landing.dist_from_home_mi)} miles from home at a bearing of {round(landing.bearing_from_home)}°'
     if place:
-        body += f' It was last heard in {place}.'
+        body += f', in {place}'
+    body += ". "
     if geo and geo.address:
         body += f' The nearest known address is {geo.address}.'
 
     if last_alt_ft > 15000:
-        body += ' NOTE: Because its last-heard altitude was so high, its actual landing location is several miles away.'
+        body += '<p>NOTE: Because its last-heard altitude was so high, its actual landing location is several miles away.'
 
     if not args.really_send:
-        print(subj)
-        print(body)
+        print(f"Subj:\n{subj}\n")
+        print(f"Body:\n{body}\n")
 
     image_cid = make_msgid(domain='lectrobox.com')
     body += f'<p><img width="100%" src="cid:{image_cid}">'

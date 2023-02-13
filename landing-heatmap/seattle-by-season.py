@@ -37,15 +37,23 @@ def main():
     gdf = gdf.set_crs(epsg=4326)
     gdf = gdf.to_crs(epsg=3857)
 
+    # make a 4x3 matrix of matplotlib axes
     fig, axs = plt.subplots(4, 3, figsize=(30, 40))
 
     for month in range(12):
         ax = axs[month//3][month%3]
 
+        # pull out just landings from the month being plotted
         d = gdf.loc[gdf.month == month+1]
+
+        print(f"{calendar.month_name[month+1]}: {len(d)} landings")
+
+        # plot each landing and set options
         d.plot(ax=ax)
         ax.axis('off')
         ax.set_title(calendar.month_name[month+1])
+
+        # add a map on top
         cx.add_basemap(
             ax,
             crs=d.crs,

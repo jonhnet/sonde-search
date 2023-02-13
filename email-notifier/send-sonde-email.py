@@ -96,6 +96,12 @@ def get_all_sondes(args):
 
     sondes['datetime'] = pd.to_datetime(sondes['datetime'])
 
+    # If no particular date has been requested, apply a cutoff time to make sure
+    # we're only examining the latest launches
+    if not args.date:
+        utc_cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=6)
+        sondes = sondes.loc[sondes.datetime >= utc_cutoff]
+
     # Mark takeoffs and landings -- the earliest ascent record and latest
     # descent record for each serial number
     ascents = sondes.loc[sondes.vel_v > 0]

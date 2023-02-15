@@ -14,7 +14,7 @@ CONFIGS = [
         'max_distance_mi': 300,
     },
 
-    # Oakland
+    # Berkeley
     {
         'home_lat': 37.859,
         'home_lon': -122.270,
@@ -50,6 +50,7 @@ import pandas as pd
 import requests
 import sondehub
 import sys
+import time
 
 matplotlib.use('Agg')
 
@@ -59,6 +60,7 @@ AWS_PROFILE = 'cambot-emailer'
 METERS_PER_MILE = 1609.34
 METERS_PER_FOOT = 0.3048
 SONDEHUB_DATA_URL = 'https://api.v2.sondehub.org/sondes/telemetry?duration=6h'
+MAX_SONDEHUB_RETRIES = 6
 SONDEHUB_MAP_URL = 'https://sondehub.org/#!mt=Mapnik&mz=9&qm=12h&f={serial}&q={serial}'
 GMAP_URL = 'https://www.google.com/maps/search/?api=1&query={lat},{lon}'
 
@@ -72,19 +74,41 @@ def get_sonde_telemetry_s3(date):
         datetime_prefix=f"{date.year:4}/{date.month:02}/{date.day:02}")
     )
 
+# Get sonde data from the same live API that the web site uses
 def get_sonde_telemetry_api():
     def unpack_list():
-        api_retval = requests.get(SONDEHUB_DATA_URL).json()
-        for sonde, timeblock in api_retval.items():
+        response = requests.get(SONDEHUB_DATA_URL)
+        response.raise_for_status()
+        for sonde, timeblock in response.json().items():
             for time, record in timeblock.items():
                 yield record
     return pd.DataFrame(unpack_list())
 
-def get_all_sondes(args):
+def get_telemetry(args):
     if args.date:
-        sondes = get_sonde_telemetry_s3(args.date)
+        return get_sonde_telemetry_s3(args.date)
     else:
-        sondes = get_sonde_telemetry_api()
+        return get_sonde_telemetry_api()
+
+def get_telemetry_with_retries(args):
+    retries = 0
+    while retries <= MAX_SONDEHUB_RETRIES:
+        if retries > 0:
+            print("Sondehub data failure; retrying after a short sleep...")
+            time.sleep((2**retries) * 4)
+        retries += 1
+        try:
+            sondes = get_telemetry(args)
+            if len(sondes) == 0:
+                raise Exception("Got empty dataframe from Sondehub")
+            return sondes
+        except Exception as e:
+            print(f"Couldn't get sondehub data: {e}")
+
+    raise Exception(f"Couldn't get sondehub data, even after {MAX_SONDEHUB_RETRIES} retries")
+
+def get_all_sondes(args):
+    sondes = get_telemetry_with_retries(args)
 
     # Sometimes lat/lon comes as a string instead of float
     sondes = sondes.astype({
@@ -212,6 +236,7 @@ def process(args, sondes, config):
     landing = flight.loc[flight.phase == 'landing'].iloc[0]
 
     if landing.dist_from_home_mi > config['max_distance_mi']:
+        print(f"{config['email_from']}: Nearest landing is {landing.dist_from_home_mi:.1f}, more than max")
         return
 
     last_alt_ft = round(landing['alt'] / METERS_PER_FOOT)

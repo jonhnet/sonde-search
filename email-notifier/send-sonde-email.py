@@ -236,7 +236,7 @@ def process(args, sondes, config):
     landing = flight.loc[flight.phase == 'landing'].iloc[0]
 
     if landing.dist_from_home_mi > config['max_distance_mi']:
-        print(f"{config['email_from']}: Nearest landing is {landing.dist_from_home_mi:.1f}, more than max")
+        print(f"{config['email_from']}: Nearest landing is {landing.dist_from_home_mi:.1f}, more than max {config['max_distance_mi']}")
         return
 
     last_alt_ft = round(landing['alt'] / METERS_PER_FOOT)

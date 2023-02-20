@@ -85,7 +85,7 @@ def get_sonde_telemetry_api():
     return pd.DataFrame(unpack_list())
 
 def get_telemetry(args):
-    if args.date:
+    if args and args.date:
         return get_sonde_telemetry_s3(args.date)
     else:
         return get_sonde_telemetry_api()
@@ -107,7 +107,7 @@ def get_telemetry_with_retries(args):
 
     raise Exception(f"Couldn't get sondehub data, even after {MAX_SONDEHUB_RETRIES} retries")
 
-def get_all_sondes(args):
+def get_all_sondes(args=None):
     sondes = get_telemetry_with_retries(args)
 
     # Sometimes lat/lon comes as a string instead of float
@@ -122,7 +122,7 @@ def get_all_sondes(args):
 
     # If no particular date has been requested, apply a cutoff time to make sure
     # we're only examining the latest launches
-    if not args.date:
+    if args is None or args.date is None:
         utc_cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=6)
         sondes = sondes.loc[sondes.datetime >= utc_cutoff]
 

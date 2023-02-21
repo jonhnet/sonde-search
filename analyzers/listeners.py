@@ -16,9 +16,11 @@ import argparse
 import pandas as pd
 import sondehub
 import sys
+import requests
 
 def get_listeners(sondeid):
-    df = pd.DataFrame(sondehub.download(serial=sondeid))
+    #df = pd.DataFrame(sondehub.download(serial=sondeid))
+    df = pd.DataFrame(requests.get(f'https://api.v2.sondehub.org/sonde/{sondeid}').json())
     if len(df) == 0:
         sys.exit(f"Can not find sonde '{sondeid}'")
     df['date'] = pd.to_datetime(df['datetime']).round('s')

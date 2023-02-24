@@ -44,7 +44,7 @@ def get_listeners(sondeid):
     print(agg.to_string())
 
     print("\nNumber of points heard by:")
-    who_per_point = df.groupby('frame')['uploader_callsign'].agg(lambda x: ",".join(sorted(x)))
+    who_per_point = df.groupby('frame')['uploader_callsign'].agg(lambda x: ",".join(sorted(set(x))))
     print(who_per_point.value_counts().to_string())
 
 if __name__ == "__main__":

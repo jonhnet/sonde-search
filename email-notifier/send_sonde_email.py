@@ -219,7 +219,8 @@ def get_image(args, config, flight, landing):
     cx.add_basemap(
         ax,
         #zoom=10,
-        source=cx.providers.OpenStreetMap.Mapnik,
+        #source=cx.providers.OpenStreetMap.Mapnik,
+        source=cx.providers.CyclOSM,
     )
     fig.tight_layout()
 

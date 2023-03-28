@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 
+#EXTERNAL_IMAGES_ROOT = None
+EXTERNAL_IMAGES_ROOT = '/mnt/storage/sondemaps'
+EXTERNAL_IMAGES_URL = 'https://sondemaps.lectrobox.com/'
+
 CONFIGS = [
 
     # Seattle
     {
+        'name': 'seattle',
         'home_lat': 47.6426,
         'home_lon': -122.32271,
         'email_from': 'Seattle Sonde Notifier <jelson@lectrobox.com>',
@@ -16,6 +21,7 @@ CONFIGS = [
 
     # Berkeley
     {
+        'name': 'berkeley',
         'home_lat': 37.859,
         'home_lon': -122.270,
         'email_from': 'Berkeley Sonde Notifier <jelson@lectrobox.com>',
@@ -237,7 +243,7 @@ def process(args, sondes, config):
     landing = flight.loc[flight.phase == 'landing'].iloc[0]
 
     if landing.dist_from_home_mi > config['max_distance_mi']:
-        print(f"{config['email_from']}: Nearest landing is {landing.dist_from_home_mi:.1f}, more than max {config['max_distance_mi']}")
+        print(f"{config['name']}: Nearest landing is {landing.dist_from_home_mi:.1f}, more than max {config['max_distance_mi']}")
         return
 
     last_alt_ft = round(landing['alt'] / METERS_PER_FOOT)
@@ -279,34 +285,42 @@ def process(args, sondes, config):
     if last_alt_ft > 15000:
         body += '<p>NOTE: Because its last-heard altitude was so high, its actual landing location is several miles away.'
 
-    if not args.really_send:
-        print(f"Subj:\n{subj}\n")
-        print(f"Body:\n{body}\n")
-
-    image_cid = make_msgid(domain='lectrobox.com')
-    body += f'<p><img width="100%" src="cid:{image_cid}">'
-
-    # build mime message including map attachment
+    # build mime message
     msg = MIMEMultipart('mixed')
     msg['Subject'] = subj
     msg['From'] = config['email_from']
     msg['To'] = ",".join(config['email_to'])
+
+    if EXTERNAL_IMAGES_ROOT:
+        # map as link to external web site
+        map_suffix = f"{config['name']}/{landing_localtime.year}/{landing_localtime.month}/{landing_localtime.day}-{landing_localtime.hour}-{landing.lat}-{landing.lon}.jpg"
+        map_local_fn = os.path.join(EXTERNAL_IMAGES_ROOT, map_suffix)
+        map_dir = os.path.split(map_local_fn)[0]
+        os.makedirs(map_dir, exist_ok=True)
+        map_url = os.path.join(EXTERNAL_IMAGES_URL) + map_suffix
+        fig = get_image(args, config, flight, landing)
+        fig.savefig(map_local_fn, bbox_inches='tight')
+        body += f'<p><img width="100%" src="{map_url}">'
+    else:
+        # map as attachment
+        image_cid = make_msgid(domain='lectrobox.com')
+        body += f'<p><img width="100%" src="cid:{image_cid}">'
+
+        img = io.BytesIO()
+        fig = get_image(args, config, flight, landing)
+        fig.savefig(img, format='jpg', bbox_inches='tight')
+        img.seek(0)
+        img_att = MIMEImage(img.read(), name='map.jpg')
+        img_att.add_header('Content-ID', f'<{image_cid}>')
+        msg.attach(img_att)
+
     alternatives = MIMEMultipart('alternative')
     alternatives.attach(MIMEText(body, 'html', 'utf-8'))
     msg.attach(alternatives)
 
-    img = io.BytesIO()
-    fig = get_image(args, config, flight, landing)
-    fig.savefig(img, format='jpg', bbox_inches='tight')
-    img.seek(0)
-    img_att = MIMEImage(img.read(), name='map.jpg')
-    img_att.add_header('Content-ID', f'<{image_cid}>')
-    msg.attach(img_att)
-
-    session = boto3.Session(profile_name=AWS_PROFILE)
-    client = session.client('ses', region_name = 'us-west-2')
-
     if args.really_send:
+        session = boto3.Session(profile_name=AWS_PROFILE)
+        client = session.client('ses', region_name = 'us-west-2')
         client.send_raw_email(
             Source=config['email_from'],
             Destinations=config['email_to'],
@@ -314,6 +328,9 @@ def process(args, sondes, config):
                 'Data': msg.as_string(),
             },
         )
+    else:
+        print(f"Subj:\n{subj}\n")
+        print(f"Body:\n{body}\n")
 
 def get_args():
     parser = argparse.ArgumentParser()

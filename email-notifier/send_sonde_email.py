@@ -17,6 +17,8 @@ CONFIGS = [
             'jonh.sondenotify@jonh.net',
         ],
         'max_distance_mi': 300,
+        'units': 'imperial',
+        'tz': 'US/Pacific',
     },
 
     # Berkeley
@@ -31,6 +33,23 @@ CONFIGS = [
             'david.jacobowitz+sonde@gmail.com',
         ],
         'max_distance_mi': 25,
+        'units': 'imperial',
+        'tz': 'US/Pacific',
+    },
+
+    # Kitchener
+    {
+        'name': 'kitchener',
+        'home_lat': 43.46865,
+        'home_lon': -80.49695,
+        'email_from': 'Kitchener Sonde Notifier <jelson@lectrobox.com>',
+        'email_to': [
+            'jelson@gmail.com',
+            'info@bestforbees.com',
+        ],
+        'max_distance_mi': 100,
+        'units': 'metric',
+        'tz': 'US/Eastern',
     },
 ]
 
@@ -51,6 +70,7 @@ import io
 import json
 import matplotlib
 import matplotlib.pyplot as plt
+import numpy as np
 import os
 import pandas as pd
 import requests
@@ -151,15 +171,18 @@ def get_nearest_sonde_flight(sondes, config):
     def get_path(sonde):
         path = Geodesic.WGS84.Inverse(config['home_lat'], config['home_lon'], sonde.lat, sonde.lon)
         return (
-            path['s12'] / METERS_PER_MILE,
+            path['s12'],
             (path['azi1'] + 360) % 360
         )
 
     # Annotate all landing records with distance from home
-    sondes[['dist_from_home_mi', 'bearing_from_home']] = sondes.apply(
+    sondes[['dist_from_home_m', 'bearing_from_home']] = sondes.apply(
         lambda s: get_path(s) if s.phase == 'landing' else (None, None),
         axis=1,
         result_type='expand')
+
+    sondes['dist_from_home_mi'] = sondes['dist_from_home_m'] / METERS_PER_MILE
+    sondes['dist_from_home_km'] = sondes['dist_from_home_m'] / 1000
 
     #f = sondes.sort_values('dist_from_home_mi')
     #print(f[f.phase == 'landing'].to_string())
@@ -198,11 +221,20 @@ def get_limit(points):
     max_x += max_pad
     min_y -= max_pad
     max_y += max_pad
-    return min_x, min_y, max_x, max_y
+
+    # Calculate the zoom
+    lat_length = max_lat - min_lat
+    lon_length = max_lon - min_lon
+    zoom_lat = np.ceil(np.log2(360 * 2.0 / lat_length))
+    zoom_lon = np.ceil(np.log2(360 * 2.0 / lon_length))
+    zoom = np.max([zoom_lon, zoom_lat])
+    zoom = int(zoom)
+
+    return min_x, min_y, max_x, max_y, zoom
 
 
-def get_image(args, config, flight, landing):
-    fig, ax = plt.subplots(figsize=(12, 12))
+def get_image(args, config, size, flight, landing):
+    fig, ax = plt.subplots(figsize=(size, size))
     ax.axis('off')
 
     # Plot the balloon's path
@@ -215,7 +247,7 @@ def get_image(args, config, flight, landing):
     ax.plot([home_x, sonde_x], [home_y, sonde_y], color='blue', marker='*')
 
     # Find the limits of the map
-    min_x, min_y, max_x, max_y = get_limit([
+    min_x, min_y, max_x, max_y, zoom = get_limit([
         [config['home_lat'], config['home_lon']],
         [landing['lat'], landing['lon']],
     ])
@@ -224,9 +256,11 @@ def get_image(args, config, flight, landing):
 
     cx.add_basemap(
         ax,
-        #zoom=10,
+        zoom=zoom,
         #source=cx.providers.OpenStreetMap.Mapnik,
         source=cx.providers.CyclOSM,
+        #source=cx.providers.Stamen.Terrain,
+        #source=cx.providers.Stamen.TopOSMFeatures,
     )
     fig.tight_layout()
 
@@ -246,6 +280,7 @@ def process(args, sondes, config):
         print(f"{config['name']}: Nearest landing is {landing.dist_from_home_mi:.1f}, more than max {config['max_distance_mi']}")
         return
 
+    last_alt_m = round(landing['alt'])
     last_alt_ft = round(landing['alt'] / METERS_PER_FOOT)
 
     # attempt a geocode
@@ -260,22 +295,35 @@ def process(args, sondes, config):
         place += geo.county
 
     # timezone can be part of config eventually
-    landing_localtime = landing.datetime.tz_convert('US/Pacific')
+    landing_localtime = landing.datetime.tz_convert(config['tz'])
 
     # subject line
     subj = f"{landing_localtime.month_name()} {landing_localtime.day} "
     subj += "morning" if landing_localtime.hour < 12 else "afternoon"
-    subj += f" sonde landed {round(landing.dist_from_home_mi)}mi from home,"
-    subj += f" bearing {round(landing.bearing_from_home)}°"
+    subj += f" sonde landed "
+    if config['units'] == 'imperial':
+        subj += f"{round(landing.dist_from_home_mi)}mi"
+    else:
+        subj += f"{round(landing.dist_from_home_km)}km"
+    subj += f" from home, bearing {round(landing.bearing_from_home)}°"
     if place:
         subj += f" ({place})"
 
     # body
     body = f'Sonde <a href="{SONDEHUB_MAP_URL.format(serial=landing.serial)}">{landing.serial}</a> '
-    body += f'was last heard at {landing_localtime.strftime("%Y-%m-%d %H:%M:%S")} Pacific time '
-    body += f"as it descended through {last_alt_ft:,}'. "
-    body += f'It was last heard at <a href="{GMAP_URL.format(lat=landing.lat, lon=landing.lon)}">{landing.lat}, {landing.lon}</a>, '
-    body += f'which is about {round(landing.dist_from_home_mi)} miles from home at a bearing of {round(landing.bearing_from_home)}°'
+    body += f'was last heard at {landing_localtime.strftime("%Y-%m-%d %H:%M:%S %Z")}'
+    body += f" as it descended through "
+    if config['units'] == 'imperial':
+        body += f"{last_alt_ft:,}'"
+    else:
+        body += f"{last_alt_m:,}m"
+    body += f'.  It was last heard at <a href="{GMAP_URL.format(lat=landing.lat, lon=landing.lon)}">{landing.lat}, {landing.lon}</a>, '
+    body += f'which is about '
+    if config['units'] == 'imperial':
+        body += f'{round(landing.dist_from_home_mi)} miles'
+    else:
+        body += f'{round(landing.dist_from_home_km)} km'
+    body += f' from home at a bearing of {round(landing.bearing_from_home)}°'
     if place:
         body += f', in {place}'
     body += ". "
@@ -298,7 +346,7 @@ def process(args, sondes, config):
         map_dir = os.path.split(map_local_fn)[0]
         os.makedirs(map_dir, exist_ok=True)
         map_url = os.path.join(EXTERNAL_IMAGES_URL) + map_suffix
-        fig = get_image(args, config, flight, landing)
+        fig = get_image(args, config, 22, flight, landing)
         fig.savefig(map_local_fn, bbox_inches='tight')
         body += f'<p><img width="100%" src="{map_url}">'
     else:
@@ -307,7 +355,7 @@ def process(args, sondes, config):
         body += f'<p><img width="100%" src="cid:{image_cid}">'
 
         img = io.BytesIO()
-        fig = get_image(args, config, flight, landing)
+        fig = get_image(args, config, 12, flight, landing)
         fig.savefig(img, format='jpg', bbox_inches='tight')
         img.seek(0)
         img_att = MIMEImage(img.read(), name='map.jpg')
@@ -357,6 +405,7 @@ def main():
 
     for config in CONFIGS:
         process(args, sondes, config)
+        time.sleep(1)
 
 if __name__ == "__main__":
     main()

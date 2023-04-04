@@ -47,7 +47,7 @@ CONFIGS = [
             'jelson@gmail.com',
             'info@bestforbees.com',
         ],
-        'max_distance_mi': 100,
+        'max_distance_mi': 77.6,
         'units': 'metric',
         'tz': 'US/Eastern',
     },

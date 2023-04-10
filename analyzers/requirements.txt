@@ -1,4 +1,4 @@
-azelrange
+AltAzRange
 pandas
 sondehub
 contextily

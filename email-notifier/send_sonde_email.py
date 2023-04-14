@@ -227,8 +227,8 @@ def get_limit(points):
     lon_length = max_lon - min_lon
     zoom_lat = np.ceil(np.log2(360 * 2.0 / lat_length))
     zoom_lon = np.ceil(np.log2(360 * 2.0 / lon_length))
-    zoom = np.max([zoom_lon, zoom_lat])
-    zoom = int(zoom)
+    zoom = np.min([zoom_lon, zoom_lat])
+    zoom = int(zoom) + 1
 
     return min_x, min_y, max_x, max_y, zoom
 
@@ -253,6 +253,7 @@ def get_image(args, config, size, flight, landing):
     ])
     ax.set_xlim([min_x, max_x])
     ax.set_ylim([min_y, max_y])
+    print(f"{config['name']}: downloading at zoomlevel {zoom}")
 
     cx.add_basemap(
         ax,

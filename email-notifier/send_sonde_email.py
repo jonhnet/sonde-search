@@ -6,6 +6,22 @@ EXTERNAL_IMAGES_URL = 'https://sondemaps.lectrobox.com/'
 
 CONFIGS = [
 
+    # Hilo
+    {
+        'name': 'hilo',
+        'home_lat': 20,
+        'home_lon': -155,
+        'email_from': 'Hilo Sonde Notifier <jelson@lectrobox.com>',
+        'email_to': [
+            'jelson@gmail.com',
+            'jonh.sondenotify@jonh.net',
+            'david.jacobowitz+sonde@gmail.com',
+        ],
+        'max_distance_mi': 150,
+        'units': 'imperial',
+        'tz': 'US/Hawaii',
+    },
+
     # Seattle
     {
         'name': 'seattle',
@@ -82,10 +98,11 @@ matplotlib.use('Agg')
 
 cx.set_cache_dir(os.path.expanduser("~/.cache/geotiles"))
 
+CUTOFF_HOURS = 6
 AWS_PROFILE = 'cambot-emailer'
 METERS_PER_MILE = 1609.34
 METERS_PER_FOOT = 0.3048
-SONDEHUB_DATA_URL = 'https://api.v2.sondehub.org/sondes/telemetry?duration=6h'
+SONDEHUB_DATA_URL = f'https://api.v2.sondehub.org/sondes/telemetry?duration={CUTOFF_HOURS}h'
 MAX_SONDEHUB_RETRIES = 6
 SONDEHUB_MAP_URL = 'https://sondehub.org/#!mt=Mapnik&mz=9&qm=12h&f={serial}&q={serial}'
 GMAP_URL = 'https://www.google.com/maps/search/?api=1&query={lat},{lon}'
@@ -149,7 +166,7 @@ def get_all_sondes(args=None):
     # If no particular date has been requested, apply a cutoff time to make sure
     # we're only examining the latest launches
     if args is None or args.date is None:
-        utc_cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=6)
+        utc_cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=CUTOFF_HOURS)
         sondes = sondes.loc[sondes.datetime >= utc_cutoff]
 
     # Mark takeoffs and landings -- the earliest ascent record and latest

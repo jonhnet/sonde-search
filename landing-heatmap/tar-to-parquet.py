@@ -7,7 +7,7 @@
 # and it takes tens of minutes to open and parse all of them. The parqet file,
 # on the other hand, can be loaded in a couple of seconds.
 #
-# 1) aws s3 sync aws --no-sign-request s3://sondehub-history/date/2023 .
+# 1) aws s3 sync --no-sign-request s3://sondehub-history/date/2023 .
 # 2) tar cvfz sondehub-2023.tgz .
 # 3) ./tar-to-parquet.py sondehub-2023.tgz
 #

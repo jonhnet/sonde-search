@@ -3,29 +3,33 @@
 import calendar
 import contextily as cx
 import geopandas
+import glob
 import matplotlib.pyplot as plt
 import pandas as pd
 
 cx.set_cache_dir("/tmp/cached-tiles")
 
-LAT_MIN = 46
-LAT_MAX = 49
-LON_MIN = -125
-LON_MAX = -121
+MAPS = {
+    'seattle': {
+        'bottomleft': (46, -125),
+        'topright': (49, -121),
+    },
+    'kitchener': {
+        'bottomleft': (40, -83),
+        'topright': (46, -77),
+    },
+    'hilo': {
+        'bottomleft': (18, -162),
+        'topright': (23, -152),
+    },
+}
 
-def main():
-    df = pd.read_parquet('sonde-summaries-2022.parquet')
-
-    # get landings
-    df = df.loc[(df.vel_v < 0) & (df.alt < 10000)]
-
+def draw_map(df, title, config):
     # get local landings
-    df = df.loc[(df.lat >= LAT_MIN) & (df.lat <= LAT_MAX)]
-    df = df.loc[(df.lon >= LON_MIN) & (df.lon <= LON_MAX)]
-
-    # annotate with month
-    df['datetime'] = pd.to_datetime(df['datetime'])
-    df['month'] = df['datetime'].dt.month
+    df = df.loc[df['lat'] >= config['bottomleft'][0]]
+    df = df.loc[df['lat'] <= config['topright'][0]]
+    df = df.loc[df['lon'] >= config['bottomleft'][1]]
+    df = df.loc[df['lon'] <= config['topright'][1]]
 
     # convert to a geodataframe
     gdf = geopandas.GeoDataFrame(
@@ -46,7 +50,7 @@ def main():
         # pull out just landings from the month being plotted
         d = gdf.loc[gdf.month == month+1]
 
-        print(f"{calendar.month_name[month+1]}: {len(d)} landings")
+        print(f"{title:10s}: {calendar.month_name[month+1]:9s}: {len(d)} landings")
 
         # plot each landing and set options
         d.plot(ax=ax)
@@ -61,7 +65,22 @@ def main():
 
     fig.subplots_adjust(wspace=0, hspace=0)
     fig.tight_layout()
-    fig.savefig('seattle-landings-by-month.png', bbox_inches='tight', pad_inches=0)
+    fig.savefig(f'{title}-landings-by-month.png', bbox_inches='tight', pad_inches=0)
+
+def main():
+    df = pd.concat(
+        [pd.read_parquet(fn) for fn in glob.glob('sonde-summaries-*.parquet')]
+    )
+
+    # get landings -- the latest frame received for each serial number
+    df = df.loc[df.groupby('serial')['frame'].idxmax()]
+
+    # annotate with month
+    df['datetime'] = pd.to_datetime(df['datetime'])
+    df['month'] = df['datetime'].dt.month
+
+    for (title, config) in MAPS.items():
+        draw_map(df, title, config)
 
 if __name__ == "__main__":
     main()

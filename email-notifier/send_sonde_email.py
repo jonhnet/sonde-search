@@ -9,8 +9,8 @@ CONFIGS = [
     # Hilo
     {
         'name': 'hilo',
-        'home_lat': 20,
-        'home_lon': -155,
+        'home_lat': 19.73,
+        'home_lon': -155.09,
         'email_from': 'Hilo Sonde Notifier <jelson@lectrobox.com>',
         'email_to': [
             'jelson@gmail.com',

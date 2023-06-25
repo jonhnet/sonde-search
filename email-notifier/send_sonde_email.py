@@ -6,22 +6,6 @@ EXTERNAL_IMAGES_URL = 'https://sondemaps.lectrobox.com/'
 
 CONFIGS = [
 
-    # Hilo
-    {
-        'name': 'hilo',
-        'home_lat': 19.73,
-        'home_lon': -155.09,
-        'email_from': 'Hilo Sonde Notifier <jelson@lectrobox.com>',
-        'email_to': [
-            'jelson@gmail.com',
-            'jonh.sondenotify@jonh.net',
-            'david.jacobowitz+sonde@gmail.com',
-        ],
-        'max_distance_mi': 150,
-        'units': 'imperial',
-        'tz': 'US/Hawaii',
-    },
-
     # Seattle
     {
         'name': 'seattle',
@@ -48,7 +32,7 @@ CONFIGS = [
             'jonh.sondenotify@jonh.net',
             'david.jacobowitz+sonde@gmail.com',
         ],
-        'max_distance_mi': 25,
+        'max_distance_mi': 20,
         'units': 'imperial',
         'tz': 'US/Pacific',
     },

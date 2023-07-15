@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-#EXTERNAL_IMAGES_ROOT = None
 EXTERNAL_IMAGES_ROOT = '/mnt/storage/sondemaps'
 EXTERNAL_IMAGES_URL = 'https://sondemaps.lectrobox.com/'
+#EXTERNAL_IMAGES_ROOT = None
 
 CONFIGS = [
 
@@ -85,6 +85,7 @@ cx.set_cache_dir(os.path.expanduser("~/.cache/geotiles"))
 CUTOFF_HOURS = 6
 AWS_PROFILE = 'cambot-emailer'
 METERS_PER_MILE = 1609.34
+METERS_PER_KM   = 1000
 METERS_PER_FOOT = 0.3048
 SONDEHUB_DATA_URL = f'https://api.v2.sondehub.org/sondes/telemetry?duration={CUTOFF_HOURS}h'
 MAX_SONDEHUB_RETRIES = 6
@@ -182,14 +183,11 @@ def get_nearest_sonde_flight(sondes, config):
         axis=1,
         result_type='expand')
 
-    sondes['dist_from_home_mi'] = sondes['dist_from_home_m'] / METERS_PER_MILE
-    sondes['dist_from_home_km'] = sondes['dist_from_home_m'] / 1000
-
     #f = sondes.sort_values('dist_from_home_mi')
     #print(f[f.phase == 'landing'].to_string())
 
     # Find the landing closest to home
-    nearest_landing_idx = sondes[sondes.phase == 'landing'].dist_from_home_mi.idxmin()
+    nearest_landing_idx = sondes[sondes.phase == 'landing']['dist_from_home_m'].idxmin()
 
     # Get the serial number of the nearest landing
     nearest_landing_serial = sondes.loc[nearest_landing_idx].serial
@@ -274,19 +272,47 @@ def get_image(args, config, size, flight, landing):
 
 ### Sending email
 
+def get_elev(lat, lon):
+    resp = requests.get('https://epqs.nationalmap.gov/v1/json', params={
+        'x': lon,
+        'y': lat,
+        'units': 'Meters',
+        'wkid': '4326',
+        'includeDate': 'True',
+    })
+    if resp.status_code == 200:
+        return float(resp.json()['value'])
+    else:
+        return None
+
+def render_elevation(config, meters):
+    if config['units'] == 'imperial':
+        feet = meters / METERS_PER_FOOT
+        return f"{round(feet):,}'"
+    else:
+        return f"{round(meters):,}m"
+
+def render_distance(config, meters):
+    if config['units'] == 'imperial':
+        miles = meters / METERS_PER_MILE
+        return f"{round(miles):,} miles"
+    else:
+        km = meters / METERS_PER_KM
+        return f"{round(km):,}km"
+
 def process(args, sondes, config):
     flight = get_nearest_sonde_flight(sondes, config)
     landing = flight.loc[flight.phase == 'landing'].iloc[0]
 
-    if landing.dist_from_home_mi > config['max_distance_mi']:
-        print(f"{config['name']}: Nearest landing is {landing.dist_from_home_mi:.1f}, more than max {config['max_distance_mi']}")
+    dist_from_home_mi = landing['dist_from_home_m'] / METERS_PER_MILE
+
+    if dist_from_home_mi > config['max_distance_mi']:
+        print(f"{config['name']}: Nearest landing is {dist_from_home_mi:.1f}, more than max {config['max_distance_mi']}")
         return
 
-    last_alt_m = round(landing['alt'])
-    last_alt_ft = round(landing['alt'] / METERS_PER_FOOT)
-
     # attempt a geocode
-    geo = geocoder.osm(f"{landing.lat}, {landing.lon}")
+    geo = geocoder.osm(f"{landing['lat']}, {landing['lon']}")
+    elev = get_elev(landing['lat'], landing['lon'])
 
     place = ""
     if geo and geo.county:
@@ -303,37 +329,44 @@ def process(args, sondes, config):
     subj = f"{landing_localtime.month_name()} {landing_localtime.day} "
     subj += "morning" if landing_localtime.hour < 12 else "afternoon"
     subj += f" sonde landed "
-    if config['units'] == 'imperial':
-        subj += f"{round(landing.dist_from_home_mi)}mi"
-    else:
-        subj += f"{round(landing.dist_from_home_km)}km"
+    subj += render_distance(config, landing['dist_from_home_m'])
     subj += f" from home, bearing {round(landing.bearing_from_home)}°"
     if place:
         subj += f" ({place})"
 
     # body
+    uploaders = [u['uploader_callsign'] for u in landing['uploaders']]
     body = f'Sonde <a href="{SONDEHUB_MAP_URL.format(serial=landing.serial)}">{landing.serial}</a> '
-    body += f'was last heard at {landing_localtime.strftime("%Y-%m-%d %H:%M:%S %Z")}'
-    body += f" as it descended through "
-    if config['units'] == 'imperial':
-        body += f"{last_alt_ft:,}'"
-    else:
-        body += f"{last_alt_m:,}m"
-    body += f'.  It was last heard at <a href="{GMAP_URL.format(lat=landing.lat, lon=landing.lon)}">{landing.lat}, {landing.lon}</a>, '
+    body += f'was last heard by {", ".join(uploaders)} '
+    body += f'at {landing_localtime.strftime("%Y-%m-%d %H:%M:%S %Z")} '
+    body += f'as it descended through '
+    body += render_elevation(config, landing['alt'])
+    body += '. '
+    body += f'It was last heard at <a href="{GMAP_URL.format(lat=landing.lat, lon=landing.lon)}">{landing.lat}, {landing.lon}</a>, '
     body += f'which is about '
-    if config['units'] == 'imperial':
-        body += f'{round(landing.dist_from_home_mi)} miles'
-    else:
-        body += f'{round(landing.dist_from_home_km)} km'
+    body += render_distance(config, landing['dist_from_home_m'])
     body += f' from home at a bearing of {round(landing.bearing_from_home)}°'
     if place:
         body += f', in {place}'
-    body += ". "
+    body += '. '
     if geo and geo.address:
-        body += f' The nearest known address is {geo.address}.'
+        body += f'The nearest known address is {geo.address}. '
 
-    if last_alt_ft > 15000:
-        body += '<p>NOTE: Because its last-heard altitude was so high, its actual landing location is several miles away.'
+    body += '<p>When last heard, the sonde was descending at '
+    body += render_elevation(config, -landing['vel_v']) + '/s '
+    body += 'and moving laterally at '
+    body += render_elevation(config, landing['vel_h']) + '/s, heading '
+    body += f"{round(landing['heading'])}°. "
+
+    if elev:
+        body += f'The ground elevation at the last-heard location is '
+        body += render_elevation(config, elev)
+        body += ', so the sonde was last heard '
+        time_to_landing = (landing['alt'] - elev) / -landing['vel_v']
+        body += f'{round(time_to_landing)}s from landing, implying a landing position about '
+        horiz_error = landing['vel_h'] * time_to_landing
+        body += render_elevation(config, horiz_error)
+        body += ' away.'
 
     # build mime message
     msg = MIMEMultipart('mixed')

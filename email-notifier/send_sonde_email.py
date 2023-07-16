@@ -2,7 +2,6 @@
 
 EXTERNAL_IMAGES_ROOT = '/mnt/storage/sondemaps'
 EXTERNAL_IMAGES_URL = 'https://sondemaps.lectrobox.com/'
-#EXTERNAL_IMAGES_ROOT = None
 
 CONFIGS = [
 
@@ -82,15 +81,21 @@ matplotlib.use('Agg')
 
 cx.set_cache_dir(os.path.expanduser("~/.cache/geotiles"))
 
-CUTOFF_HOURS = 6
-AWS_PROFILE = 'cambot-emailer'
+# conversion factors
 METERS_PER_MILE = 1609.34
 METERS_PER_KM   = 1000
 METERS_PER_FOOT = 0.3048
+
+# sondehup API
 SONDEHUB_DATA_URL = 'https://api.v2.sondehub.org/sondes/telemetry'
 MAX_SONDEHUB_RETRIES = 6
+
+# URLs for email body
 SONDEHUB_MAP_URL = 'https://sondehub.org/#!mt=Mapnik&mz=9&qm=12h&f={serial}&q={serial}'
 GMAP_URL = 'https://www.google.com/maps/search/?api=1&query={lat},{lon}'
+
+# other config
+AWS_PROFILE = 'cambot-emailer'
 
 # Clean up and annotate telemetry returned by sondehub
 def cleanup_sonde_data(sondes):
@@ -145,7 +150,16 @@ def get_telemetry(params):
     raise Exception(f"Couldn't get sondehub data, even after {MAX_SONDEHUB_RETRIES} retries")
 
 def get_all_sondes():
-    return get_telemetry(params={'duration': f'{CUTOFF_HOURS}h'})
+    sondes = get_telemetry(params={'duration': '1d'})
+
+    # Filter out launches left over from the prior launch cycle. We expect
+    # sondes to be launched about 2 hours ago, but sondes launched 14 hours ago
+    # that are still being received might show up here. Filter out any sondes
+    # that have been transmitting data for more than 6 hours.
+    sondes = sondes.groupby('serial').filter(
+        lambda g: g['datetime'].max() - g['datetime'].min() < datetime.timedelta(hours=6))
+
+    return sondes
 
 ### Getting the nearest sonde
 
@@ -437,6 +451,13 @@ def get_args():
 
 def main():
     args = get_args()
+
+    global EXTERNAL_IMAGES_ROOT
+    if not os.path.exists(EXTERNAL_IMAGES_ROOT):
+        if args.really_send:
+            raise Exception(f"External images root {EXTERNAL_IMAGES_ROOT} does not exist")
+        else:
+            EXTERNAL_IMAGES_ROOT = None
 
     sondes = get_all_sondes()
 

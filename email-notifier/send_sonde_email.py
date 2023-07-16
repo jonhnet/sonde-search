@@ -360,7 +360,7 @@ def process(args, sondes, config):
 
     if ground_reception:
         body += '<b>The sonde appears to still be in contact with receivers while stationary, '
-        body += 'so the last-heard location may be exact!</b> '
+        body += 'so the last-heard location may be the actual landing site!</b> '
 
         if elev:
             body += f'The ground elevation at the last-heard location is '

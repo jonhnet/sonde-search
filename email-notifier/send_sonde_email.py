@@ -82,7 +82,7 @@ matplotlib.use('Agg')
 
 cx.set_cache_dir(os.path.expanduser("~/.cache/geotiles"))
 
-CUTOFF_HOURS = 12
+CUTOFF_HOURS = 6
 AWS_PROFILE = 'cambot-emailer'
 METERS_PER_MILE = 1609.34
 METERS_PER_KM   = 1000
@@ -304,9 +304,12 @@ def process(args, sondes, config):
         print(f"{config['name']}: Nearest landing is {dist_from_home_mi:.1f}, more than max {config['max_distance_mi']}")
         return
 
-    # attempt a geocode
+    # attempt a geocode and DEM lookup
     geo = geocoder.osm(f"{landing['lat']}, {landing['lon']}")
     elev = get_elev(landing['lat'], landing['lon'])
+
+    # sonde still in contact from the ground?
+    ground_reception = abs(landing['vel_v']) < 1 and abs(landing['vel_h']) < 1
 
     place = ""
     if geo and geo.county:
@@ -316,11 +319,14 @@ def process(args, sondes, config):
             place += geo.city + ", "
         place += geo.county
 
-    # timezone can be part of config eventually
+    # get landing time in config-specified timezone
     landing_localtime = landing.datetime.tz_convert(config['tz'])
 
     # subject line
-    subj = f"{landing_localtime.month_name()} {landing_localtime.day} "
+    subj = ""
+    if ground_reception:
+        subj += 'GROUND RECEPTION! '
+    subj += f"{landing_localtime.month_name()} {landing_localtime.day} "
     subj += "morning" if landing_localtime.hour < 12 else "afternoon"
     subj += f" sonde landed "
     subj += render_distance(config, landing['dist_from_home_m'])
@@ -352,7 +358,16 @@ def process(args, sondes, config):
     body += render_elevation(config, landing['vel_h']) + '/s, heading '
     body += f"{round(landing['heading'])}°. "
 
-    if elev:
+    if ground_reception:
+        body += '<b>The sonde appears to still be in contact with receivers while stationary, '
+        body += 'so the last-heard location may be exact!</b> '
+
+        if elev:
+            body += f'The ground elevation at the last-heard location is '
+            body += render_elevation(config, elev)
+            body += '. '
+
+    elif elev:
         body += f'The ground elevation at the last-heard location is '
         body += render_elevation(config, elev)
         body += ', so the sonde was last heard '

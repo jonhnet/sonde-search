@@ -82,43 +82,52 @@ matplotlib.use('Agg')
 
 cx.set_cache_dir(os.path.expanduser("~/.cache/geotiles"))
 
-CUTOFF_HOURS = 6
+CUTOFF_HOURS = 12
 AWS_PROFILE = 'cambot-emailer'
 METERS_PER_MILE = 1609.34
 METERS_PER_KM   = 1000
 METERS_PER_FOOT = 0.3048
-SONDEHUB_DATA_URL = f'https://api.v2.sondehub.org/sondes/telemetry?duration={CUTOFF_HOURS}h'
+SONDEHUB_DATA_URL = 'https://api.v2.sondehub.org/sondes/telemetry'
 MAX_SONDEHUB_RETRIES = 6
 SONDEHUB_MAP_URL = 'https://sondehub.org/#!mt=Mapnik&mz=9&qm=12h&f={serial}&q={serial}'
 GMAP_URL = 'https://www.google.com/maps/search/?api=1&query={lat},{lon}'
 
-# This is the old-style version that uses the sondehub python API, which goes to
-# sondehub's public S3 bucket for data. However, it's a few hours behind, and
-# we'd like data closer to live.
-def get_sonde_telemetry_s3(date):
-    # get data from all sondes that had a flight today. Sondehub returns 3
-    # points per sonde: first reception, highest reception, and last reception.
-    return pd.DataFrame(sondehub.download(
-        datetime_prefix=f"{date.year:4}/{date.month:02}/{date.day:02}")
-    )
+# Clean up and annotate telemetry returned by sondehub
+def cleanup_sonde_data(sondes):
+    # Sometimes lat/lon comes as a string instead of float
+    sondes = sondes.astype({
+        'alt': float,
+        'vel_v': float,
+        'vel_h': float,
+        'lat': float,
+        'lon': float,
+    })
+
+    sondes['datetime'] = pd.to_datetime(sondes['datetime'])
+
+    # Mark takeoffs and landings -- the earliest record and latest record for
+    # each serial number
+    takeoffs = sondes.groupby('serial')['datetime'].idxmin()
+    sondes.loc[takeoffs, 'phase'] = 'takeoff'
+
+    landings = sondes.groupby('serial')['datetime'].idxmax()
+    sondes.loc[landings, 'phase'] = 'landing'
+
+    return sondes
 
 # Get sonde data from the same live API that the web site uses
-def get_sonde_telemetry_api():
+def get_telemetry_once(params):
     def unpack_list():
-        response = requests.get(SONDEHUB_DATA_URL)
+        response = requests.get(SONDEHUB_DATA_URL, params=params)
         response.raise_for_status()
         for sonde, timeblock in response.json().items():
             for time, record in timeblock.items():
                 yield record
-    return pd.DataFrame(unpack_list())
+    sondes = pd.DataFrame(unpack_list())
+    sondes = cleanup_sonde_data(sondes)
+    return sondes
 
-def get_telemetry(args):
-    if args and args.date:
-        return get_sonde_telemetry_s3(args.date)
-    else:
-        return get_sonde_telemetry_api()
-
-def get_telemetry_with_retries(args):
+def get_telemetry(params):
     retries = 0
     while retries <= MAX_SONDEHUB_RETRIES:
         if retries > 0:
@@ -126,7 +135,7 @@ def get_telemetry_with_retries(args):
             time.sleep((2**retries) * 4)
         retries += 1
         try:
-            sondes = get_telemetry(args)
+            sondes = get_telemetry_once(params)
             if len(sondes) == 0:
                 raise Exception("Got empty dataframe from Sondehub")
             return sondes
@@ -135,41 +144,12 @@ def get_telemetry_with_retries(args):
 
     raise Exception(f"Couldn't get sondehub data, even after {MAX_SONDEHUB_RETRIES} retries")
 
-def get_all_sondes(args=None):
-    sondes = get_telemetry_with_retries(args)
-
-    # Sometimes lat/lon comes as a string instead of float
-    sondes = sondes.astype({
-        'alt': float,
-        'vel_v': float,
-        'lat': float,
-        'lon': float,
-    })
-
-    sondes['datetime'] = pd.to_datetime(sondes['datetime'])
-
-    # If no particular date has been requested, apply a cutoff time to make sure
-    # we're only examining the latest launches
-    if args is None or args.date is None:
-        utc_cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=CUTOFF_HOURS)
-        sondes = sondes.loc[sondes.datetime >= utc_cutoff]
-
-    # Mark takeoffs and landings -- the earliest ascent record and latest
-    # descent record for each serial number
-    ascents = sondes.loc[sondes.vel_v > 0]
-    takeoffs = ascents.groupby('serial')['datetime'].idxmin()
-    sondes.loc[takeoffs, 'phase'] = 'takeoff'
-
-    descents = sondes.loc[sondes.vel_v < 0]
-    landings = descents.groupby('serial')['datetime'].idxmax()
-    sondes.loc[landings, 'phase'] = 'landing'
-
-    return sondes
-
+def get_all_sondes():
+    return get_telemetry(params={'duration': f'{CUTOFF_HOURS}h'})
 
 ### Getting the nearest sonde
 
-def get_nearest_sonde_flight(sondes, config):
+def annotate_with_distance(sondes, config):
     def get_path(sonde):
         path = Geodesic.WGS84.Inverse(config['home_lat'], config['home_lon'], sonde.lat, sonde.lon)
         return (
@@ -179,21 +159,35 @@ def get_nearest_sonde_flight(sondes, config):
 
     # Annotate all landing records with distance from home
     sondes[['dist_from_home_m', 'bearing_from_home']] = sondes.apply(
-        lambda s: get_path(s) if s.phase == 'landing' else (None, None),
+        lambda s: get_path(s) if s['phase'] == 'landing' else (None, None),
         axis=1,
         result_type='expand')
 
     #f = sondes.sort_values('dist_from_home_mi')
     #print(f[f.phase == 'landing'].to_string())
 
+    return sondes
+
+def get_nearest_sonde_flight(sondes, config):
+    sondes = annotate_with_distance(sondes, config)
+
     # Find the landing closest to home
-    nearest_landing_idx = sondes[sondes.phase == 'landing']['dist_from_home_m'].idxmin()
+    nearest_landing_idx = sondes[sondes['phase'] == 'landing']['dist_from_home_m'].idxmin()
 
     # Get the serial number of the nearest landing
     nearest_landing_serial = sondes.loc[nearest_landing_idx].serial
 
     # Return all data from the flight with the minimum landing distance
-    nearest_landing_flight = sondes.loc[sondes.serial == nearest_landing_serial]
+
+    # OLD: Just return the subsampled data from the overview result
+    #nearest_landing_flight = sondes.loc[sondes.serial == nearest_landing_serial]
+
+    # NEW: Query SondeHub for detail on the serial to get all data for that flight
+    nearest_landing_flight = get_telemetry(params={
+        'duration': '1d',
+        'serial': nearest_landing_serial,
+    })
+    nearest_landing_flight = annotate_with_distance(nearest_landing_flight, config)
 
     return nearest_landing_flight
 
@@ -265,7 +259,7 @@ def get_image(args, config, size, flight, landing):
     fig.tight_layout()
 
     if not args.really_send:
-        fig.savefig("test.jpg", bbox_inches='tight')
+        fig.savefig(f"test-{config['name']}.jpg", bbox_inches='tight')
 
     return fig
 
@@ -302,7 +296,7 @@ def render_distance(config, meters):
 
 def process(args, sondes, config):
     flight = get_nearest_sonde_flight(sondes, config)
-    landing = flight.loc[flight.phase == 'landing'].iloc[0]
+    landing = flight.iloc[flight['datetime'].idxmax()]
 
     dist_from_home_mi = landing['dist_from_home_m'] / METERS_PER_MILE
 
@@ -422,21 +416,14 @@ def get_args():
         default=False,
         action='store_true',
     )
-    parser.add_argument(
-        '--date',
-        action='store',
-    )
     args = parser.parse_args(sys.argv[1:])
-
-    if args.date:
-        args.date = dateparser.parse(args.date)
 
     return args
 
 def main():
     args = get_args()
 
-    sondes = get_all_sondes(args)
+    sondes = get_all_sondes()
 
     for config in CONFIGS:
         process(args, sondes, config)

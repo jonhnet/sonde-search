@@ -150,14 +150,15 @@ def get_telemetry(params):
     raise Exception(f"Couldn't get sondehub data, even after {MAX_SONDEHUB_RETRIES} retries")
 
 def get_all_sondes():
-    sondes = get_telemetry(params={'duration': '1d'})
+    sondes = get_telemetry(params={'duration': '12h'})
 
     # Filter out launches left over from the prior launch cycle. We expect
     # sondes to be launched about 2 hours ago, but sondes launched 14 hours ago
     # that are still being received might show up here. Filter out any sondes
     # that have been transmitting data for more than 6 hours.
+    now = datetime.datetime.now(tz=datetime.timezone.utc)
     sondes = sondes.groupby('serial').filter(
-        lambda g: g['datetime'].max() - g['datetime'].min() < datetime.timedelta(hours=6))
+        lambda g: now - g['datetime'].min() < datetime.timedelta(hours=6))
 
     return sondes
 

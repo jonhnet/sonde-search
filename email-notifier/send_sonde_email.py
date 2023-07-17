@@ -73,7 +73,6 @@ import numpy as np
 import os
 import pandas as pd
 import requests
-import sondehub
 import sys
 import time
 

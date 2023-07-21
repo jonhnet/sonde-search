@@ -31,7 +31,7 @@ def get_listeners(sondeid):
     df['date'] = pd.to_datetime(df['datetime']).round('s')
     df['time'] = df['date'].dt.strftime("%H:%M:%SZ")
     df['alt'] = df['alt'].astype(int)
-    df['vel_v'] = df['vel_v'].round(1)
+    df['vel_v'] = df['vel_v'].astype(float).round(1)
     df = df.sort_values('frame')
     agg = df.groupby('uploader_callsign').agg({
         'frame': ['first', 'last', 'count'],
@@ -39,8 +39,9 @@ def get_listeners(sondeid):
         'alt': ['first', 'last'],
         'vel_v': ['first', 'last'],
     })
-    agg['cov%'] = agg[('frame', 'count')] / (1 + agg[('frame', 'last')] - agg[('frame', 'first')])
+    agg.insert(3, 'cov%', agg[('frame', 'count')] / (1 + agg[('frame', 'last')] - agg[('frame', 'first')]))
     agg['cov%'] = (agg['cov%'] * 100).round(1)
+    agg = agg.sort_values([('frame', 'last')], ascending=False)
     print(agg.to_string())
 
     print("\nNumber of points heard by:")

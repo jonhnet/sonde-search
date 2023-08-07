@@ -246,12 +246,12 @@ def get_image(args, config, size, flight, landing):
 
     # Plot the balloon's path
     (flight_x, flight_y) = to_mercator_xy(flight.lat, flight.lon)
-    ax.plot(flight_x, flight_y, color='blue')
+    ax.plot(flight_x, flight_y, color='red')
 
     # Plot a line from home to the landing point
     home_x, home_y = to_mercator_xy(config['home_lat'], config['home_lon'])
     sonde_x, sonde_y = to_mercator_xy(landing['lat'], landing['lon'])
-    ax.plot([home_x, sonde_x], [home_y, sonde_y], color='red', marker='*')
+    ax.plot([home_x, sonde_x], [home_y, sonde_y], color='blue', marker='*')
     ax.annotate(
         xy=[home_x, home_y],
         text='home',
@@ -263,7 +263,7 @@ def get_image(args, config, size, flight, landing):
     # Plot a line from the last receiver to the landing point
     rx_lat, rx_lon = [float(f) for f in landing['uploader_position'].split(',')]
     rx_x, rx_y = to_mercator_xy(rx_lat, rx_lon)
-    ax.plot([rx_x, sonde_x], [rx_y, sonde_y], color='green', marker='*')
+    ax.plot([rx_x, sonde_x], [rx_y, sonde_y], color='springgreen', marker='*')
     ax.annotate(
         xy=[rx_x, rx_y],
         text=f"rx ({landing['uploader_callsign']})",

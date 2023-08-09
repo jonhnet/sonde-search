@@ -316,9 +316,9 @@ def get_elev(lat, lon):
 def render_elevation(config, meters):
     if config['units'] == 'imperial':
         feet = meters / METERS_PER_FOOT
-        return f"{round(feet):,}'"
+        return f"{round(feet):,} ft"
     else:
-        return f"{round(meters):,}m"
+        return f"{round(meters):,} m"
 
 def render_distance(config, meters):
     if config['units'] == 'imperial':
@@ -326,7 +326,7 @@ def render_distance(config, meters):
         return f"{round(miles):,} miles"
     else:
         km = meters / METERS_PER_KM
-        return f"{round(km):,}km"
+        return f"{round(km):,} km"
 
 def process(args, sondes, config):
     flight = get_nearest_sonde_flight(sondes, config)
@@ -370,46 +370,109 @@ def process(args, sondes, config):
 
     # body
     uploaders = [u['uploader_callsign'] for u in landing['uploaders']]
-    body = f'Sonde <a href="{SONDEHUB_MAP_URL.format(serial=landing.serial)}">{landing.serial}</a> '
-    body += f'was last heard by {", ".join(uploaders)} '
-    body += f'at {landing_localtime.strftime("%Y-%m-%d %H:%M:%S %Z")} '
-    body += f'as it descended through '
-    body += render_elevation(config, landing['alt'])
-    body += '. '
-    body += f'It was last heard at <a href="{GMAP_URL.format(lat=landing.lat, lon=landing.lon)}">{landing.lat}, {landing.lon}</a>, '
-    body += f'which is about '
-    body += render_distance(config, landing['dist_from_home_m'])
-    body += f' from home at a bearing of {round(landing.bearing_from_home)}°'
-    if place:
-        body += f', in {place}'
-    body += '. '
-    if geo and geo.address:
-        body += f'The nearest known address is {geo.address}. '
 
-    body += '<p>When last heard, the sonde was descending at '
-    body += render_elevation(config, -landing['vel_v']) + '/s '
-    body += 'and moving laterally at '
-    body += render_elevation(config, landing['vel_h']) + '/s, heading '
-    body += f"{round(landing['heading'])}°. "
+    body = '''
+<style>
+table.sonde {
+    background-color: #e0e0e0;
+}
+table.sonde th {
+    background-color:  #404040;
+    color: white;
+}
+table.sonde tbody tr:nth-child(odd) {
+    background-color:  #d0d0d0;
+}
+</style>
+    '''
+
+    body += f'''
+<table class="sonde">
+    <tr>
+        <td>Sonde ID</td>
+        <td><a href="{SONDEHUB_MAP_URL.format(serial=landing.serial)}">{landing.serial}</a></td>
+    </tr>
+    <tr>
+        <th colspan="2">Last Reception</td>
+    </tr>
+    <tr>
+        <td>Heard</td>
+        <td>{landing_localtime.strftime("%Y-%m-%d %H:%M:%S %Z")} by {", ".join(uploaders)}</td>
+    </tr>
+    <tr>
+        <td>Altitude</td>
+        <td>{render_elevation(config, landing['alt'])}</td>
+    </tr>
+    <tr>
+        <td>Position</td>
+        <td><a href="{GMAP_URL.format(lat=landing.lat, lon=landing.lon)}">{landing.lat}, {landing.lon}</a></td>
+    </tr>
+    '''
+
+    if place:
+        nearest_addr = place
+        if geo and geo.address:
+            nearest_addr += f'<br>{geo.address}'
+        body += f'''
+    <tr>
+        <td>Address</td>
+        <td>{nearest_addr}</td>
+    </tr>
+        '''
+
+    body += f'''
+    <tr>
+        <td>Distance</td>
+        <td>{render_distance(config, landing['dist_from_home_m'])} from home</td>
+    </tr>
+    <tr>
+        <td>Bearing</td>
+        <td>{round(landing.bearing_from_home)}° from home</td>
+    </tr>
+    <tr>
+        <td>Descent Rate</td>
+        <td>{render_elevation(config, -landing['vel_v'])}/s, moving laterally {render_elevation(config, landing['vel_h'])}/s,
+        heading {round(landing['heading'])}°</td>
+    </tr>
+    '''
 
     if ground_reception:
-        body += '<b>The sonde appears to still be in contact with receivers while stationary, '
-        body += 'so the last-heard location may be the actual landing site!</b> '
-
+        body += '''
+    <tr>
+        <td colspan="2">Ground Reception</td>
+    </tr>
+        '''
         if elev:
-            body += f'The ground elevation at the last-heard location is '
-            body += render_elevation(config, elev)
-            body += '. '
-
+            body += f'''
+    <tr>
+        <td>Elevation</td>
+        <td>{render_elevation(config, elev)}</td>
+    </tr>
+            '''
     elif elev:
-        body += f'The ground elevation at the last-heard location is '
-        body += render_elevation(config, elev)
-        body += ', so the sonde was last heard '
         time_to_landing = (landing['alt'] - elev) / -landing['vel_v']
-        body += f'{round(time_to_landing)}s from landing, implying a landing position about '
         horiz_error = landing['vel_h'] * time_to_landing
-        body += render_elevation(config, horiz_error)
-        body += ' away.'
+        body += f'''
+    <tr>
+        <th colspan="2">Landing Estimation</th>
+    </tr>
+    <tr>
+        <td>Ground Elev</td>
+        <td>{render_elevation(config, elev)}</td>
+    </tr>
+    <tr>
+        <td>Time to landing</td>
+        <td>{round(time_to_landing)} s</td>
+    </tr>
+    <tr>
+        <td>Search Radius</td>
+        <td>{render_elevation(config, horiz_error)}</td>
+    </tr>
+        '''
+
+    body += '''
+</table>
+    '''
 
     # build mime message
     msg = MIMEMultipart('mixed')

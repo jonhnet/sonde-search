@@ -377,6 +377,8 @@ def process(args, sondes, config):
     uploaders = [u['uploader_callsign'] for u in landing['uploaders']]
 
     body = '''
+<html>
+<head>
 <style>
 table.sonde {
     background-color: #e0e0e0;
@@ -389,6 +391,8 @@ table.sonde tbody tr:nth-child(odd) {
     background-color:  #d0d0d0;
 }
 </style>
+</head>
+<body>
     '''
 
     body += f'''
@@ -507,6 +511,9 @@ table.sonde tbody tr:nth-child(odd) {
         img_att = MIMEImage(img.read(), name='map.jpg')
         img_att.add_header('Content-ID', f'<{image_cid}>')
         msg.attach(img_att)
+
+
+    body += '</body></html>'
 
     alternatives = MIMEMultipart('alternative')
     alternatives.attach(MIMEText(body, 'html', 'utf-8'))

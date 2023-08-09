@@ -109,13 +109,18 @@ def cleanup_sonde_data(sondes):
 
     sondes['datetime'] = pd.to_datetime(sondes['datetime'])
 
-    # Mark takeoffs and landings -- the earliest record and latest record for
-    # each serial number
+    # Mark takeoffs as the earliest record seen for each serial number
     takeoffs = sondes.groupby('serial')['datetime'].idxmin()
     sondes.loc[takeoffs, 'phase'] = 'takeoff'
 
-    landings = sondes.groupby('serial')['datetime'].idxmax()
-    sondes.loc[landings, 'phase'] = 'landing'
+    # Mark landings: for each serial number, it's a landing if and only if the
+    # latest record has a vertical velocity less than 2 m/s. Setting the filter
+    # to "Less than 0" would not capture the most important landings -- ground
+    # receptions -- where vertical velocity is close to zero but can be both
+    # slightly negative and slightly positive.
+    landings = sondes.loc[sondes.groupby('serial')['datetime'].idxmax()]
+    landings = landings.loc[landings['vel_v'] < 2]
+    sondes.loc[landings.index, 'phase'] = 'landing'
 
     return sondes
 
@@ -154,10 +159,10 @@ def get_all_sondes():
     # Filter out launches left over from the prior launch cycle. We expect
     # sondes to be launched about 2 hours ago, but sondes launched 14 hours ago
     # that are still being received might show up here. Filter out any sondes
-    # that have been transmitting data for more than 6 hours.
+    # that have been transmitting data for more than 8 hours.
     now = datetime.datetime.now(tz=datetime.timezone.utc)
     sondes = sondes.groupby('serial').filter(
-        lambda g: now - g['datetime'].min() < datetime.timedelta(hours=6))
+        lambda g: now - g['datetime'].min() < datetime.timedelta(hours=8))
 
     return sondes
 

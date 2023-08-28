@@ -80,6 +80,7 @@ if __name__ == "__main__":
         '-d', '--logfile-dir',
         default=".",
         action='store',
+        required=True,
     )
     parser.add_argument(
         '-l',

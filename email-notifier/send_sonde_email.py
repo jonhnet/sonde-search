@@ -314,7 +314,11 @@ def get_elev(lat, lon):
         'includeDate': 'True',
     })
     if resp.status_code == 200:
-        return float(resp.json()['value'])
+        try:
+            return float(resp.json()['value'])
+        except:
+            print(f'Elevation API gave invalid response: {resp.content}')
+            return None
     else:
         return None
 

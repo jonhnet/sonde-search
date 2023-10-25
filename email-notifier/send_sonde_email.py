@@ -45,6 +45,7 @@ CONFIGS = [
         'email_to': [
             'jelson@gmail.com',
             'info@bestforbees.com',
+            'liu.space.yang@gmail.com',
         ],
         'max_distance_mi': 77.6,
         'units': 'metric',

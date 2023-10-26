@@ -545,6 +545,11 @@ def get_args():
         default=False,
         action='store_true',
     )
+    parser.add_argument(
+        '--attach',
+        default=False,
+        action='store_true',
+    )
     args = parser.parse_args(sys.argv[1:])
 
     return args
@@ -553,7 +558,10 @@ def main():
     args = get_args()
 
     global EXTERNAL_IMAGES_ROOT
-    if not os.path.exists(EXTERNAL_IMAGES_ROOT):
+    if args.attach:
+        EXTERNAL_IMAGES_ROOT = None
+
+    if EXTERNAL_IMAGES_ROOT and not os.path.exists(EXTERNAL_IMAGES_ROOT):
         if args.really_send:
             raise Exception(f"External images root {EXTERNAL_IMAGES_ROOT} does not exist")
         else:

@@ -1,4 +1,4 @@
-#/usr/bin/env python3
+#!/usr/bin/env python3
 
 # These functions create the dynamodb tables needed by the
 # service. They are uesd by both the local unit test framework to
@@ -51,3 +51,8 @@ def create_tables(ddb_client):
         ],
         BillingMode='PAY_PER_REQUEST',
     )
+
+if __name__ == '__main__':
+    import boto3
+    ddb = boto3.client('dynamodb')
+    create_tables(ddb)

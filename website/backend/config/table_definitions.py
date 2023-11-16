@@ -7,6 +7,21 @@
 
 def create_tables(ddb_client):
     ddb_client.create_table(
+        TableName='sondesearch-notifier-users',
+        KeySchema=[{
+            'AttributeName': 'uuid',
+            'KeyType': 'HASH',
+        }],
+        AttributeDefinitions=[
+            {
+                'AttributeName': 'uuid',
+                'AttributeType': 'S',
+            },
+        ],
+        BillingMode='PAY_PER_REQUEST',
+    )
+
+    ddb_client.create_table(
         TableName='sondesearch-notifier-subscriptions',
         KeySchema=[{
             'AttributeName': 'uuid',
@@ -18,35 +33,20 @@ def create_tables(ddb_client):
                 'AttributeType': 'S',
             },
             {
-                'AttributeName': 'email',
+                'AttributeName': 'subscriber',
                 'AttributeType': 'S',
             },
         ],
         GlobalSecondaryIndexes=[
             {
-                'IndexName': 'email-index',
+                'IndexName': 'subscriber-index',
                 'KeySchema': [{
-                    'AttributeName': 'email',
+                    'AttributeName': 'subscriber',
                     'KeyType': 'HASH',
                 }],
                 'Projection': {
                     'ProjectionType': 'ALL',
                 },
-            },
-        ],
-        BillingMode='PAY_PER_REQUEST',
-    )
-
-    ddb_client.create_table(
-        TableName='sondesearch-notifier-prefs',
-        KeySchema=[{
-            'AttributeName': 'email',
-            'KeyType': 'HASH',
-        }],
-        AttributeDefinitions=[
-            {
-                'AttributeName': 'email',
-                'AttributeType': 'S',
             },
         ],
         BillingMode='PAY_PER_REQUEST',

@@ -6,7 +6,6 @@ import os
 import boto3
 import json
 import sys
-from cryptography.fernet import Fernet
 
 from moto import mock_secretsmanager, mock_dynamodb
 
@@ -18,11 +17,7 @@ class Test_v1:
     def server(self):
         self.mock_dynamodb = mock_dynamodb()
         self.mock_dynamodb.start()
-        self.mock_secretsmanager = mock_secretsmanager()
-        self.mock_secretsmanager.start()
 
-        SECRET_NAME = 'secret_name'
-        os.environ['SECRET_NAME'] = SECRET_NAME
         os.environ['AWS_ACCESS_KEY_ID'] = 'testing'
         os.environ['AWS_SECRET_ACCESS_KEY'] ='testing'
         os.environ['AWS_SECURITY_TOKEN'] = 'testing'
@@ -31,13 +26,8 @@ class Test_v1:
 
         ddb = boto3.resource('dynamodb')
         table_definitions.create_tables(ddb)
+        self.user_table = ddb.Table('sondesearch-notifier-users')
         self.sub_table = ddb.Table('sondesearch-notifier-subscriptions')
-        self.pref_table = ddb.Table('sondesearch-notifier-prefs')
-
-        sm = boto3.client('secretsmanager')
-        sm.create_secret(Name=SECRET_NAME, SecretString=json.dumps({
-            'fernet_key': Fernet.generate_key().decode('utf8'),
-        }))
 
         from src import v1
         self.apiserver = v1.apiserver
@@ -48,7 +38,6 @@ class Test_v1:
         cherrypy.engine.block()
 
         self.mock_dynamodb.stop()
-        self.mock_secretsmanager.stop()
 
     def get(self, url_suffix, expected_status=200, params=None):
         url = f'http://127.0.0.1:8080/{url_suffix}'
@@ -71,18 +60,19 @@ class Test_v1:
     # for. The response shouldn't have anything else in it.
     def test_get_config_newuser(self, server):
         email = 'test@foo.bar'
-        token = self.apiserver.get_signup_token(email)
-        resp = self.get('get_config', params={'token': token}).json()
-        assert resp['email'] == email
-        resp.pop('email')
+        user_token = self.apiserver.get_user_token(email)
+        resp = self.get('get_config', params={'user_token': user_token}).json()
+        assert resp.pop('email') == email
+        assert resp.pop('prefs') == {}
+        assert resp.pop('subs') == []
         assert resp == {}
 
     # Test subscribing, then unsubscribing
     def test_subscribe_unsubscribe(self, server):
         email = 'test@testme'
-        token = self.apiserver.get_signup_token(email)
+        user_token = self.apiserver.get_user_token(email)
         resp = self.post('subscribe', data={
-            'token': token,
+            'user_token': user_token,
             'lat': '77.123456789',
             'lon': '0.1',
             'max_distance_mi': '300',
@@ -98,20 +88,20 @@ class Test_v1:
         assert resp['prefs']['units'] == 'imperial'
         assert resp['prefs']['tzname'] == 'America/Los_Angeles'
 
-        resp2 = self.get('get_config', params={'token': token}).json()
+        resp2 = self.get('get_config', params={'user_token': user_token}).json()
         assert resp == resp2
 
         # Unsubscribe
         self.get('unsubscribe', params={'uuid': sub['uuid']})
 
-        resp3 = self.get('get_config', params={'token': token}).json()
+        resp3 = self.get('get_config', params={'user_token': user_token}).json()
         assert len(resp3['subs']) == 0
 
     def test_multiple_subscriptions(self, server):
         email = 'test@testme'
-        token = self.apiserver.get_signup_token(email)
+        user_token = self.apiserver.get_user_token(email)
         templ = {
-            'token': token,
+            'user_token': user_token,
             'lat': '1',
             'lon': '1',
             'max_distance_mi': '300',
@@ -137,7 +127,7 @@ class Test_v1:
                 self.post('unsubscribe', data={'uuid': sub['uuid']})
 
         # make sure 2 remains
-        resp = self.get('get_config', params={'token': token}).json()
+        resp = self.get('get_config', params={'user_token': user_token}).json()
         assert len(resp['subs']) == 1
         assert resp['subs'][0]['lat'] == 2
         assert resp['subs'][0]['lon'] == 2
@@ -145,9 +135,9 @@ class Test_v1:
     # Test subscribing with a missing argument
     def test_missing_subscribe(self, server):
         email = 'test@testme'
-        token = self.apiserver.get_signup_token(email)
+        user_token = self.apiserver.get_user_token(email)
         resp = self.post('subscribe', expected_status=400, data={
-            'token': token,
+            'user_token': user_token,
             'lat': 77,
             'lon': 44,
             'max_distance_mi': 300,

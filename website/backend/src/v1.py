@@ -12,19 +12,15 @@ from decimal import Decimal
 import boto3
 from boto3.dynamodb.conditions import Key, Attr
 
-from cryptography.fernet import Fernet
-
 EMAIL_DESTINATION = f'https://sondesearch.lectrobox.com/'
 
 class GlobalConfig:
     def __init__(self):
         print('Global setup')
         secretsmanager = boto3.client('secretsmanager')
-        self.secrets = json.loads(secretsmanager.get_secret_value(SecretId=os.environ['SECRET_NAME'])['SecretString'])
-        self.encryptor = Fernet(self.secrets['fernet_key'])
         self.ddb = boto3.resource('dynamodb')
+        self.user_table = self.ddb.Table('sondesearch-notifier-users')
         self.sub_table = self.ddb.Table('sondesearch-notifier-subscriptions')
-        self.pref_table = self.ddb.Table('sondesearch-notifier-prefs')
 
 class ClientError(cherrypy.HTTPError):
     def __init__(self, message):
@@ -42,26 +38,28 @@ class LectroboxAPI:
     def __init__(self, global_config):
         self._g = global_config
 
-    def _client_error(self, message):
-        cherrypy.response.status = 400
-        cherrypy.response.body = message.encode('utf8')
-        raise cherrypy.CherryPyException
-
     @cherrypy.expose
     def hello(self):
         return f"{datetime.datetime.now()}: hello from the sondesearch api! pid {os.getpid()}"
 
-    def get_email(self, token):
-        email = json.loads(self._g.encryptor.decrypt(token.encode('utf8')))['e']
-        print(f'got request for {email}')
-        return email
-
-    def get_signup_token(self, email):
-        token_data = {
-            'e': email,
+    def get_user_token(self, email):
+        # Construct the initial preferences object
+        user_item = {
+            'uuid': uuid.uuid4().hex,
+            'email': email,
         }
-        return self._g.encryptor.encrypt(json.dumps(token_data).encode('utf8')).decode('utf8')
-        
+        self._g.user_table.put_item(Item=user_item)
+        return user_item['uuid']
+
+    def get_user_data(self, user_token):
+        rv = self._g.user_table.query(
+            KeyConditionExpression=Key('uuid').eq(user_token)
+        )['Items']
+
+        if len(rv) == 0:
+            raise ClientError("unknown user token")
+        return rv[0]
+
     @cherrypy.expose
     def send_validation_email(self, email, url):
         print(f'got request: e={email}, u={url}')
@@ -71,29 +69,27 @@ class LectroboxAPI:
         next_url = url[0:idx] + f'/manage/?token={token}'
         return 'hello'
 
+    PREFERENCES = ('units', 'tzname')
+
     @cherrypy.expose
-    def get_config(self, token):
+    def get_config(self, user_token):
         cherrypy.response.headers['Access-Control-Allow-Origin'] = '*'
 
-        email = self.get_email(token)
-        prefs = self._g.pref_table.query(
-            KeyConditionExpression=Key('email').eq(email)
-        )['Items']
+        user_data = self.get_user_data(user_token)
 
-        # Check to see if this user has any preferences stored
-        if len(prefs) == 0:
-            return json.dumps({
-                'email': email,
-            })
-
-        prefs = prefs[0]
+        # Get preferences
+        prefs = {}
+        for pref in self.PREFERENCES:
+            if pref in user_data:
+                prefs[pref] = user_data[pref]
 
         # Get subscriptions
         db_items = self._g.sub_table.query(
-            IndexName='email-index',
-            KeyConditionExpression=Key('email').eq(email),
+            IndexName='subscriber-index',
+            KeyConditionExpression=Key('subscriber').eq(user_data['uuid']),
             FilterExpression=Attr('active').eq(True),
         )
+
         subs = []
         for item in db_items['Items']:
             subs.append({
@@ -105,11 +101,8 @@ class LectroboxAPI:
 
         # Return both preferences and subscriptions
         resp = {
-            'email': email,
-            'prefs': {
-                'units': prefs['units'],
-                'tzname': prefs['tzname'],
-            },
+            'email': user_data['email'],
+            'prefs': prefs,
             'subs': subs,
         }
         return json.dumps(resp, indent=2)
@@ -121,29 +114,28 @@ class LectroboxAPI:
 
     @cherrypy.expose
     def subscribe(self, **args):
-        token = self._required(args, 'token')
-        email = self.get_email(token)
+        user_token = self._required(args, 'user_token')
+        user_data = self.get_user_data(user_token)
 
         # Construct the preferences object
-        pref_item = {
-            'email': email,
+        user_data.update({
             'units': self._required(args, 'units'),
             'tzname': self._required(args, 'tzname'),
-        }            
-        self._g.pref_table.put_item(Item=pref_item)
+        })
+        self._g.user_table.put_item(Item=user_data)
 
         # Construct the subscription object
-        ddb_item = {
+        sub_item = {
             'uuid': uuid.uuid4().hex,
-            'email': email,
+            'subscriber': user_data['uuid'],
             'active': True,
             'lat': Decimal(self._required(args, 'lat')),
             'lon': Decimal(self._required(args, 'lon')),
             'max_distance_mi': Decimal(self._required(args, 'max_distance_mi')),
         }
-        self._g.sub_table.put_item(Item=ddb_item)
+        self._g.sub_table.put_item(Item=sub_item)
 
-        return self.get_config(token)
+        return self.get_config(user_token)
 
     @cherrypy.expose
     def unsubscribe(self, uuid):
@@ -156,7 +148,7 @@ class LectroboxAPI:
                 ':f': False,
             }
         )
-            
+
         cherrypy.response.headers['Access-Control-Allow-Origin'] = '*'
 
 #def main():

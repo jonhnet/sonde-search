@@ -132,10 +132,12 @@ function process_config(config) {
         row.append($('<td class="text-right">').text(this['lat']));
         row.append($('<td class="text-right">').text(this['lon']));
         row.append($('<td class="text-right">').text('' + Math.round(100*dist)/100 + dist_unit));
-        let del_icon = $('<td class="text-center">').html('<img src="/images/trash.png" width="20" />');
+        //let del_button = $('<button class="ladda-button" data-size="xs">');
+        let del_button = $('<div data-size="xs">');
+        del_button.append($('<img src="/images/trash.png" width="20" />'));
         let uuid = this['uuid'];
-        del_icon.click(function() { unsubscribe(uuid); });
-        row.append(del_icon);
+        del_button.click(function() { unsubscribe(del_button, uuid); });
+        row.append($('<td class="text-center">').html(del_button));
         table.append(row);
     });
     if (num_subs == 0) {
@@ -228,7 +230,9 @@ function subscribe() {
     return false;
 }
 
-function unsubscribe(uuid) {
+function unsubscribe(del_icon, uuid) {
+    var l = Ladda.create(del_icon[0]);
+    l.start();
     let user_token = Cookies.get('notifier_user_token');
 
     $.ajax({
@@ -242,6 +246,8 @@ function unsubscribe(uuid) {
             process_config(result);
         },
         error: function(jqXHR, textStatus, errorThrown) {
+            l.stop();
+            alert("Couldn't delete notification! Please try again later.");
         }
     });
 

@@ -50,7 +50,7 @@ class Test_v1:
         resp = requests.post(url, data=data)
         assert resp.status_code == expected_status
         return resp
-        
+
     def test_hello(self, server):
         resp = self.get('hello')
         assert 'hello from the sondesearch api' in resp.text
@@ -67,9 +67,10 @@ class Test_v1:
         assert resp.pop('subs') == []
         assert resp == {}
 
-    # Test subscribing, then unsubscribing
+    # Test subscribing, then unsubscribing, as if we're using the
+    # management portal
     def test_subscribe_unsubscribe(self, server):
-        email = 'test@testme'
+        email = 'test@testme2.net'
         user_token = self.apiserver.get_user_token(email)
         resp = self.post('subscribe', data={
             'user_token': user_token,
@@ -92,10 +93,16 @@ class Test_v1:
         assert resp == resp2
 
         # Unsubscribe
-        self.get('unsubscribe', params={'uuid': sub['uuid']})
+        resp3 = self.post('managed_unsubscribe', data={
+            'user_token': user_token,
+            'uuid': sub['uuid'],
+        }).json()
 
-        resp3 = self.get('get_config', params={'user_token': user_token}).json()
         assert len(resp3['subs']) == 0
+        assert resp3['email'] == email
+
+        resp4 = self.get('get_config', params={'user_token': user_token}).json()
+        assert resp3 == resp4
 
     def test_multiple_subscriptions(self, server):
         email = 'test@testme'
@@ -124,7 +131,10 @@ class Test_v1:
         # unsub from 1 and 3
         for sub in resp['subs']:
             if sub['lat'] != 2:
-                self.post('unsubscribe', data={'uuid': sub['uuid']})
+                self.post('managed_unsubscribe', data={
+                    'user_token': user_token,
+                    'uuid': sub['uuid']
+                })
 
         # make sure 2 remains
         resp = self.get('get_config', params={'user_token': user_token}).json()
@@ -136,11 +146,79 @@ class Test_v1:
     def test_missing_subscribe(self, server):
         email = 'test@testme'
         user_token = self.apiserver.get_user_token(email)
-        resp = self.post('subscribe', expected_status=400, data={
+        basic_args = {
             'user_token': user_token,
             'lat': 77,
             'lon': 44,
             'max_distance_mi': 300,
             'units': 'imperial',
-        })
-        assert 'missing arg tzname' in resp.text
+            'tzname': 'America',
+        }
+
+        # make sure the basic args work
+        self.post('subscribe', expected_status=200, data=basic_args)
+
+        for arg in basic_args:
+            testargs = dict(basic_args)
+            testargs.pop(arg)
+            resp = self.post('subscribe', expected_status=400, data=testargs)
+            assert f'missing argument: {arg}' in resp.text
+
+    # Test subscribing with various arguments out of range
+    def test_bad_subscribe_args(self, server):
+        email = 'test@testme12.com.net'
+        user_token = self.apiserver.get_user_token(email)
+        basic_args = {
+            'user_token': user_token,
+            'lat': 77,
+            'lon': 44,
+            'max_distance_mi': 300,
+            'units': 'imperial',
+            'tzname': 'America',
+        }
+
+        tests = (
+            ('lat', 100),
+            ('lat', -100),
+            ('lon', 190),
+            ('lon', -190),
+            ('units', 'foos'),
+            ('max_distance_mi', -5)
+        )
+
+        self.post('subscribe', expected_status=200, data=basic_args)
+
+        for (arg, val) in tests:
+            testargs = dict(basic_args)
+            testargs[arg] = val
+            print(f'trying to set {arg} to {val}: {testargs}')
+            resp = self.post('subscribe', expected_status=400, data=testargs)
+
+    # Test one-click unsubscribe -- the link at the bottom of each
+    # email which gives unsubscribe privileges but not full management
+    # privileges
+    def test_oneclick_unsubscribe(self, server):
+        email = 'testnumberthree@test.com'
+        lat = 23.45
+        lon = -123.321
+        user_token = self.apiserver.get_user_token(email)
+        resp = self.post('subscribe', data={
+            'user_token': user_token,
+            'lat': lat,
+            'lon': lon,
+            'max_distance_mi': '300',
+            'units': 'imperial',
+            'tzname': 'America/Los_Angeles',
+        }).json()
+        assert resp['email'] == email
+        assert len(resp['subs']) == 1
+
+        sub = resp['subs'][0]
+
+        resp2 = self.post('oneclick_unsubscribe', data={
+            'uuid': sub['uuid']
+        }).json()
+
+        assert 'email' not in resp2
+        assert resp2['success'] == True
+        assert resp2['message'] == f'{email} will no longer get notifications for sondes near ({lat}, {lon}).'

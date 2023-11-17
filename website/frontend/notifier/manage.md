@@ -3,8 +3,24 @@ layout: page-fullwidth
 title: "Sonde Email Notifier — Manage"
 ---
 
-<div id='result'>
-    Nothing here yet
+<div id="loading" class="row t30 text-center">
+    <img src="/images/loading.gif" />
+</div>
+
+<div id="management_state" hidden>
+    <p>
+    Notifications configured for email address:
+    <tt><span id="state_email">unknown</span></tt>
+    </p>
+
+    <p id="no_subs" hidden>
+    You currently have no notifications configured. Click below to add one.
+    </p>
+
+    <div id="sub_table_div" class="text-center">
+    </div>
+
+    <button class="button" data-reveal-id="add-subscription">Add New Notification</button>
 </div>
 
 <div class="reveal-modal" id="add-subscription" data-reveal aria-labelledby="modalTitle" aria-hidden="true" role="dialog">
@@ -69,9 +85,6 @@ title: "Sonde Email Notifier — Manage"
   </form>
 </div>
 
-<button class="button" data-reveal-id="add-subscription">Add New Notification</button>
-
-
 <script>
 let base_url = "https://api.sondesearch.lectrobox.com/api/v1/";
 var tzname = null;
@@ -88,18 +101,53 @@ function mi_to_km(mi) {
 function process_config(config) {
     email = config['email'];
     tzname = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    var prefs = {}
-    if ('prefs' in config) {
-	prefs = config['prefs'];
-    }
-    if ('units' in prefs) {
-	set_units(prefs['units']);
-    } else {
-	set_units('imperial');
-    }
+    var prefs = config['prefs'] || {};
+    set_units(prefs['units'] || 'imperial');
 
+    $('#state_email').html(email);
     $('#subscribe_email').html(email);
     $('#subscribe_tzname').html(tzname);
+
+    // construct the table
+    let table = $('<table>');
+    let headers = $('<tr>');
+    let num_subs = 0;
+    headers.append($('<th>').text('Home Lat'));
+    headers.append($('<th>').text('Home Lon'));
+    headers.append($('<th>').text('Max Dist'));
+    headers.append($('<th>').text('Delete'));
+    table.append(headers);
+    var dist_unit = ' mi';
+    if (units == 'metric') {
+	dist_unit = ' km';
+    }
+    $.each(config['subs'] || [], function() {
+	console.log(this);
+	num_subs += 1;
+	let dist = this['max_distance_mi'];
+	if (units == 'metric') {
+	    dist = mi_to_km(dist);
+	}
+	let row = $('<tr>');
+	row.append($('<td class="text-right">').text(this['lat']));
+	row.append($('<td class="text-right">').text(this['lon']));
+	row.append($('<td class="text-right">').text('' + Math.round(100*dist)/100 + dist_unit));
+	let del_icon = $('<td class="text-center">').html('<img src="/images/trash.png" width="20" />');
+	let uuid = this['uuid'];
+	del_icon.click(function() { unsubscribe(uuid); });
+	row.append(del_icon);
+	table.append(row);
+    });
+    if (num_subs == 0) {
+	$('#no_subs').attr('hidden', false);
+	$('#sub_table_div').attr('hidden', true);
+    } else {
+	$('#no_subs').attr('hidden', true);
+	$('#sub_table_div').html(table);
+	$('#sub_table_div').attr('hidden', false);
+    }
+    $('#management_state').attr('hidden', false);
+    $('#loading').attr('hidden', true);
 }
 
 function set_units(units_arg) {
@@ -177,6 +225,26 @@ function subscribe() {
     return false;
 }
 
+function unsubscribe(uuid) {
+    let user_token = Cookies.get('notifier_user_token');
+
+    $.ajax({
+        method: 'POST',
+        url: base_url + 'managed_unsubscribe',
+	data: {
+	    'user_token': user_token,
+	    'uuid': uuid,
+	},
+        success: function(result) {
+            process_config(result);
+        },
+        error: function(jqXHR, textStatus, errorThrown) {
+        }
+    });
+
+    // return false to prevent form from navigating away to a new page
+    return false;
+}
 
 function OnLoadTrigger() {
     get_config();

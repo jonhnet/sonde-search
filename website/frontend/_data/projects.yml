@@ -1,0 +1,26 @@
+#
+# This list is used in two ways:
+#
+# 1) A list, with thumbnails, of products on the front page
+#
+# 2) The nav bar that appears at the top of every page
+#
+# --JE
+#
+
+- title: Landing Heatmaps
+  url: /heatmaps/
+  image: front-page-teasers/earth-measurement.jpg
+  text: Interactive map showing the last-heard lcations of all sondes tracked by SondeHub in 2022
+  tags: maps
+
+- title: Landing Calendars
+  url: /calendars/
+  text: Calendars
+  tags: maps
+
+- title: Email Notifier
+  url: /notifier/
+  text: Get email every time a radiosonde lands near you
+  tags: poop
+  

@@ -1,0 +1,21 @@
+jelson notes:
+
+Site uses Jekyll.
+
+* Installation - don't try to apt-get install, it just gets confused and sad
+  because 'gem' installations conflict with the system installations
+
+  https://jekyllrb.com/docs/installation/ubuntu/
+
+  gem install jekyll bundler
+  bundle install
+
+* Running
+
+  Make sure 'which jekyll' returns ~/.gems/bin, not /usr/bin
+
+  Debug server:
+     bundle exec jekyll serve --config _config.yml,_config_dev.yml
+     point browser to localhost:4000
+  
+  

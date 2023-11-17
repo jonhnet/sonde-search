@@ -1,0 +1,15 @@
+{% if include.prefix %}
+   {% assign prefix = include.prefix" %}
+{% else %}
+   {% assign prefix = "images" %}
+{% endif %}
+
+<div class="lec-captioned-image">
+  <a href="{{prefix}}/{{ include.image }}">
+    <img src="{{prefix}}/thumbs/thumb-{{include.image}}" style="display: block; margin:auto" />
+  </a>
+  {% if include.caption %}
+  <div class="caption">{{ include.caption }}</div>
+  {% endif %}
+</div>
+

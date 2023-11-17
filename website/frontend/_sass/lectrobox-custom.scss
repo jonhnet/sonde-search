@@ -1,0 +1,42 @@
+div.lec-inline-images {
+    text-align: center;
+    margin-top: 15px;
+    margin-bottom: 15px;
+}
+
+div.lec-inline-images>a {
+    border-bottom: none;
+}
+
+div.lec-inline-images>div.lec-captioned-image {
+    display: inline-block;
+    margin-left: 3px;
+    margin-right: 3px;
+    margin-top: 3px;
+    margin-bottom: 3px;
+    vertical-align: top;
+}
+
+div.lec-right-image {
+    display: block;
+    float: right;
+    margin-left: 20px;
+}
+
+div.lec-captioned-image>div.caption {
+    text-align:center;
+    width: 400px;
+    font-size: 80%;
+    margin: 0 auto;
+    margin-bottom: 17px;
+}
+
+button.linkbutton {
+    text-decoration: none;
+    /* color: initial; */
+    border-radius: 12px;
+    border: solid;
+    border-color: blue;
+    border-width: 2px;
+    padding: 10px;
+}

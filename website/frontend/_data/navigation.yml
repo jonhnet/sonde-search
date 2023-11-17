@@ -1,0 +1,15 @@
+- title: Home
+  url: "/"
+  side: left
+
+- title: About
+  url: "/about/"
+  side: left
+
+- title: "Contact"
+  url: "/contact/"
+  side: right
+
+# Note: projects menus are auto-generated using data from projects.yml. The
+# custom generator (in _plugins/jekyll-lectrobox.rb) reads the projects list
+# from projects.yml and appended to this list.

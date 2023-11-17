@@ -1,0 +1,30 @@
+	.zoomout .highslide-image {
+		cursor: url(/assets/highslide/graphics/zoomout.cur), pointer;
+	}
+	.zoomout .highslide-caption {
+		width: auto;
+		background: #343434;
+		color: white;
+	}
+	.zoomin .highslide-image {
+		cursor: url(/assets/highslide/graphics/zoomin.cur), pointer;
+	}
+	.highslide-image {
+		border: 1px solid black;
+	}
+	.highslide-controls {
+		width: 60px !important;
+	}
+	.highslide-controls .highslide-close {
+		display: none;
+	}
+	.highslide-controls .highslide-full-expand {
+		display: none;
+	}
+	.highslide-caption {
+		padding: .5em 0;
+	}
+	.closebutton {
+		top: 0;
+		left: 0;
+	}

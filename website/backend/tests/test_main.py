@@ -7,7 +7,7 @@ import boto3
 import json
 import sys
 
-from moto import mock_secretsmanager, mock_dynamodb
+from moto import mock_secretsmanager, mock_dynamodb, mock_ses
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from config import table_definitions
@@ -17,6 +17,8 @@ class Test_v1:
     def server(self):
         self.mock_dynamodb = mock_dynamodb()
         self.mock_dynamodb.start()
+        self.mock_ses = mock_ses()
+        self.mock_ses.start()
 
         os.environ['AWS_ACCESS_KEY_ID'] = 'testing'
         os.environ['AWS_SECRET_ACCESS_KEY'] ='testing'
@@ -30,6 +32,10 @@ class Test_v1:
         self.sub_table = ddb.Table('sondesearch-notifier-subscriptions')
 
         from src import v1
+
+        ses = boto3.client('ses')
+        ses.verify_email_address(EmailAddress=v1.LectroboxAPI.FROM_EMAIL_ADDR)
+
         self.apiserver = v1.apiserver
         cherrypy.engine.start()
         cherrypy.engine.wait(cherrypy.engine.states.STARTED)
@@ -38,6 +44,7 @@ class Test_v1:
         cherrypy.engine.block()
 
         self.mock_dynamodb.stop()
+        self.mock_ses.stop()
 
     def sub_args(self, user_token):
         return {
@@ -76,6 +83,14 @@ class Test_v1:
         assert resp.pop('prefs') == {}
         assert resp.pop('subs') == []
         assert resp == {}
+
+    # Test sending a notification email
+    def test_send_validation_email(self, server):
+        email = 'jelson@gmail.com'
+        self.post('send_validation_email', data={
+            'email': email,
+            'url': 'https://sondesearch.lectrobox.com/notifier/signup',
+        })
 
     # Test subscribing, then unsubscribing, as if we're using the
     # management portal

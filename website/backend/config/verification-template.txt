@@ -1,0 +1,10 @@
+<p>
+Hello! The <a href="https://sondesearch.lectrobox.com/">Lectrobox Radiosonde Search Service</a>
+has received a request to send notifications to this email: <tt>{EMAIL}</tt>. To manage
+email notifications for this address, please <a href="{URL}">click here</a>.
+<p>
+If you did not request such notifications, you can safely ignore this email.
+<p>
+Thank you,<br>
+The Lectrobox Email Notifier
+

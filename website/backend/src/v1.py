@@ -37,6 +37,8 @@ class ClientError(cherrypy.HTTPError):
 class LectroboxAPI:
     PREFERENCES = ('units', 'tzname')
     VALID_UNITS = ('metric', 'imperial')
+    FROM_EMAIL_ADDR = 'notifier@lectrobox.com'
+    VERIFY_EMAIL_SUBJ = 'Verify your email to receive sonde notifications'
 
     def __init__(self, global_config):
         self._g = global_config
@@ -85,7 +87,34 @@ class LectroboxAPI:
         # with "/manage", plus the user token.
         idx = url.index('/signup')
         next_url = url[0:idx] + f'/manage/?user_token={user_token}'
-        print(next_url)
+        print(f'got signup request from {email}: sending to {next_url}')
+
+        # construct the email body
+        with open(os.path.join(os.path.dirname(__file__), "../config/verification-template.txt")) as f:
+            body_template = f.read()
+        body = body_template.format(EMAIL=email, URL=next_url)
+
+        # send
+        ses = boto3.client('ses')
+        ses.send_email(
+            Source=self.FROM_EMAIL_ADDR,
+            Destination={
+                'ToAddresses': [email],
+                'BccAddresses': [self.FROM_EMAIL_ADDR],
+            },
+            Message={
+                'Subject': {
+                    'Data': self.VERIFY_EMAIL_SUBJ,
+                    'Charset': 'utf-8',
+                },
+                'Body': {
+                    'Html': {
+                        'Data': body,
+                        'Charset': 'utf-8',
+                    },
+                },
+            },
+        )
 
         return {'success': True}
 
@@ -204,8 +233,9 @@ class LectroboxAPI:
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def oneclick_unsubscribe(self, uuid):
-        res = self._unsubscribe_common(uuid)
         cherrypy.response.headers['Access-Control-Allow-Origin'] = '*'
+
+        res = self._unsubscribe_common(uuid)
         return {
             'success': True,
             'message': '{} will no longer get notifications for sondes near ({}, {}).'.format(
@@ -222,6 +252,8 @@ class LectroboxAPI:
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def managed_unsubscribe(self, user_token, uuid):
+        cherrypy.response.headers['Access-Control-Allow-Origin'] = '*'
+
         res = self._unsubscribe_common(uuid)
 
         if res['cancelled_sub']['subscriber'] != user_token:

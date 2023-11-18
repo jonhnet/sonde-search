@@ -6,6 +6,7 @@
 #
 layout: frontpage
 header: true
+footer: true
 
 permalink: /index.html
 # This is a nasty hack to make the navigation highlight
@@ -13,3 +14,4 @@ permalink: /index.html
 #
 homepage: true
 ---
+

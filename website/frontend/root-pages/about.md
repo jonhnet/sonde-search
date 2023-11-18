@@ -1,31 +1,35 @@
 ---
 layout: page
-title: "About Lectrobox"
+title: "What is a radiosonde, and why search for one?"
 permalink: "/about/"
+footer: true
 ---
 
-Hi! My name is [Jeremy](https://www.circlemud.org/jelson), and
-Lectrobox is a tiny company I made for fun in order to distribute some
-of my electronics projects. I work for a Big Company as a computer
-scientist by day. But after work, I have a lot of hobbies I'm
-passionate about: being a maker, riding bicycles, flying small
-airplanes, and travelling.  A few years ago, I realized that some of
-my electronics projects might be useful to other people, too! And so
-<em>Lectrobox</em> was born.
+A [radiosonde](https://www.noaa.gov/jetstream/upperair/radiosondes) is
+a small wireless sensor used to gather data about the atmosphere to
+drive weather predictions and research. At over 1,300 sites worldwide,
+sondes are launched twice a day, hoisted by large hydrogen-filled
+balloons into the upper atmosphere. Over the course of several hours,
+they climb up above 100,000 feet (30,000 meters).
 
-Most of my electronics are designed and prototyped at my home in
-Seattle. The first few copies of everything I sell are made by
-hand. After those are gone, I hire companies to do the bulk assembly
-for me. This lets me spend more time designing the next cool thing and
-less time soldering.
+When the balloon finally bursts, the sonde falls slowly back to earth
+under a small parachute. That's where our hobby begins! Hobbyists
+around the world collaborate to [track the
+sondes](https://www.sondehub.org/) and find them after they land.
+Once every second, the sonde transmits data including its current
+GPS-derived position (latitude, longitude and altitude) back to the
+launch point. These transmissions are not encrypted, and hobbyists
+have learned to receive and decode them, typically with a cheap
+[software-defined radio](https://www.rtl-sdr.com/about-rtl-sdr/).
 
-Nearly everything I sell is distributed through Amazon's fulfillment
-services. I just ship a box full of my products to Amazon; they store
-it in their warehouse and ship it when someone orders one. This is
-great for a micro-company like mine because it keeps me from having to
-be on call every day to ship boxes out to customers or deal with
-taking orders: Amazon makes it all turn-key.
+The [SondeHub](https://www.sondehub.org) web site is the largest
+public repository of radiosonde data collected by hobbyists. Over the
+past couple of years, I've built a number of tools that help track
+radiosondes based on the data from SondeHub. My site makes all those
+tools available to the public. You can also find all [the source
+code](https://github.com/jonhnet/sonde-search) on GitHub.
 
-If you have any suggestions for new projects or would like to
-collaborate, please get in touch with me at <em>jelson</em> at
-<em>lectrobox</em> dot <em>com</em>!
+You may still be wondering: but *why* search for sondes?
+
+Why not? It's fun. It's like a high-tech treasure hunt, similar to
+[Geocaching](https://www.geocaching.com).

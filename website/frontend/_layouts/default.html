@@ -4,20 +4,20 @@ layout: compress
 <!doctype html>
 <html class="no-js" lang="{% if site.language == nil %}en{% else %}{{ site.language }}{% endif %}">
 <head>
-	{% include _head.html %}
+        {% include _head.html %}
 </head>
 <body id="top-of-page" class="{{ layout.format }}" onload="if (typeof OnLoadTrigger === 'function') { OnLoadTrigger(); }">
-	{% unless page.skip_boilerplate %}
-	{% include _navigation.html %}
-	{% endunless %}
+        {% unless page.skip_nav %}
+        {% include _navigation.html %}
+        {% endunless %}
 
-	{% include _masthead.html %}
-	{{ content }}
+        {% include _masthead.html %}
+        {{ content }}
 
-	{% unless page.skip_boilerplate %}
-	{% include _footer.html %}
-	{% endunless %}
+        {% if page.footer %}
+        {% include _footer.html %}
+        {% endif %}
 
-	{% include _footer_scripts.html %}
+        {% include _footer_scripts.html %}
 </body>
 </html>

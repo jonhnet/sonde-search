@@ -1,0 +1,13 @@
+[Unit]
+Description=Sondesearch API
+StartLimitIntervalSec=0
+
+[Service]
+Restart=always
+RestartSec=30
+ExecStart=uwsgi --ini /home/jelson/projects/sonde-search/config/uwsgi.conf
+User=jelson
+
+[Install]
+WantedBy=multi-user.target
+

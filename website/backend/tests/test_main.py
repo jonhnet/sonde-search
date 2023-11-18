@@ -244,4 +244,28 @@ class Test_v1:
 
     # Make sure we keep two accounts straight
     def test_two_accounts(self, server):
-        email1 = 'testnumberthree@test.com'
+        # user 1
+        email1 = 'testuser_1@test.com'
+        user_token1 = self.apiserver.get_user_token(email1)
+        sub1 = self.sub_args(user_token1)
+        sub1['max_distance_mi'] = 111
+        self.post('subscribe', data=sub1).json()
+
+        # user 2
+        email2 = 'testuser_2@test.com'
+        user_token2 = self.apiserver.get_user_token(email2)
+        sub2 = self.sub_args(user_token2)
+        sub2['max_distance_mi'] = 222
+        self.post('subscribe', data=sub2).json()
+
+        # verify user 1
+        resp1 = self.get('get_config', params={'user_token': user_token1}).json()
+        assert resp1['email'] == email1
+        assert len(resp1['subs']) == 1
+        assert resp1['subs'][0]['max_distance_mi'] == 111
+
+        # verify user 2
+        resp1 = self.get('get_config', params={'user_token': user_token2}).json()
+        assert resp1['email'] == email2
+        assert len(resp1['subs']) == 1
+        assert resp1['subs'][0]['max_distance_mi'] == 222

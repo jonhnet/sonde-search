@@ -39,6 +39,16 @@ class Test_v1:
 
         self.mock_dynamodb.stop()
 
+    def sub_args(self, user_token):
+        return {
+            'user_token': user_token,
+            'lat': '77.123456789',
+            'lon': '0.1',
+            'max_distance_mi': '300',
+            'units': 'imperial',
+            'tzname': 'America/Los_Angeles',
+        }
+
     def get(self, url_suffix, expected_status=200, params=None):
         url = f'http://127.0.0.1:8080/{url_suffix}'
         resp = requests.get(url, params=params)
@@ -72,23 +82,18 @@ class Test_v1:
     def test_subscribe_unsubscribe(self, server):
         email = 'test@testme2.net'
         user_token = self.apiserver.get_user_token(email)
-        resp = self.post('subscribe', data={
-            'user_token': user_token,
-            'lat': '77.123456789',
-            'lon': '0.1',
-            'max_distance_mi': '300',
-            'units': 'imperial',
-            'tzname': 'America/Los_Angeles',
-        }).json()
+        test_sub = self.sub_args(user_token)
+        resp = self.post('subscribe', data=test_sub).json()
         assert resp['email'] == email
         assert len(resp['subs']) == 1
         sub = resp['subs'][0]
-        assert sub['lat'] == 77.123456789
-        assert sub['lon'] == 0.1
-        assert sub['max_distance_mi'] == 300
-        assert resp['prefs']['units'] == 'imperial'
-        assert resp['prefs']['tzname'] == 'America/Los_Angeles'
+        assert sub['lat'] == float(test_sub['lat'])
+        assert sub['lon'] == float(test_sub['lon'])
+        assert sub['max_distance_mi'] == float(test_sub['max_distance_mi'])
+        assert resp['prefs']['units'] == test_sub['units']
+        assert resp['prefs']['tzname'] == test_sub['tzname']
 
+        # Get config and ensure we get the same config block back again
         resp2 = self.get('get_config', params={'user_token': user_token}).json()
         assert resp == resp2
 
@@ -101,20 +106,32 @@ class Test_v1:
         assert len(resp3['subs']) == 0
         assert resp3['email'] == email
 
+        # Get config again, ensure it's the same as the unsubscribe response
         resp4 = self.get('get_config', params={'user_token': user_token}).json()
         assert resp3 == resp4
+
+    # Test making a subscription, then losing your credentials and
+    # asking for another auth link to be emailed. Your subscription
+    # state should be retained.
+    def test_lost_credentials(self, server):
+        email = 'lost-credentials@test.net'
+        user_token = self.apiserver.get_user_token(email)
+        resp = self.post('subscribe', data=self.sub_args(user_token)).json()
+        assert resp['email'] == email
+        assert len(resp['subs']) == 1
+
+        # ask for new credentials and make sure the sub is still there
+        user_token2 = self.apiserver.get_user_token(email)
+
+        resp2 = self.get('get_config', params={'user_token': user_token2}).json()
+        assert resp == resp2
 
     def test_multiple_subscriptions(self, server):
         email = 'test@testme'
         user_token = self.apiserver.get_user_token(email)
-        templ = {
-            'user_token': user_token,
-            'lat': '1',
-            'lon': '1',
-            'max_distance_mi': '300',
-            'units': 'imperial',
-            'tzname': 'America/Los_Angeles',
-        }
+        templ = self.sub_args(user_token)
+        templ['lat'] = '1'
+        templ['lon'] = '1'
         resp = self.post('subscribe', data=templ).json()
         assert len(resp['subs']) == 1
 
@@ -146,14 +163,7 @@ class Test_v1:
     def test_missing_subscribe(self, server):
         email = 'test@testme'
         user_token = self.apiserver.get_user_token(email)
-        basic_args = {
-            'user_token': user_token,
-            'lat': 77,
-            'lon': 44,
-            'max_distance_mi': 300,
-            'units': 'imperial',
-            'tzname': 'America',
-        }
+        basic_args = self.sub_args(user_token)
 
         # make sure the basic args work
         self.post('subscribe', expected_status=200, data=basic_args)
@@ -168,22 +178,16 @@ class Test_v1:
     def test_bad_subscribe_args(self, server):
         email = 'test@testme12.com.net'
         user_token = self.apiserver.get_user_token(email)
-        basic_args = {
-            'user_token': user_token,
-            'lat': 77,
-            'lon': 44,
-            'max_distance_mi': 300,
-            'units': 'imperial',
-            'tzname': 'America',
-        }
+        basic_args = self.sub_args(user_token)
 
         tests = (
-            ('lat', 100),
-            ('lat', -100),
-            ('lon', 190),
-            ('lon', -190),
+            ('lat', '90.1'),
+            ('lat', '-90.1'),
+            ('lon', '180.1'),
+            ('lon', '-180.1'),
             ('units', 'foos'),
-            ('max_distance_mi', -5)
+            ('max_distance_mi', '-5'),
+            ('max_distance_mi', '-0.001'),
         )
 
         self.post('subscribe', expected_status=200, data=basic_args)
@@ -199,26 +203,45 @@ class Test_v1:
     # privileges
     def test_oneclick_unsubscribe(self, server):
         email = 'testnumberthree@test.com'
-        lat = 23.45
-        lon = -123.321
         user_token = self.apiserver.get_user_token(email)
-        resp = self.post('subscribe', data={
-            'user_token': user_token,
-            'lat': lat,
-            'lon': lon,
-            'max_distance_mi': '300',
-            'units': 'imperial',
-            'tzname': 'America/Los_Angeles',
+
+        # first subscription
+        sub1 = self.sub_args(user_token)
+        sub1['lat'] = 23.45
+        sub1['lon'] = -123.321
+        resp1 = self.post('subscribe', data=sub1).json()
+        assert resp1['email'] == email
+        assert len(resp1['subs']) == 1
+
+        # second subscription
+        sub2 = self.sub_args(user_token)
+        sub2['lat'] = 11.11
+        sub2['lon'] = 22.22
+        resp2 = self.post('subscribe', data=sub2).json()
+        assert resp2['email'] == email
+        assert len(resp2['subs']) == 2
+
+        # make sure there are two subscriptons returned from get_config
+        resp3 = self.get('get_config', params={'user_token': user_token}).json()
+        assert len(resp3['subs']) == 2
+
+        # unsubscribe from sub1 using the uuid-only API
+        resp4 = self.post('oneclick_unsubscribe', data={
+            'uuid': resp1['subs'][0]['uuid']
         }).json()
-        assert resp['email'] == email
-        assert len(resp['subs']) == 1
+        # make sure no personal data is returned from this API
+        assert resp4.pop('success') == True
+        assert resp4.pop('message') == f'{email} will no longer get notifications for sondes near ({sub1["lat"]}, {sub1["lon"]}).'
+        assert resp4 == {}
 
-        sub = resp['subs'][0]
+        # use the authorized-user management api to get the config;
+        # make sure sub1 is gone and sub2 is still there
+        resp5 = self.get('get_config', params={'user_token': user_token}).json()
+        assert resp5['email'] == email
+        assert len(resp5['subs']) == 1
+        assert resp5['subs'][0]['lat'] == sub2['lat']
+        assert resp5['subs'][0]['lon'] == sub2['lon']
 
-        resp2 = self.post('oneclick_unsubscribe', data={
-            'uuid': sub['uuid']
-        }).json()
-
-        assert 'email' not in resp2
-        assert resp2['success'] == True
-        assert resp2['message'] == f'{email} will no longer get notifications for sondes near ({lat}, {lon}).'
+    # Make sure we keep two accounts straight
+    def test_two_accounts(self, server):
+        email1 = 'testnumberthree@test.com'

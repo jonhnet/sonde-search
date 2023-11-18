@@ -46,7 +46,17 @@ class LectroboxAPI:
         return f"{datetime.datetime.now()}: hello from the sondesearch api! pid {os.getpid()}"
 
     def get_user_token(self, email):
-        # Construct the initial preferences object
+        # Check to see if this email already exists in the system. If
+        # so, simply return the existing UUID.
+        rv = self._g.user_table.query(
+            IndexName='email-index',
+            KeyConditionExpression=Key('email').eq(email)
+        )['Items']
+        if len(rv) > 0:
+            return rv[0]['uuid']
+
+        # Email address does not exist yet. Construct the initial
+        # preferences object and insert it.
         user_item = {
             'uuid': uuid.uuid4().hex,
             'email': email,

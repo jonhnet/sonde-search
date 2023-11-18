@@ -17,6 +17,25 @@ def create_tables(ddb_client):
                 'AttributeName': 'uuid',
                 'AttributeType': 'S',
             },
+            {
+                'AttributeName': 'email',
+                'AttributeType': 'S',
+            },
+        ],
+
+        # An index for mapping an email address back to the user's
+        # uuid
+        GlobalSecondaryIndexes=[
+            {
+                'IndexName': 'email-index',
+                'KeySchema': [{
+                    'AttributeName': 'email',
+                    'KeyType': 'HASH',
+                }],
+                'Projection': {
+                    'ProjectionType': 'KEYS_ONLY',
+                },
+            },
         ],
         BillingMode='PAY_PER_REQUEST',
     )

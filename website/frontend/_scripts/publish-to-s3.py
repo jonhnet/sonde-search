@@ -10,7 +10,8 @@ import tempfile
 
 AWS_PROFILE = 'jelson-personal'
 HTACCESS_FUNC_NAME = 'SondeSearchHTAccess'
-DISTRIBUTION_ID = 'xxx'
+DISTRIBUTION_ID = 'EQ982DOCB40EP'
+DEST_BUCKET = "s3://sondesearch"
 
 def get_cloudfront_function(htaccess_path):
     with open(os.path.join(os.path.dirname(__file__), "cloudfront-function-template.js")) as ifh:
@@ -39,7 +40,7 @@ def main():
         os.environ['AWS_PROFILE'] = AWS_PROFILE
 
         subprocess.check_call([
-            "aws", "s3", "sync", "--delete", tmpdir, "s3://lectrobox.com",
+            "aws", "s3", "sync", tmpdir, DEST_BUCKET,
         ])
 
         # upload the htaccess function
@@ -52,7 +53,7 @@ def main():
         rv = client.update_function(
             Name=HTACCESS_FUNC_NAME,
             FunctionConfig={
-                'Comment': f'Lectrobox HTAccess function {date}',
+                'Comment': f'SondeSearch HTAccess function {date}',
                 'Runtime': 'cloudfront-js-2.0',
             },
             FunctionCode=cloudfront_function,

@@ -5,8 +5,9 @@ function handler(event) {
     var uri = request.uri;
     var should_redirect = false;
 
-    // If the user went to www.lectrobox.com, redirect them to lectrobox.com
-    if (request.headers.host.value == 'lectrobox.com') {
+    // If the user went to the non-canonical name, redirect them to
+    // the canonical name
+    if (request.headers.host.value != 'sondesearch.lectrobox.com') {
         should_redirect = true;
     }
 
@@ -29,7 +30,7 @@ function handler(event) {
            statusCode: 301,
            statusDescription: 'Permanently Moved',
            headers: {
-             'location': { 'value': 'https://www.lectrobox.com' + uri }
+             'location': { 'value': 'https://sondesearch.lectrobox.com' + uri }
            }
         };
     }

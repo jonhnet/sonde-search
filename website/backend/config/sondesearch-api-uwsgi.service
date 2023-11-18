@@ -5,7 +5,8 @@ StartLimitIntervalSec=0
 [Service]
 Restart=always
 RestartSec=30
-ExecStart=uwsgi --ini /home/jelson/projects/sonde-search/config/uwsgi.conf
+WorkingDirectory=/home/jelson/projects/sonde-search/website/backend/config
+ExecStart=uwsgi --ini ./uwsgi.conf
 User=jelson
 
 [Install]

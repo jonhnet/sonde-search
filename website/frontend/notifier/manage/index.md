@@ -9,8 +9,9 @@ title: "Sonde Email Notifier — Manage"
 
 <div id="management_state" hidden>
     <p>
-    Notifications configured for email address:
+    Managing notifications for
     <tt><span id="state_email">unknown</span></tt>
+    <a href="../signup/">(Change)</a>
     </p>
 
     <p id="no_subs" hidden>

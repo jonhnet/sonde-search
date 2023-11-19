@@ -10,6 +10,10 @@ import pandas as pd
 cx.set_cache_dir("/tmp/cached-tiles")
 
 MAPS = {
+    'spokane': {
+        'bottomleft': (45, -119),
+        'topright': (51, -113),
+    },
     'seattle': {
         'bottomleft': (46, -125),
         'topright': (49, -121),

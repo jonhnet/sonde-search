@@ -8,6 +8,8 @@
 
 - title: Notifier
   side: left
+  url: "/notifier/"
+
   dropdown:
     - title: Signup
       url: "/notifier/signup/"

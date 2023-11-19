@@ -7,7 +7,7 @@ from subprocess import call
 
 THUMBS_DIR = "thumbs"
 THUMBS_PREFIX = "thumb-"
-extList = ["jpg", "JPG", "png", "PNG", "gif", "GIF"]
+extList = ["jpg", "JPG", "png", "PNG", "gif", "GIF", "webm", "WEBM"]
 
 if not os.path.exists(THUMBS_DIR):
     os.mkdir("thumbs")
@@ -21,6 +21,7 @@ for f in fileList:
         continue
 
     dest = os.path.join(THUMBS_DIR, THUMBS_PREFIX + f)
+    dest = os.path.splitext(dest)[0] + ".webp"
 
     if not os.path.exists(dest):
         sys.stdout.write("%s --> %s\n" % (f, dest))

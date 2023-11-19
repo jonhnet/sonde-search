@@ -10,6 +10,9 @@ module Jekyll
         # for each tag, build a list of the projects that have the tag
         projects = []
         site.data["projects"].each do |project|
+          if not project.key?("tags")
+            next
+          end
           if project["tags"].include? tag["tag"]
             projects << {
               "title" => project["title"],
@@ -18,13 +21,15 @@ module Jekyll
           end
         end
 
-        # add all the tag's projects to the nav bar with the list of projects we
-        # found
-        site.data["navigation"] << {
-          "title" => tag["title"],
-          "side" => "left",
-          "dropdown" => projects
-        }
+        if projects.length > 0
+          # add all the tag's projects to the nav bar with the list of projects we
+          # found
+          site.data["navigation"] << {
+            "title" => tag["title"],
+            "side" => "left",
+            "dropdown" => projects
+          }
+        end
       end
     end
   end

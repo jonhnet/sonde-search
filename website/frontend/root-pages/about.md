@@ -1,5 +1,5 @@
 ---
-layout: page
+layout: page-fullwidth
 title: "What is a radiosonde, and why search for one?"
 permalink: "/about/"
 footer: true

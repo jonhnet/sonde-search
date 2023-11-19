@@ -8,19 +8,40 @@
 # --JE
 #
 
-- title: Landing Heatmaps
-  url: /heatmaps/
-  image: front-page-teasers/earth-measurement.jpg
-  text: Interactive map showing the last-heard lcations of all sondes tracked by SondeHub in 2022
-  tags: maps
-
-- title: Landing Calendars
-  url: /calendars/
-  text: Calendars
-  tags: maps
+- title: Introduction
+  url: /about/
+  text: What are radiosondes, and why search for them?
+  image: home-thumbs/sonde-intro.webp
 
 - title: Email Notifier
   url: /notifier/
   text: Get email every time a radiosonde lands near you
-  tags: poop
-  
+  image: home-thumbs/notifier.webp
+
+- title: Landing Heatmaps
+  url: /heatmaps/
+  text: Interactive map showing landing locations worldwide
+  tags: maps
+  image: home-thumbs/heatmap.webp
+
+- title: Landing Map-Calendars
+  url: /calendars/
+  text: 12-map images showing where landings tend to happen month by month
+  tags: maps
+  image: home-thumbs/landing-calendar.webp
+
+- title: Receive Site Analyzer
+  url: /receiver-analyzer/
+  tags: analyzers
+  text: Analyze a SondeHub feeder site's efficacy at receiving sondes
+
+- title: Raw Data
+  url: /data/
+  text: Sonde flight summary data in parquet format for data science
+  tags: dev
+
+- title: Source Code
+  text: Everything on this site is open-source
+  url: /code/
+  tags: dev
+

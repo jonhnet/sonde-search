@@ -6,6 +6,19 @@
   url: "/about/"
   side: left
 
+- title: Notifier
+  side: left
+  dropdown:
+    - title: Signup
+      url: "/notifier/signup/"
+
+    - title: Manage
+      url: "/notifier/manage/"
+
+- title: "Lectrobox Home"
+  url: "https://www.lectrobox.com"
+  side: right
+
 - title: "Contact"
   url: "/contact/"
   side: right

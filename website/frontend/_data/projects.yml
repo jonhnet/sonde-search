@@ -33,12 +33,15 @@
 - title: Receive Site Analyzer
   url: /receiver-analyzer/
   tags: analyzers
-  text: Analyze a SondeHub feeder site's efficacy at receiving sondes
+  text: Analyze which SondeHub feeder sites were best at receiving a sonde flight
+  image: home-thumbs/listeners.webp
+
 
 - title: Raw Data
   url: /data/
   text: Sonde flight summary data in parquet format for data science
   tags: dev
+  image: home-thumbs/db.webp
 
 - title: Source Code
   text: Everything on this site is open-source

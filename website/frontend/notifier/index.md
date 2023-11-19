@@ -99,7 +99,7 @@ table.sonde tbody tr:nth-child(odd) {
 It also attaches a map showing where the sonde was last heard by a
 tracking site. It plots the sonde's flight path (red), a line from
 your configured home coordinates to the last reception (blue) and a
-line from the last receiver site toq the sonde (green).
+line from the last receiver site to the sonde (green).
 
 {% include thumb-image.html image="notifier-example.webp" %}
 
@@ -116,8 +116,8 @@ Check SondeHub (by clicking on the sonde's serial number) to see the
 computer projection of where the sonde might have landed based on the
 model of winds aloft.  The higher the last-heard report, the worse the
 landing estimate is. The notifier takes an educated guess as to how
-much error might be in the landing estimate by computing how far it
-was likely to have moved laterally in the time it took to reach the
+much error might be in the landing estimate by computing how far the
+sonde was likely to have travelled laterally before reaching the
 ground. For example, if the sonde is last heard at 1000' MSL above a
 site where the terrain elevation is 200', while descending at 100 feet
 per second, it's 8 seconds from landing. Multiplying 8 seconds by its

@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 
 AWS_PROFILE = 'jelson-personal'
 HTACCESS_FUNC_NAME = 'SondeSearchHTAccess'
@@ -31,19 +32,22 @@ def get_cloudfront_function(htaccess_path):
 
 def main():
     with tempfile.TemporaryDirectory() as tmpdir:
+        print(f'Emitting to {tmpdir}')
         date = str(datetime.datetime.now().replace(microsecond=0))
 
         subprocess.check_call([
             "bundle", "exec", "jekyll", "build", "-d", tmpdir,
-        ])
+        ], cwd=os.path.join(os.path.dirname(__file__), ".."))
 
         os.environ['AWS_PROFILE'] = AWS_PROFILE
 
+        print("Syncing to s3")
         subprocess.check_call([
             "aws", "s3", "sync", tmpdir, DEST_BUCKET,
         ])
 
         # upload the htaccess function
+        print("Generating new htaccess-ish cloudfront function")
         cloudfront_function = get_cloudfront_function(os.path.join(tmpdir, ".htaccess"))
         session = boto3.Session(profile_name=AWS_PROFILE)
         client = session.client('cloudfront')
@@ -64,6 +68,8 @@ def main():
             Name=HTACCESS_FUNC_NAME,
             IfMatch=newfunc_etag,
         )
+
+        print("Generating invalidation to make site live")
         rv = client.create_invalidation(
             DistributionId=DISTRIBUTION_ID,
             InvalidationBatch={

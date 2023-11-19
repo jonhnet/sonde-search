@@ -36,7 +36,6 @@
   text: Analyze which SondeHub feeder sites were best at receiving a sonde flight
   image: home-thumbs/listeners.webp
 
-
 - title: Raw Data
   url: /data/
   text: Sonde flight summary data in parquet format for data science
@@ -45,6 +44,6 @@
 
 - title: Source Code
   text: Everything on this site is open-source
-  url: /code/
+  url: https://github.com/jonhnet/sonde-search/
   tags: dev
 

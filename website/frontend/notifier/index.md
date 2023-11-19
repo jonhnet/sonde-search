@@ -23,7 +23,8 @@ Notifications are configured with:
 
 My system checks in with SondeHub regularly. If any landings are
 within the desired search area, it sends an email with a little table
-showing the important statistics, like this:
+showing the important statistics, such as this:
+
 
 <style>
 table.sonde {
@@ -96,10 +97,14 @@ table.sonde tbody tr:nth-child(odd) {
 
 </tbody></table>
 
-It also attaches a map showing where the sonde was last heard by a
-tracking site. It plots the sonde's flight path (red), a line from
-your configured home coordinates to the last reception (blue) and a
-line from the last receiver site to the sonde (green).
+The time in the table will use the time zone of the computer you use
+to sign up for notifications. You can also customize whether distances
+and altitudes are reported in metric or imperial units.
+
+Notifications also have maps attached showing where the sonde was last
+heard by a receiver. It plots the sonde's flight path (red), a
+line from your configured home coordinates to the last reception
+(blue) and a line from the last receiver site to the sonde (green).
 
 {% include thumb-image.html image="notifier-example.webp" %}
 
@@ -138,10 +143,11 @@ all. Since we've gotten its GPS coordinates while it was sitting on
 the ground, we know exactly where it is -- we can just go to those
 coordinates and pick it up!
 
-The notifier detects such situations by detecting that last data
-points reported by a receive site indicate its vertical and horizontal
-velocities are both close to zero. In this case, the notifier will
-send an email whose subject excitedly proclaims "GROUND RECEPTION!".
+The notifier detects such situations when the last data points
+reported by a receive site indicate the sonde's vertical and
+horizontal velocities are both close to zero. In this case, the
+notifier will send an email whose subject excitedly proclaims "GROUND
+RECEPTION!".
 
 ### Signing Up for Notifications
 

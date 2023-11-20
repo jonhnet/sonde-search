@@ -33,18 +33,26 @@ def get_recs_from_tar(infilename):
                 continue
             num_files += 1
 
-            j = json.load(archive.extractfile(f.name))
+            try:
+                j = json.load(archive.extractfile(f.name))
+            except json.decoder.JSONDecodeError:
+                print(f"error parsing json: {f}")
+                continue
+
             for rec in j:
                 num_recs += 1
                 yield rec
 
             if num_files % 100 == 0:
-                print(f"found {num_recs} records in {num_files} files")
+                print(f"found {num_recs} records in {num_files} files ({f})")
 
 def convert(infilename):
     df = pd.DataFrame(get_recs_from_tar(infilename))
+    df.to_parquet(os.path.splitext(infilename)[0] + ".before.parquet")
     df = df.astype({
         'alt': float,
+        'vel_v': float,
+        'vel_h': float,
         'lat': float,
         'lon': float,
     })

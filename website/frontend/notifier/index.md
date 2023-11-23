@@ -134,18 +134,19 @@ The quality of the tracking depends largely on how many volunteer
 receive sites are nearby and the terrain or other obstructions (e.g.,
 buildings) between the sonde and nearby receivers. The more receivers
 there are in strategic locations, the more likely it is that sondes
-will be have better low-altitude tracking. If you want better
-tracking, the best way is to [set up your own receive
+will get tracked to lower altitudes. If you want better tracking, the
+best way is to [set up your own receive
 site](https://github.com/projecthorus/radiosonde_auto_rx/wiki)!
 
 
 ### Ground Receptions
 
-Occasionally, if you're very lucky, a sonde will be within earshot of a receive
-site all the way to the ground! This is an exciting situation because it means
-there's *no* error in the sonde's location. Since we've gotten its GPS
-coordinates while it was sitting on the ground, we know exactly where it is --
-we can just go pick it up!
+Occasionally, if you're very lucky, a sonde will be within earshot of
+a receive site all the way to the ground! This is an exciting
+situation because it means there's *no* error in the sonde's
+location. Since we've gotten its GPS coordinates while it was sitting
+on the ground, we know exactly where it is---we can just go pick it
+up!
 
 The notifier detects ground receptions when the last data points reported by a
 receive site indicate the sonde's vertical and horizontal velocities are both

@@ -94,9 +94,10 @@ table.sonde tbody tr:nth-child(odd) {
     </tr>
 </tbody></table>
 
-The time of day in the table will be reported in the time zone of the computer
-you use when signing up for notifications. You can also customize whether
-distances and altitudes are reported in metric or imperial units.
+The time of day in the table will be reported in the time zone of the
+computer you use when you sign up for notifications. You can also
+customize whether distances and altitudes are reported in metric or
+imperial units.
 
 Notifications also have maps attached showing where the sonde was last
 heard by a receiver. It plots the sonde's flight path (red), a

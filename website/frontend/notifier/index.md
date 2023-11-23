@@ -105,31 +105,35 @@ line from your configured home coordinates to the last reception
 
 {% include thumb-image.html image="notifier-example.webp" %}
 
+### Accuracy
+
 The sonde's mapped location is usually not where it landed, but where the sonde
 was last heard by a receiver. The actual landing site might be some distance
 away. Click on the sonde's serial number at the top of the email to see
 SondeHub's projection of where the sonde might have landed. The estimate is
 based on a model of winds aloft and terrain heights.
 
-Sondes last heard at high altitudes have to depend more heavily on these models,
-increasing the potential for error. The notifier takes an educated guess as to
-how much error might be in the landing estimate by computing how far the sonde
-was likely to have travelled laterally before reaching the ground. For example,
-if the sonde is last heard at 1000' MSL above a site where the terrain elevation
-is 200', while descending at 100 feet per second, it's about 8 seconds from
-landing. Multiplying 8 seconds by its horizontal speed gives a rough upper bound
-on how far the actual landing site is from the last-heard location.
+Sondes last heard at high altitudes depend more heavily on these
+models, increasing the potential for error. The notifier guesses the
+error of the landing estimate by computing how far the sonde was
+likely to have travelled laterally before reaching the ground,
+starting its last known location. For example, if the sonde is last
+heard at 1000' MSL above a site where the terrain elevation is 200',
+while descending at 100 feet per second, it's about 8 seconds from
+landing. Multiplying 8 seconds by its horizontal speed gives a rough
+upper bound on how far the actual landing site is from the last-heard
+location.
 
 Of course, this algorithm is fairly naive compared to SondeHub's more
-sophisticated terrain and wind model. However, the rough estimate is useful in
-the notification email because it gives a quick, rough estimate of the
-error. This is helps you decide if it's worth the time to investigate the flight
-further.
+sophisticated terrain and wind model. However, rough estimate of the
+error helps you decide if it's worth the time to investigate the
+flight further as a potential find.
 
-The quality of the tracking depends largely on how many volunteer receive sites
-are nearby and the terrain or other obstructions between the sonde and nearby
-receivers. The more receivers there are in strategic locations, the more likely
-it is that sondes will be have better low-altitude tracking. If you want better
+The quality of the tracking depends largely on how many volunteer
+receive sites are nearby and the terrain or other obstructions (e.g.,
+buildings) between the sonde and nearby receivers. The more receivers
+there are in strategic locations, the more likely it is that sondes
+will be have better low-altitude tracking. If you want better
 tracking, the best way is to [set up your own receive
 site](https://github.com/projecthorus/radiosonde_auto_rx/wiki)!
 

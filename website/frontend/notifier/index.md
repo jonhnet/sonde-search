@@ -4,17 +4,18 @@ title: "Sonde Email Notifier"
 footer: true
 ---
 
-[Sign up here](manage) for to receive email notifications when a sonde
+[Sign up here](manage) to receive email notifications when a sonde
 lands near you!
 
-Not many of of the radiosondes in my area (Seattle) land somewhere
-accessible. Most end up in the Olympic forest the ocean. Only rarely
-do they come far enough east to land in civilization. My habit was to
-check [SondeHub](https://www.sondehub.org/") daily to see if any of
-the day's flights landed nearby.  This was an annoying chore, so I set
-up a system that would query SondeHub's API for me and send me an
-email if a radiosonde landed nearby. This facility is now available to
-anyone!
+Few radiosondes land in my area (Seattle). The balloons launched from
+Quillayute, about 100 west, usually land somewhere inaccessible such
+as in the Olympic forest or the ocean. Only rarely do they come far
+enough east to land in civilization. My habit was to check
+[SondeHub](https://www.sondehub.org/") to see if the day's flights
+landed nearby. This was an annoying chore, so I set up a system that
+would query SondeHub's API for me and send an email if a radiosonde
+landed less than a configured distance from home. This facility is now
+available to anyone!
 
 Notifications are configured with:
 
@@ -22,7 +23,7 @@ Notifications are configured with:
 * The maximum distance from home for a landing to be interesting
 
 My system checks SondeHub regularly. Any landings within the desired search area
-are reported. You'll get email with a little table showing the important
+are reported. You'll get email with a table showing the important
 statistics, like this example:
 <style>
 table.sonde {
@@ -69,12 +70,12 @@ table.sonde tbody tr:nth-child(odd) {
     </tr>
     <tr>
         <td>Bearing</td>
-        <td>297° <span class="il">from</span> <span class="il">home</span></td>
+        <td>297Â° <span class="il">from</span> <span class="il">home</span></td>
     </tr>
     <tr>
         <td>Descent Rate</td>
         <td>40 ft/s, moving laterally 5 ft/s,
-        heading 324°</td>
+        heading 324Â°</td>
     </tr>
 
     <tr>
@@ -94,12 +95,11 @@ table.sonde tbody tr:nth-child(odd) {
     </tr>
 </tbody></table>
 
-The time of day in the table will be reported in the time zone of the
-computer you use when you sign up for notifications. You can also
-customize whether distances and altitudes are reported in metric or
-imperial units.
+The time of day will be reported in the time zone of the computer used
+to sign up for notifications. The distance and altitudes unit can be
+configured to be metric or imperial.
 
-Notifications also have maps attached showing where the sonde was last
+Notifications have maps attached showing where the sonde was last
 heard by a receiver. It plots the sonde's flight path (red), a
 line from your configured home coordinates to the last reception
 (blue) and a line from the last receiver site to the sonde (green).
@@ -108,22 +108,21 @@ line from your configured home coordinates to the last reception
 
 ### Accuracy
 
-The sonde's mapped location is usually not where it landed, but where the sonde
-was last heard by a receiver. The actual landing site might be some distance
-away. Click on the sonde's serial number at the top of the email to see
-SondeHub's projection of where the sonde might have landed. The estimate is
-based on a model of winds aloft and terrain elevations.
+A sonde's mapped location is usually not where it landed, but where
+the sonde was last heard by a receiver. The actual landing site might
+be some distance away. Click on the sonde's serial number at the top
+of the table to see SondeHub's projected landing site based on a model
+of winds aloft and terrain.
 
 Sondes last heard at high altitudes depend more heavily on these
 models, increasing the potential for error. The notifier guesses the
-error of the landing estimate by computing how far the sonde was
-likely to have travelled laterally before reaching the ground,
-starting from its last known location. For example, if the sonde is last
-heard at 1000' MSL above a site where the terrain elevation is 200',
-while descending at 100 feet per second, it's about 8 seconds from
-landing. Multiplying 8 seconds by its horizontal speed gives a rough
-upper bound on how far the actual landing site is from the last-heard
-location.
+error of the landing estimate by estimating how far the sonde was
+travelled laterally before reaching the ground from its last known
+location. For example, if a sonde is last heard at 1000' MSL above
+200' high terrain while descending at 100' per second, it's about 8
+seconds from landing. Multiplying 8 seconds by its horizontal speed
+gives a rough upper bound on how far the actual landing site is from
+the last-heard location.
 
 Of course, this algorithm is fairly naive compared to SondeHub's more
 sophisticated terrain and wind model. However, the rough error
@@ -142,16 +141,17 @@ site](https://github.com/projecthorus/radiosonde_auto_rx/wiki)!
 ### Ground Receptions
 
 Occasionally, if you're very lucky, a sonde will be within earshot of
-a receive site all the way to the ground! This is an exciting
+a receiver all the way to the ground! This is an exciting
 situation because it means there's *no* error in the sonde's
 location. Since we've gotten its GPS coordinates while it was sitting
 on the ground, we know exactly where it is---we can just go pick it
 up!
 
-The notifier detects ground receptions when the last data points reported by a
-receive site indicate the sonde's vertical and horizontal velocities are both
-close to zero. In this case, the notifier will send an email whose subject
-excitedly proclaims "GROUND RECEPTION!".
+The notifier detects ground receptions when the last data points
+reported by a receive site indicate the sonde's vertical and
+horizontal velocities are both close to zero. In this case, the
+notifier will send an email whose subject excitedly proclaims "GROUND
+RECEPTION!".
 
 ### Signing Up for Notifications
 

@@ -7,15 +7,15 @@ footer: true
 [Sign up here](manage) to receive email notifications when a sonde
 lands near you!
 
-Few radiosondes land in my area (Seattle). The balloons launched from
-Quillayute, about 100 west, usually land somewhere inaccessible such
-as in the Olympic forest or the ocean. Only rarely do they come far
-enough east to land in civilization. My habit was to check
-[SondeHub](https://www.sondehub.org/") to see if the day's flights
-landed nearby. This was an annoying chore, so I set up a system that
-would query SondeHub's API for me and send an email if a radiosonde
-landed less than a configured distance from home. This facility is now
-available to anyone!
+Not many radiosondes land in my home of Seattle. The balloons launched
+from Quillayute, about 100 miles (170km) west, usually land somewhere
+inaccessible such as in the Olympic forest or the ocean. Only rarely
+do they come far enough east to land in civilization. My habit was to
+check [SondeHub](https://www.sondehub.org/") to see if the day's
+flights landed nearby. This was an annoying chore, so I set up a
+system that would query SondeHub's API for me and send an email if a
+radiosonde landed less than a configured distance from home. This
+facility is now available to anyone!
 
 Notifications are configured with:
 
@@ -70,12 +70,12 @@ table.sonde tbody tr:nth-child(odd) {
     </tr>
     <tr>
         <td>Bearing</td>
-        <td>297Â° <span class="il">from</span> <span class="il">home</span></td>
+        <td>297° <span class="il">from</span> <span class="il">home</span></td>
     </tr>
     <tr>
         <td>Descent Rate</td>
         <td>40 ft/s, moving laterally 5 ft/s,
-        heading 324Â°</td>
+        heading 324°</td>
     </tr>
 
     <tr>

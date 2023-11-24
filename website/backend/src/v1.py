@@ -2,25 +2,23 @@
 
 import cherrypy
 import datetime
-import simplejson as json
 import os
-import sys
-import time
 import uuid
 from decimal import Decimal
 
 import boto3
 from boto3.dynamodb.conditions import Key, Attr
 
-EMAIL_DESTINATION = f'https://sondesearch.lectrobox.com/'
+EMAIL_DESTINATION = 'https://sondesearch.lectrobox.com/'
+
 
 class GlobalConfig:
     def __init__(self):
         print('Global setup')
-        secretsmanager = boto3.client('secretsmanager')
         self.ddb = boto3.resource('dynamodb')
         self.user_table = self.ddb.Table('sondesearch-notifier-users')
         self.sub_table = self.ddb.Table('sondesearch-notifier-subscriptions')
+
 
 class ClientError(cherrypy.HTTPError):
     def __init__(self, message):
@@ -33,6 +31,7 @@ class ClientError(cherrypy.HTTPError):
         response.body = self._msg
         response.status = 400
         response.headers.pop('Content-Length', None)
+
 
 class LectroboxAPI:
     PREFERENCES = ('units', 'tzname')
@@ -157,7 +156,7 @@ class LectroboxAPI:
         return resp
 
     def _required(self, args, arg):
-        if not arg in args:
+        if arg not in args:
             raise ClientError(f'missing argument: {arg}')
         if not args[arg]:
             raise ClientError(f'empty argument: {arg}')
@@ -261,12 +260,15 @@ class LectroboxAPI:
 
         return res['config']
 
+#
 #def main():
 #    cherrypy.quickstart(LectroboxAPI())
+
 
 global_config = GlobalConfig()
 apiserver = LectroboxAPI(global_config)
 cherrypy.tree.mount(apiserver)
+
 
 # "application" is the magic function called by Apache's wsgi module
 def application(environ, start_response):

@@ -1,16 +1,15 @@
-from decimal import Decimal
 import cherrypy
 import pytest
 import requests
 import os
 import boto3
-import json
 import sys
 
-from moto import mock_secretsmanager, mock_dynamodb, mock_ses
+from moto import mock_dynamodb, mock_ses
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from config import table_definitions
+
 
 class Test_v1:
     @pytest.fixture
@@ -21,7 +20,7 @@ class Test_v1:
         self.mock_ses.start()
 
         os.environ['AWS_ACCESS_KEY_ID'] = 'testing'
-        os.environ['AWS_SECRET_ACCESS_KEY'] ='testing'
+        os.environ['AWS_SECRET_ACCESS_KEY'] = 'testing'
         os.environ['AWS_SECURITY_TOKEN'] = 'testing'
         os.environ['AWS_SESSION_TOKEN'] = 'testing'
         os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
@@ -211,7 +210,7 @@ class Test_v1:
             testargs = dict(basic_args)
             testargs[arg] = val
             print(f'trying to set {arg} to {val}: {testargs}')
-            resp = self.post('subscribe', expected_status=400, data=testargs)
+            self.post('subscribe', expected_status=400, data=testargs)
 
     # Test one-click unsubscribe -- the link at the bottom of each
     # email which gives unsubscribe privileges but not full management
@@ -245,7 +244,7 @@ class Test_v1:
             'uuid': resp1['subs'][0]['uuid']
         }).json()
         # make sure no personal data is returned from this API
-        assert resp4.pop('success') == True
+        assert resp4.pop('success') is True
         assert resp4.pop('message') == f'{email} will no longer get notifications for sondes near ({sub1["lat"]}, {sub1["lon"]}).'
         assert resp4 == {}
 

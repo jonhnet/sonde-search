@@ -16,27 +16,65 @@
 # deleted the original.
 #
 
-import io
 import json
 import os
 import pandas as pd
+import pytz
 import sys
 import tarfile
+import time
+
+
+def is_valid_record(recs, fname):
+    if len(recs) % 3 != 0:
+        print(f'tossing invalid file {fname} with {len(recs)} recs')
+        return False
+
+    frame_nums = [int(rec['frame']) for rec in recs]
+
+    if not (frame_nums[0] <= frame_nums[1] <= frame_nums[2]):
+        print(f'out of order frames in {fname}: {frame_nums}')
+        return False
+
+    for frame_num in frame_nums:
+        if frame_num < 0 or frame_num > 4_000_000_000:
+            print(f'invalid frame number {frame_num} in {fname}')
+            return False
+
+    try:
+        for rec in recs:
+            d = pd.to_datetime(rec['datetime'])
+            if d.tzinfo is None:
+                d = pytz.utc.localize(d)
+            rec['datetime'] = d
+    except Exception as e:
+        print(f'invalid datetime {rec["datetime"]}: {e}: {fname}')
+        return False
+
+    for rec in recs:
+        rec['archive_source'] = fname
+
+    return True
+
 
 def get_recs_from_tar(infilename):
-    num_files = 0
-    num_recs = 0
-
     with tarfile.open(infilename) as archive:
-        for f in archive:
-            if not f.isfile():
-                continue
+        fnames = [f.name for f in archive if f.isfile()]
+
+        num_files = 0
+        num_recs = 0
+        start_time = time.time()
+
+        for fname in fnames:
             num_files += 1
 
             try:
-                j = json.load(archive.extractfile(f.name))
+                j = json.load(archive.extractfile(fname))
             except json.decoder.JSONDecodeError:
-                print(f"error parsing json: {f}")
+                print(f"error parsing json: {fname}")
+                continue
+
+            if not is_valid_record(j, fname):
                 continue
 
             for rec in j:
@@ -44,20 +82,30 @@ def get_recs_from_tar(infilename):
                 yield rec
 
             if num_files % 100 == 0:
-                print(f"found {num_recs} records in {num_files} files ({f})")
+                dur = time.time() - start_time
+                print(f"[{num_files}/{len(fnames)}] {num_recs} recs, {dur:.2f}s")
+                start_time = time.time()
+
 
 def convert(infilename):
     df = pd.DataFrame(get_recs_from_tar(infilename))
-    df.to_parquet(os.path.splitext(infilename)[0] + ".before.parquet")
+    df.to_pickle(os.path.splitext(infilename)[0] + ".before.pickle")
     df = df.astype({
         'alt': float,
         'vel_v': float,
         'vel_h': float,
         'lat': float,
         'lon': float,
+        'temp': float,
+        'humidity': float,
+        'frame': int,
     })
+    if 'frequency' in df:
+        df['frequency'] = df['frequency'].astype(float)
+    df['datetime'] = pd.to_datetime(df['datetime'])
+
     df.to_parquet(os.path.splitext(infilename)[0] + ".parquet")
+
 
 if __name__ == "__main__":
     convert(sys.argv[1])
-    

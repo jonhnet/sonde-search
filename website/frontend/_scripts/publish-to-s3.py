@@ -44,7 +44,7 @@ def main():
         print("Syncing to s3")
         subprocess.check_call([
             "aws", "s3", "sync", "--delete", tmpdir, DEST_BUCKET,
-            "--exclude", "data/*",
+            "--exclude", "vault/*",
         ])
 
         # upload the htaccess function

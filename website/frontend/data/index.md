@@ -23,15 +23,15 @@ frameworks.
 
 I've broken the summary data into files per year for easier downloading:
 
-* [2021 Summaries](https://sondesearch.lectrobox.com/data/sonde-summaries/sonde-summaries-2021.parquet)
+* [2021 Summaries](https://sondesearch.lectrobox.com/vault/sonde-summaries/sonde-summaries-2021.parquet)
 
-* [2022 Summaries](https://sondesearch.lectrobox.com/data/sonde-summaries/sonde-summaries-2022.parquet)
+* [2022 Summaries](https://sondesearch.lectrobox.com/vault/sonde-summaries/sonde-summaries-2022.parquet)
 
-* [2023 Summaries](https://sondesearch.lectrobox.com/data/sonde-summaries/sonde-summaries-2023.parquet)
+* [2023 Summaries](https://sondesearch.lectrobox.com/vault/sonde-summaries/sonde-summaries-2023.parquet)
 
 ## Example Usage
 
-Python's popular data science library [Pandas[(https://pandas.pydata.org/) is a
+Python's popular data science library [Pandas](https://pandas.pydata.org/) is a
 great way to explore the data. For example, to see how many launches there were
 in 2022:
 

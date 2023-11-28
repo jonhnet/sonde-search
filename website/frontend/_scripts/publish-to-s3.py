@@ -43,7 +43,7 @@ def main():
 
         print("Syncing to s3")
         subprocess.check_call([
-            "aws", "s3", "sync", "--dryrun", "--delete", tmpdir, DEST_BUCKET,
+            "aws", "s3", "sync", "--delete", tmpdir, DEST_BUCKET,
             "--exclude", "data/*",
         ])
 

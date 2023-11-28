@@ -5,14 +5,13 @@ import boto3
 import json
 import os
 import subprocess
-import sys
 import tempfile
-import time
 
 AWS_PROFILE = 'jelson-personal'
 HTACCESS_FUNC_NAME = 'SondeSearchHTAccess'
 DISTRIBUTION_ID = 'EQ982DOCB40EP'
 DEST_BUCKET = "s3://sondesearch"
+
 
 def get_cloudfront_function(htaccess_path):
     with open(os.path.join(os.path.dirname(__file__), "cloudfront-function-template.js")) as ifh:
@@ -30,6 +29,7 @@ def get_cloudfront_function(htaccess_path):
     out = template.replace('@REDIRECTS@', json.dumps(redirects, indent=3))
     return out.encode('utf-8')
 
+
 def main():
     with tempfile.TemporaryDirectory() as tmpdir:
         print(f'Emitting to {tmpdir}')
@@ -43,7 +43,8 @@ def main():
 
         print("Syncing to s3")
         subprocess.check_call([
-            "aws", "s3", "sync", tmpdir, DEST_BUCKET,
+            "aws", "s3", "sync", "--dryrun", "--delete", tmpdir, DEST_BUCKET,
+            "--exclude", "data/*",
         ])
 
         # upload the htaccess function
@@ -83,5 +84,6 @@ def main():
             }
         )
         print(rv)
+
 
 main()

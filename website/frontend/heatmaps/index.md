@@ -36,6 +36,7 @@ entire world and for the US only. The files are large, so some browsers might
 have performance issues with the worldwide map.
 
 The source code for generating the heatmaps can be found
-[here](https://github.com/jonhnet/sonde-search/blob/main/landing-heatmap/landings-heatmap.py).
-The [data](/data) comes from SondeHub's public API, reprocessed into parquet files that are also available for download. The heatmaps are drawn using the
+[here](https://github.com/jonhnet/sonde-search/blob/main/analyzers/landings-heatmap.py).
+The [data](/data) comes from SondeHub's public API, reprocessed into parquet
+files that are also available for download. The heatmaps are drawn using the
 [Folium](https://python-visualization.github.io/folium/latest/) Python library.

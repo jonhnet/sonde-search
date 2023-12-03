@@ -75,5 +75,5 @@ the months numerically.
 
 There are endless other ways Pandas can be used to analyze sonde data. For some
 other examples, see my code on GitHub that [draws a landing
-calendar](https://github.com/jonhnet/sonde-search/blob/main/landing-heatmap/landings-by-season.py)
+calendar](https://github.com/jonhnet/sonde-search/blob/main/analyzers/landings-by-season.py)
 showing where sondes tend to land each month.

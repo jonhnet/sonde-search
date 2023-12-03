@@ -1,8 +1,13 @@
+AltAzRange
 boto3
 contextily
 dateparser
+fastparquet
+folium
 geocoder
 geographiclib
+geopandas
 pandas
+pyarrow
 pyproj
 sondehub

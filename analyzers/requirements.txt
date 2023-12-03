@@ -1,4 +1,0 @@
-AltAzRange
-pandas
-sondehub
-contextily

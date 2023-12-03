@@ -7,7 +7,7 @@ footer: true
 
 <div class="lec-right-image">
   <div class="lec-captioned-image">
-    <video autoplay="autoplay" width="480" height="270" controls>
+    <video width="480" height="270" controls>
       <source src="/images/video/salem-launch-july-2021.webm" type="video/webm" />
     </video>
     <div class="caption">An automatic sonde launcher seen in Salem, Oregon, July 2021</div>

@@ -31,7 +31,7 @@
   image: home-thumbs/landing-calendar.webp
 
 - title: Receive Site Analyzer
-  url: /receiver-analyzer/
+  url: /analyzers/receiver/
   tags: analyzers
   text: Analyze which SondeHub feeder sites were best at receiving a sonde flight
   image: home-thumbs/listeners.webp
@@ -46,4 +46,3 @@
   text: Everything on this site is open-source
   url: https://github.com/jonhnet/sonde-search/
   tags: dev
-

@@ -7,7 +7,7 @@ footer: true
 
 <div class="lec-right-image">
   <div class="lec-captioned-image">
-    <video autoplay="autoplay" loop="loop" width="480" height="270" controls>
+    <video autoplay="autoplay" width="480" height="270" controls>
       <source src="/images/video/salem-launch-july-2021.webm" type="video/webm" />
     </video>
     <div class="caption">An automatic sonde launcher seen in Salem, Oregon, July 2021</div>
@@ -37,14 +37,13 @@ transmissions are not encrypted, so hobbyists have learned to receive
 and decode them, typically with a cheap [software-defined
 radio](https://www.rtl-sdr.com/about-rtl-sdr/). Volunteers have set up
 hundreds of listening posts worldwide. The next step is to get out
-into the field, touch grass, and try to find where the sonde landed
-based on its tracking data.
+into the field and try to find the sonde based on its tracking data.
+It's a great way to touch grass!
 
-[SondeHub](https://www.sondehub.org) is the largest public repository
-of radiosonde data collected by hobbyists. Over the past couple of
-years, I've built a number of tools that help track radiosondes based
-on the data from SondeHub. My site makes all those tools available to
-the public. You can also find all [the source
+[SondeHub](https://www.sondehub.org) is the largest public repository of
+radiosonde data collected by hobbyists. Over the past couple of years, I've
+built tools that help track radiosondes based on the data from SondeHub. My site
+makes all those tools available to the public. You can also find all [the source
 code](https://github.com/jonhnet/sonde-search) on GitHub.
 
 You may still be wondering: but *why* search for sondes?
@@ -86,3 +85,7 @@ More information can be found at:
   is a portable sonde tracker; a useful self-contained device for
   picking up transmisisons from nearby balloons while in the field.
 
+* [Radiosonde North
+  America](https://www.facebook.com/groups/444260440607754)---an active,
+  friendly Facebook group where U.S.-based sonde hunters post photos, stories
+  from the hunt, and questions.

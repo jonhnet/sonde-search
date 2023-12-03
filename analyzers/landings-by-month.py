@@ -3,11 +3,15 @@
 import calendar
 import contextily as cx
 import geopandas
-import glob
 import matplotlib.pyplot as plt
 import pandas as pd
+import subprocess
+import sys
 
 cx.set_cache_dir("/tmp/cached-tiles")
+
+sys.path.insert(0, "..")
+from data.cache import get_sonde_summaries_as_dataframe
 
 MAPS = {
     'spokane': {
@@ -27,6 +31,7 @@ MAPS = {
         'topright': (23, -152),
     },
 }
+
 
 def draw_map(df, title, config):
     # get local landings
@@ -49,7 +54,7 @@ def draw_map(df, title, config):
     fig, axs = plt.subplots(4, 3, figsize=(30, 40))
 
     for month in range(12):
-        ax = axs[month//3][month%3]
+        ax = axs[month // 3][month % 3]
 
         # pull out just landings from the month being plotted
         d = gdf.loc[gdf.month == month+1]
@@ -69,12 +74,13 @@ def draw_map(df, title, config):
 
     fig.subplots_adjust(wspace=0, hspace=0)
     fig.tight_layout()
-    fig.savefig(f'{title}-landings-by-month.png', bbox_inches='tight', pad_inches=0)
+    fn_base = f'{title}-landings-by-month.'
+    fig.savefig(fn_base+"png", bbox_inches='tight', pad_inches=0)
+    subprocess.check_call(args=["convert", fn_base+"png", fn_base+"webp"])
+
 
 def main():
-    df = pd.concat(
-        [pd.read_parquet(fn) for fn in glob.glob('sonde-summaries-*.parquet')]
-    )
+    df = get_sonde_summaries_as_dataframe()
 
     # get landings -- the latest frame received for each serial number
     df = df.loc[df.groupby('serial')['frame'].idxmax()]
@@ -85,6 +91,7 @@ def main():
 
     for (title, config) in MAPS.items():
         draw_map(df, title, config)
+
 
 if __name__ == "__main__":
     main()

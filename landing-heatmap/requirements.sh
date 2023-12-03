@@ -1,9 +1,3 @@
-pip3 install \
-     contextily \
-     fastparquet \
-     folium \
-     geopandas \
-     pandas \
-     pyarrow \
+#!/bin/sh
 
-     
+pip3 install -r requirements.txt

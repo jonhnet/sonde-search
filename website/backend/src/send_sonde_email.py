@@ -60,14 +60,11 @@ from email.utils import make_msgid
 from geographiclib.geodesic import Geodesic
 from pyproj import Transformer
 import argparse
-import base64
 import boto3
 import contextily as cx
-import dateparser
 import datetime
 import geocoder
 import io
-import json
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -131,7 +128,7 @@ def get_telemetry_once(params):
         response = requests.get(SONDEHUB_DATA_URL, params=params)
         response.raise_for_status()
         for sonde, timeblock in response.json().items():
-            for time, record in timeblock.items():
+            for _, record in timeblock.items():
                 yield record
     sondes = pd.DataFrame(unpack_list())
     sondes = cleanup_sonde_data(sondes)
@@ -183,8 +180,8 @@ def annotate_with_distance(sondes, config):
         axis=1,
         result_type='expand')
 
-    #f = sondes.sort_values('dist_from_home_mi')
-    #print(f[f.phase == 'landing'].to_string())
+    # f = sondes.sort_values('dist_from_home_mi')
+    # print(f[f.phase == 'landing'].to_string())
 
     return sondes
 
@@ -200,7 +197,7 @@ def get_nearest_sonde_flight(sondes, config):
     # Return all data from the flight with the minimum landing distance
 
     # OLD: Just return the subsampled data from the overview result
-    #nearest_landing_flight = sondes.loc[sondes.serial == nearest_landing_serial]
+    # nearest_landing_flight = sondes.loc[sondes.serial == nearest_landing_serial]
 
     # NEW: Query SondeHub for detail on the serial to get all data for that flight
     nearest_landing_flight = get_telemetry(params={
@@ -317,7 +314,7 @@ def get_elev(lat, lon):
     if resp.status_code == 200:
         try:
             return float(resp.json()['value'])
-        except:
+        except Exception:
             print(f'Elevation API gave invalid response: {resp.content}')
             return None
     else:
@@ -345,7 +342,10 @@ def process(args, sondes, config):
     dist_from_home_mi = landing['dist_from_home_m'] / METERS_PER_MILE
 
     if dist_from_home_mi > config['max_distance_mi']:
-        print(f"{config['name']}: Nearest landing is {dist_from_home_mi:.1f}, more than max {config['max_distance_mi']}")
+        print(
+            f"{config['name']}: Nearest landing is {dist_from_home_mi:.1f}, "
+            f"more than max {config['max_distance_mi']}"
+        )
         return
 
     # attempt a geocode and DEM lookup
@@ -372,7 +372,7 @@ def process(args, sondes, config):
         subj += 'GROUND RECEPTION! '
     subj += f"{landing_localtime.month_name()} {landing_localtime.day} "
     subj += "morning" if landing_localtime.hour < 12 else "afternoon"
-    subj += f" sonde landed "
+    subj += " sonde landed "
     subj += render_distance(config, landing['dist_from_home_m'])
     subj += f" from home, bearing {round(landing.bearing_from_home)}°"
     if place:
@@ -445,8 +445,12 @@ table.sonde tbody tr:nth-child(odd) {
     </tr>
     <tr>
         <td>Descent Rate</td>
-        <td>{render_elevation(config, -landing['vel_v'])}/s, moving laterally {render_elevation(config, landing['vel_h'])}/s,
-        heading {round(landing['heading'])}°</td>
+        <td>
+          {render_elevation(config, -landing['vel_v'])}/s,
+          moving laterally
+          {render_elevation(config, landing['vel_h'])}/s,
+          heading {round(landing['heading'])}°
+        </td>
     </tr>
     '''
 
@@ -517,7 +521,6 @@ table.sonde tbody tr:nth-child(odd) {
         img_att.add_header('Content-ID', f'<{image_cid}>')
         msg.attach(img_att)
 
-
     body += '</body></html>'
 
     alternatives = MIMEMultipart('alternative')
@@ -526,7 +529,7 @@ table.sonde tbody tr:nth-child(odd) {
 
     if args.really_send:
         session = boto3.Session(profile_name=AWS_PROFILE)
-        client = session.client('ses', region_name = 'us-west-2')
+        client = session.client('ses', region_name='us-west-2')
         client.send_raw_email(
             Source=config['email_from'],
             Destinations=config['email_to'],

@@ -53,10 +53,8 @@ CONFIGS = [
     },
 ]
 
-from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.utils import make_msgid
 from geographiclib.geodesic import Geodesic
 from pyproj import Transformer
 import argparse
@@ -64,7 +62,6 @@ import boto3
 import contextily as cx
 import datetime
 import geocoder
-import io
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -295,9 +292,6 @@ def get_image(args, config, size, flight, landing):
     )
     fig.tight_layout()
 
-    if not args.really_send:
-        fig.savefig(f"test-{config['name']}.jpg", bbox_inches='tight')
-
     return fig
 
 
@@ -498,29 +492,25 @@ table.sonde tbody tr:nth-child(odd) {
     msg['From'] = config['email_from']
     msg['To'] = ",".join(config['email_to'])
 
-    if EXTERNAL_IMAGES_ROOT:
-        # map as link to external web site
-        map_suffix = f"{config['name']}/{landing_localtime.year}/{landing_localtime.month}/{landing_localtime.day}-{landing_localtime.hour}-{landing.lat}-{landing.lon}.jpg"
+    # Generate map link for email
+    map_suffix = \
+        f"{config['name']}/{landing_localtime.year}/{landing_localtime.month}/" \
+        f"{landing_localtime.day}-{landing_localtime.hour}-{landing.lat}-{landing.lon}.jpg"
+    map_url = os.path.join(EXTERNAL_IMAGES_URL) + map_suffix
+    body += f'<p><img width="100%" src="{map_url}">'
+
+    # Store map to external web site, if in really-send mode. Otherwise save to the local directory.
+    if args.really_send:
         map_local_fn = os.path.join(EXTERNAL_IMAGES_ROOT, map_suffix)
-        map_dir = os.path.split(map_local_fn)[0]
-        os.makedirs(map_dir, exist_ok=True)
-        map_url = os.path.join(EXTERNAL_IMAGES_URL) + map_suffix
-        fig = get_image(args, config, 22, flight, landing)
-        fig.savefig(map_local_fn, bbox_inches='tight')
-        body += f'<p><img width="100%" src="{map_url}">'
     else:
-        # map as attachment
-        image_cid = make_msgid(domain='lectrobox.com')
-        body += f'<p><img width="100%" src="cid:{image_cid}">'
+        map_local_fn = f"./test-{config['name']}.jpg"
 
-        img = io.BytesIO()
-        fig = get_image(args, config, 12, flight, landing)
-        fig.savefig(img, format='jpg', bbox_inches='tight')
-        img.seek(0)
-        img_att = MIMEImage(img.read(), name='map.jpg')
-        img_att.add_header('Content-ID', f'<{image_cid}>')
-        msg.attach(img_att)
+    fig = get_image(args, config, 22, flight, landing)
+    map_dir = os.path.split(map_local_fn)[0]
+    os.makedirs(map_dir, exist_ok=True)
+    fig.savefig(map_local_fn, bbox_inches='tight')
 
+    # all done
     body += '</body></html>'
 
     alternatives = MIMEMultipart('alternative')
@@ -560,15 +550,8 @@ def get_args():
 def main():
     args = get_args()
 
-    global EXTERNAL_IMAGES_ROOT
-    if args.attach:
-        EXTERNAL_IMAGES_ROOT = None
-
-    if EXTERNAL_IMAGES_ROOT and not os.path.exists(EXTERNAL_IMAGES_ROOT):
-        if args.really_send:
-            raise Exception(f"External images root {EXTERNAL_IMAGES_ROOT} does not exist")
-        else:
-            EXTERNAL_IMAGES_ROOT = None
+    if args.really_send and not os.path.exists(EXTERNAL_IMAGES_ROOT):
+        raise Exception(f"External images root {EXTERNAL_IMAGES_ROOT} does not exist")
 
     sondes = get_all_sondes()
 

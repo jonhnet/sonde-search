@@ -260,18 +260,16 @@ class LectroboxAPI:
 
         return res['config']
 
-#
-#def main():
-#    cherrypy.quickstart(LectroboxAPI())
-
-
-global_config = GlobalConfig()
-apiserver = LectroboxAPI(global_config)
-cherrypy.tree.mount(apiserver)
-
+# This is called both by the uwsgi path, via application(), and the unit test
+def mount_server_instance():
+    global_config = GlobalConfig()
+    apiserver = LectroboxAPI(global_config)
+    cherrypy.tree.mount(apiserver)
+    return apiserver
 
 # "application" is the magic function called by Apache's wsgi module
 def application(environ, start_response):
+    mount_server_instance()
     cherrypy.config.update({
         'log.screen': True,
         'environment': 'production',

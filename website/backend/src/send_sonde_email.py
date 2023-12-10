@@ -134,19 +134,6 @@ class EmailNotifier:
 
         sondes['datetime'] = pd.to_datetime(sondes['datetime'])
 
-        # Mark takeoffs as the earliest record seen for each serial number
-        takeoffs = sondes.groupby('serial')['datetime'].idxmin()
-        sondes.loc[takeoffs, 'phase'] = 'takeoff'
-
-        # Mark landings: for each serial number, it's a landing if and only if the
-        # latest record has a vertical velocity less than 2 m/s. Setting the filter
-        # to "Less than 0" would not capture the most important landings -- ground
-        # receptions -- where vertical velocity is close to zero but can be both
-        # slightly negative and slightly positive.
-        landings = sondes.loc[sondes.groupby('serial')['datetime'].idxmax()]
-        landings = landings.loc[landings['vel_v'] < 2]
-        sondes.loc[landings.index, 'phase'] = 'landing'
-
         return sondes
 
     def get_sonde_data_once(self, params):
@@ -190,37 +177,19 @@ class EmailNotifier:
 
         # Annotate all landing records with distance from home
         sondes[['dist_from_home_m', 'bearing_from_home']] = sondes.apply(
-            lambda s: get_path(s) if s['phase'] == 'landing' else (None, None),
+            get_path,
             axis=1,
             result_type='expand')
 
-        # f = sondes.sort_values('dist_from_home_mi')
-        # print(f[f.phase == 'landing'].to_string())
-
         return sondes
 
-    def get_nearest_sonde_flight(self, sondes, config):
+    def get_nearest_landed_sonde(self, sondes, config):
         sondes = self.annotate_with_distance(sondes, config)
 
         # Find the landing closest to home
-        nearest_landing_idx = sondes[sondes['phase'] == 'landing']['dist_from_home_m'].idxmin()
+        nearest_landing = sondes.loc[sondes['dist_from_home_m'].idxmin()]
 
-        # Get the serial number of the nearest landing
-        nearest_landing_serial = sondes.loc[nearest_landing_idx].serial
-
-        # Return all data from the flight with the minimum landing distance
-
-        # OLD: Just return the subsampled data from the overview result
-        # nearest_landing_flight = sondes.loc[sondes.serial == nearest_landing_serial]
-
-        # NEW: Query SondeHub for detail on the serial to get all data for that flight
-        nearest_landing_flight = self.get_sonde_data(params={
-            'duration': '1d',
-            'serial': nearest_landing_serial,
-        })
-        nearest_landing_flight = self.annotate_with_distance(nearest_landing_flight, config)
-
-        return nearest_landing_flight
+        return nearest_landing
 
     ####
     #### Drawing map
@@ -496,7 +465,7 @@ class EmailNotifier:
         # Generate map link for email
         t = landing['datetime']
         map_suffix = \
-            f"{config['name']}/{t.year}/{t.month}/{t.day}-{t.hour}-{landing.lat}-{landing.lon}.jpg"
+            f"{config['name']}/{t.year}/{t.month}/{t.day}-{t.hour}-{landing['lat']}-{landing['lon']}.jpg"
         map_url = os.path.join(EXTERNAL_IMAGES_URL) + map_suffix
         body += f'<p><img width="100%" src="{map_url}">'
 
@@ -527,9 +496,7 @@ class EmailNotifier:
             print(f"Body:\n{body}\n")
 
     def process_one(self, sondes, config):
-        flight = self.get_nearest_sonde_flight(sondes, config)
-        landing = flight.loc[flight['datetime'].idxmax()]
-
+        landing = self.get_nearest_landed_sonde(sondes, config)
         dist_from_home_mi = landing['dist_from_home_m'] / METERS_PER_MILE
 
         if dist_from_home_mi > config['max_distance_mi']:
@@ -539,10 +506,19 @@ class EmailNotifier:
             )
             return
 
+        # Query SondeHub for detail on the flight
+        flight = self.get_sonde_data(params={
+            'duration': '1d',
+            'serial': landing['serial'],
+        })
+
         self.send_email(config, flight, landing)
 
     def process_all(self):
         sondes = self.get_sonde_data(params={'duration': '12h'})
+
+        # Filter the data down to just the last frame received from each sonde
+        sondes = sondes.loc[sondes.groupby('serial')['frame'].idxmax()]
 
         for config in CONFIGS:
             self.process_one(sondes, config)
@@ -570,7 +546,8 @@ def main():
 
     if not args.really_send:
         args.external_images_root = "./test-maps"
-        os.makedirs(args.external_images_root)
+        if not os.path.exists(args.external_images_root):
+            os.makedirs(args.external_images_root)
 
     if not os.path.exists(args.external_images_root):
         raise Exception(f"External images root {args.external_images_root} does not exist")

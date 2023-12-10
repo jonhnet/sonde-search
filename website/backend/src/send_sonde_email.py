@@ -57,9 +57,10 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from geographiclib.geodesic import Geodesic
 from pyproj import Transformer
+from typing import Tuple
 import argparse
 import boto3
-import contextily as cx
+import contextily as cx  # type: ignore
 import geocoder
 import matplotlib
 import matplotlib.pyplot as plt
@@ -171,7 +172,7 @@ class EmailNotifier:
                 time.sleep((2**retries) * 4)
             retries += 1
             sondes = self.get_sonde_data_once(params)
-            if len(sondes) > 0:
+            if sondes is not None and len(sondes) > 0:
                 return sondes
             print('Sondehub returned empty dataframe -- trying again')
 
@@ -230,7 +231,7 @@ class EmailNotifier:
 
     MAP_WHITESPACE = 0.2
 
-    def get_map_limits(self, points):
+    def get_map_limits(self, points) -> Tuple[float, float, float, float, float]:
         min_lat = min([point[0] for point in points])
         max_lat = max([point[0] for point in points])
         min_lon = min([point[1] for point in points])
@@ -293,8 +294,8 @@ class EmailNotifier:
             [landing['lat'], landing['lon']],
             [rx_lat, rx_lon],
         ])
-        ax.set_xlim([min_x, max_x])
-        ax.set_ylim([min_y, max_y])
+        ax.set_xlim(min_x, max_x)
+        ax.set_ylim(min_y, max_y)
         print(f"{config['name']}: downloading at zoomlevel {zoom}")
 
         cx.add_basemap(
@@ -527,7 +528,7 @@ class EmailNotifier:
 
     def process_one(self, sondes, config):
         flight = self.get_nearest_sonde_flight(sondes, config)
-        landing = flight.iloc[flight['datetime'].idxmax()]
+        landing = flight.loc[flight['datetime'].idxmax()]
 
         dist_from_home_mi = landing['dist_from_home_m'] / METERS_PER_MILE
 

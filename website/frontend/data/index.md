@@ -9,8 +9,9 @@ The historical maps on this site, such as the [heatmaps](/heatmaps) and
 [made their data public](https://github.com/projecthorus/sondehub-analysis).
 However, it's not in a very convenient format: an enormous directory of hundreds
 of thousands of individual JSON files. Each of these files contains "summary"
-data: the first, highest and last data points seen by SondeHub. It takes many
-hours to download and parse them all.
+data: one JSON file for each sonde ever seen. Each JSON file contains three
+records: the first, highest and last data points reported to SondeHub for that
+sonde. It takes many hours to download and parse them all.
 
 I've downloaded the data, done some data conversion and cleaning to remove
 apparently invalid flights, and reuploaded it in the

@@ -96,10 +96,10 @@ table.sonde tbody tr:nth-child(odd) {
 </tbody></table>
 
 The time of day will be reported in the time zone of the computer used
-to sign up for notifications. The distance and altitudes unit can be
+to sign up for notifications. The distance and altitude units can be
 configured to be metric or imperial.
 
-Notifications have maps attached showing where the sonde was last
+Notifications have a map attached showing where the sonde was last
 heard by a receiver. It plots the sonde's flight path (red), a
 line from your configured home coordinates to the last reception
 (blue) and a line from the last receiver site to the sonde (green).

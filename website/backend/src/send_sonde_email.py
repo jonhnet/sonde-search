@@ -21,7 +21,10 @@ import requests
 import sys
 import time
 
-from . import constants, table_definitions, util
+sys.path.insert(0, os.path.dirname(__file__))
+import constants
+import table_definitions
+import util
 
 from boto3.dynamodb.conditions import Attr
 
@@ -219,7 +222,7 @@ class EmailNotifier:
         ])
         ax.set_xlim(min_x, max_x)
         ax.set_ylim(min_y, max_y)
-        print(f"{config['uuid_subscription']}: downloading at zoomlevel {zoom}")
+        print(f"{config['email']}: downloading at zoomlevel {zoom}")
 
         cx.add_basemap(
             ax,
@@ -440,7 +443,7 @@ class EmailNotifier:
         if self.args.really_send:
             self.ses_client.send_raw_email(
                 Source=constants.FROM_EMAIL_ADDR,
-                Destinations=[config['email']],
+                Destinations=[constants.FROM_EMAIL_ADDR, config['email']],
                 RawMessage={
                     'Data': msg.as_string(),
                 },
@@ -455,7 +458,7 @@ class EmailNotifier:
 
         if dist_from_home_mi > config['max_distance_mi']:
             print(
-                f"{config['uuid_subscription']}: Nearest landing is {dist_from_home_mi:.1f}, "
+                f"{config['email']}: Nearest landing is {dist_from_home_mi:.1f}, "
                 f"more than max {config['max_distance_mi']}"
             )
             return

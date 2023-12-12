@@ -327,6 +327,11 @@ class FakeSondehub:
 @pytest.mark.usefixtures("mock_aws")
 @pytest.mark.usefixtures("server")
 class Test_EmailNotifier:
+    def get_body(self, sent_email):
+        email_obj = email.message_from_string(sent_email.raw_data)
+        body = base64.b64decode(email_obj.get_payload()[0].get_payload()[0].get_payload()).decode('utf8')
+        return body
+
     def subscribe_seattle(self, distance):
         addr = f'test.{distance}@supertest.com'
         user_token = self.apiserver.get_user_token(addr)
@@ -357,6 +362,5 @@ class Test_EmailNotifier:
         sent_email = sent_emails[0]
         assert addr_yes in sent_email.destinations
         assert addr_no not in sent_email.destinations
-        email_obj = email.message_from_string(sent_email.raw_data)
-        body = base64.b64decode(email_obj.get_payload()[0].get_payload()[0].get_payload()).decode('utf8')
+        body = self.get_body(sent_email)
         assert 'V1854526' in body

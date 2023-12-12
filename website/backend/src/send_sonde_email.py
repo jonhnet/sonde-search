@@ -508,7 +508,7 @@ def get_args():
         action='store_true',
     )
     parser.add_argument(
-        '--image-root',
+        '--external-images-root',
         type=str,
         action='store',
         default=EXTERNAL_IMAGES_ROOT,

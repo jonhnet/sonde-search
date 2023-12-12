@@ -9,7 +9,7 @@ footer: true
     <a href="https://sondesearch.lectrobox.com/vault/calendars/seattle-landings-by-month.webp">
        <img width="400" src="images/seattle-calendar-thumb.webp" />
     </a>
-    <div class="caption">Seattle-area sonde landings tracked by SondeHub, plotted my month, 2021-2023</div>
+    <div class="caption">Seattle-area sonde landings tracked by SondeHub, plotted by month, 2021-2023</div>
   </div>
 </div>
 

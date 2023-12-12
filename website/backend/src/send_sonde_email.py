@@ -491,7 +491,7 @@ class EmailNotifier:
         configs = self.get_subscriber_data()
 
         # Get sonde data from SondeHub
-        sondes = self.get_sonde_data(params={'duration': '12h'})
+        sondes = self.get_sonde_data(params={'duration': '6h'})
 
         # Filter the data down to just the last frame received from each sonde
         sondes = sondes.loc[sondes.groupby('serial')['frame'].idxmax()]

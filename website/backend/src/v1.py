@@ -9,15 +9,15 @@ from decimal import Decimal
 import boto3
 from boto3.dynamodb.conditions import Key, Attr
 
+from . import constants, table_definitions
+
 EMAIL_DESTINATION = 'https://sondesearch.lectrobox.com/'
 
 
 class GlobalConfig:
     def __init__(self):
         print('Global setup')
-        self.ddb = boto3.resource('dynamodb')
-        self.user_table = self.ddb.Table('sondesearch-notifier-users')
-        self.sub_table = self.ddb.Table('sondesearch-notifier-subscriptions')
+        table_definitions.create_table_clients(self)
 
 
 class ClientError(cherrypy.HTTPError):
@@ -36,7 +36,6 @@ class ClientError(cherrypy.HTTPError):
 class LectroboxAPI:
     PREFERENCES = ('units', 'tzname')
     VALID_UNITS = ('metric', 'imperial')
-    FROM_EMAIL_ADDR = 'notifier@lectrobox.com'
     VERIFY_EMAIL_SUBJ = 'Verify your email to receive sonde notifications'
 
     def __init__(self, global_config):
@@ -96,10 +95,10 @@ class LectroboxAPI:
         # send
         ses = boto3.client('ses')
         ses.send_email(
-            Source=self.FROM_EMAIL_ADDR,
+            Source=constants.FROM_EMAIL_ADDR,
             Destination={
                 'ToAddresses': [email],
-                'BccAddresses': [self.FROM_EMAIL_ADDR],
+                'BccAddresses': [constants.FROM_EMAIL_ADDR],
             },
             Message={
                 'Subject': {

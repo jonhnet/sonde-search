@@ -5,9 +5,22 @@
 # create tables in the dynamodb mock service, and can create
 # production tables by running main.
 
-def create_tables(ddb_client):
+import boto3
+
+USER_TABLE_NAME = 'sondesearch-notifier-users'
+SUBSCRIBER_TABLE_NAME = 'sondesearch-notifier-subscriptions'
+
+def create_table_clients(o):
+    ddb_client = boto3.resource('dynamodb')
+    o.user_table = ddb_client.Table(USER_TABLE_NAME)
+    o.sub_table = ddb_client.Table(SUBSCRIBER_TABLE_NAME)
+
+
+def create_tables():
+    ddb_client = boto3.resource('dynamodb')
+
     ddb_client.create_table(
-        TableName='sondesearch-notifier-users',
+        TableName=USER_TABLE_NAME,
         KeySchema=[{
             'AttributeName': 'uuid',
             'KeyType': 'HASH',
@@ -41,7 +54,7 @@ def create_tables(ddb_client):
     )
 
     ddb_client.create_table(
-        TableName='sondesearch-notifier-subscriptions',
+        TableName=SUBSCRIBER_TABLE_NAME,
         KeySchema=[{
             'AttributeName': 'uuid',
             'KeyType': 'HASH',
@@ -72,6 +85,4 @@ def create_tables(ddb_client):
     )
 
 if __name__ == '__main__':
-    import boto3
-    ddb = boto3.client('dynamodb')
-    create_tables(ddb)
+    create_tables()

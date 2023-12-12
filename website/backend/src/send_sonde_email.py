@@ -3,56 +3,6 @@
 EXTERNAL_IMAGES_ROOT = '/mnt/storage/sondemaps'
 EXTERNAL_IMAGES_URL = 'https://sondemaps.lectrobox.com/'
 
-CONFIGS = [
-
-    # Seattle
-    {
-        'name': 'seattle',
-        'home_lat': 47.6426,
-        'home_lon': -122.32271,
-        'email_from': 'Seattle Sonde Notifier <notifier@lectrobox.com>',
-        'email_to': [
-            'jelson@gmail.com',
-            'jonh.sondenotify@jonh.net',
-        ],
-        'max_distance_mi': 300,
-        'units': 'imperial',
-        'tz': 'US/Pacific',
-    },
-
-    # Berkeley
-    {
-        'name': 'berkeley',
-        'home_lat': 37.859,
-        'home_lon': -122.270,
-        'email_from': 'Berkeley Sonde Notifier <jelson@lectrobox.com>',
-        'email_to': [
-            'jelson@gmail.com',
-            'jonh.sondenotify@jonh.net',
-            'david.jacobowitz+sonde@gmail.com',
-        ],
-        'max_distance_mi': 20,
-        'units': 'imperial',
-        'tz': 'US/Pacific',
-    },
-
-    # Kitchener
-    {
-        'name': 'kitchener',
-        'home_lat': 43.46865,
-        'home_lon': -80.49695,
-        'email_from': 'Kitchener Sonde Notifier <jelson@lectrobox.com>',
-        'email_to': [
-            'jelson@gmail.com',
-            'info@bestforbees.com',
-            'liu.space.yang@gmail.com',
-        ],
-        'max_distance_mi': 77.6,
-        'units': 'metric',
-        'tz': 'US/Eastern',
-    },
-]
-
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from geographiclib.geodesic import Geodesic
@@ -70,6 +20,10 @@ import pandas as pd
 import requests
 import sys
 import time
+
+from . import constants, table_definitions, util
+
+from boto3.dynamodb.conditions import Attr
 
 matplotlib.use('Agg')
 
@@ -169,7 +123,7 @@ class EmailNotifier:
 
     def annotate_with_distance(self, sondes, config):
         def get_path(sonde):
-            path = Geodesic.WGS84.Inverse(config['home_lat'], config['home_lon'], sonde.lat, sonde.lon)
+            path = Geodesic.WGS84.Inverse(config['lat'], config['lon'], sonde['lat'], sonde['lon'])
             return (
                 path['s12'],
                 (path['azi1'] + 360) % 360
@@ -234,7 +188,7 @@ class EmailNotifier:
         ax.plot(flight_x, flight_y, color='red')
 
         # Plot a line from home to the landing point
-        home_x, home_y = self.to_mercator_xy(config['home_lat'], config['home_lon'])
+        home_x, home_y = self.to_mercator_xy(config['lat'], config['lon'])
         sonde_x, sonde_y = self.to_mercator_xy(landing['lat'], landing['lon'])
         ax.plot([home_x, sonde_x], [home_y, sonde_y], color='blue', marker='*')
         ax.annotate(
@@ -259,13 +213,13 @@ class EmailNotifier:
 
         # Find the limits of the map
         min_x, min_y, max_x, max_y, zoom = self.get_map_limits([
-            [config['home_lat'], config['home_lon']],
+            [config['lat'], config['lon']],
             [landing['lat'], landing['lon']],
             [rx_lat, rx_lon],
         ])
         ax.set_xlim(min_x, max_x)
         ax.set_ylim(min_y, max_y)
-        print(f"{config['name']}: downloading at zoomlevel {zoom}")
+        print(f"{config['uuid_subscription']}: downloading at zoomlevel {zoom}")
 
         cx.add_basemap(
             ax,
@@ -323,7 +277,7 @@ class EmailNotifier:
             place += geo.county
 
         # get landing time in config-specified timezone
-        landing_localtime = landing['datetime'].tz_convert(config['tz'])
+        landing_localtime = landing['datetime'].tz_convert(config['tzname'])
 
         # subject line
         subj = ""
@@ -459,13 +413,13 @@ class EmailNotifier:
         # build mime message
         msg = MIMEMultipart('mixed')
         msg['Subject'] = subj
-        msg['From'] = config['email_from']
-        msg['To'] = ",".join(config['email_to'])
+        msg['From'] = constants.FROM_EMAIL_ADDR
+        msg['To'] = config['email']
 
         # Generate map link for email
         t = landing['datetime']
         map_suffix = \
-            f"{config['name']}/{t.year}/{t.month}/{t.day}-{t.hour}-{landing['lat']}-{landing['lon']}.jpg"
+            f"{config['uuid_subscription']}/{t.year}/{t.month}/{t.day}-{t.hour}-{landing['lat']}-{landing['lon']}.jpg"
         map_url = os.path.join(EXTERNAL_IMAGES_URL) + map_suffix
         body += f'<p><img width="100%" src="{map_url}">'
 
@@ -485,8 +439,8 @@ class EmailNotifier:
 
         if self.args.really_send:
             self.ses_client.send_raw_email(
-                Source=config['email_from'],
-                Destinations=config['email_to'],
+                Source=constants.FROM_EMAIL_ADDR,
+                Destinations=[config['email']],
                 RawMessage={
                     'Data': msg.as_string(),
                 },
@@ -501,7 +455,7 @@ class EmailNotifier:
 
         if dist_from_home_mi > config['max_distance_mi']:
             print(
-                f"{config['name']}: Nearest landing is {dist_from_home_mi:.1f}, "
+                f"{config['uuid_subscription']}: Nearest landing is {dist_from_home_mi:.1f}, "
                 f"more than max {config['max_distance_mi']}"
             )
             return
@@ -514,13 +468,32 @@ class EmailNotifier:
 
         self.send_email(config, flight, landing)
 
+    def get_subscriber_data(self):
+        table_definitions.create_table_clients(self)
+        users = util.dynamodb_to_dataframe(self.user_table.scan)
+        subs = util.dynamodb_to_dataframe(
+            self.sub_table.scan,
+            FilterExpression=Attr('active').eq(True)
+        ).astype({
+            'lat': float,
+            'lon': float,
+        })
+        if subs.empty or users.empty:
+            return pd.DataFrame()
+        configs = subs.merge(users, left_on='subscriber', right_on='uuid', suffixes=('_subscription', '_user'))
+        return configs
+
     def process_all(self):
+        # Get subscription data
+        configs = self.get_subscriber_data()
+
+        # Get sonde data from SondeHub
         sondes = self.get_sonde_data(params={'duration': '12h'})
 
         # Filter the data down to just the last frame received from each sonde
         sondes = sondes.loc[sondes.groupby('serial')['frame'].idxmax()]
 
-        for config in CONFIGS:
+        for i, config in configs.iterrows():
             self.process_one(sondes, config)
             time.sleep(1)
 

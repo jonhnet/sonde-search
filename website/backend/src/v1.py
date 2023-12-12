@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 
+from decimal import Decimal
+import boto3
 import cherrypy
 import datetime
 import os
+import sys
 import uuid
-from decimal import Decimal
 
-import boto3
 from boto3.dynamodb.conditions import Key, Attr
 
-from . import constants, table_definitions
+sys.path.insert(0, os.path.dirname(__file__))
+import constants
+import table_definitions
 
 EMAIL_DESTINATION = 'https://sondesearch.lectrobox.com/'
 

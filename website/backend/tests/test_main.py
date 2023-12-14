@@ -269,8 +269,9 @@ class Test_v1:
         }).json()
         # make sure no personal data is returned from this API
         assert resp4.pop('success') is True
-        assert resp4.pop('message') == \
-            f'{addr} will no longer get notifications for sondes near ({sub1["lat"]}, {sub1["lon"]}).'
+        assert resp4.pop('email') == addr
+        assert resp4.pop('cancelled_sub_lat') == sub1['lat']
+        assert resp4.pop('cancelled_sub_lon') == sub1['lon']
         assert resp4 == {}
 
         # use the authorized-user management api to get the config;

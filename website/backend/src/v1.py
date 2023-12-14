@@ -239,11 +239,9 @@ class LectroboxAPI:
         res = self._unsubscribe_common(uuid)
         return {
             'success': True,
-            'message': '{} will no longer get notifications for sondes near ({}, {}).'.format(
-                res['config']['email'],
-                res['cancelled_sub']['lat'],
-                res['cancelled_sub']['lon'],
-            ),
+            'email': res['config']['email'],
+            'cancelled_sub_lat': res['cancelled_sub']['lat'],
+            'cancelled_sub_lon': res['cancelled_sub']['lon'],
         }
 
     # Management portal unsubscribe where a user token is provided. If

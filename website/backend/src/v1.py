@@ -6,6 +6,7 @@ import cherrypy
 import datetime
 import os
 import sys
+import time
 import uuid
 
 from boto3.dynamodb.conditions import Key, Attr
@@ -47,6 +48,9 @@ class LectroboxAPI:
     @cherrypy.expose
     def hello(self):
         return f"{datetime.datetime.now()}: hello from the sondesearch api! pid {os.getpid()}"
+
+    def get_time(self):
+        return Decimal(time.time())
 
     def get_user_token(self, email):
         # Check to see if this email already exists in the system. If
@@ -188,6 +192,7 @@ class LectroboxAPI:
             'subscriber': user_data['uuid'],
 
             'active': True,
+            'subscribe_time': self.get_time(),
             'lat': Decimal(self._required(args, 'lat')),
             'lon': Decimal(self._required(args, 'lon')),
             'max_distance_mi': Decimal(self._required(args, 'max_distance_mi')),
@@ -215,9 +220,10 @@ class LectroboxAPI:
             Key={
                 'uuid': uuid,
             },
-            UpdateExpression='SET active=:f',
+            UpdateExpression='SET active=:f, unsubscribe_time=:now',
             ExpressionAttributeValues={
                 ':f': False,
+                ':now': self.get_time(),
             },
             ReturnValues="ALL_NEW",
         )

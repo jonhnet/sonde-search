@@ -360,7 +360,7 @@ class EmailNotifier:
             <td>Distance</td>
             <td>
                {self.render_distance(config, landing['dist_from_home_m'])} from home
-               (your configured maximum:
+               (configured max:
                {self.render_distance(config, METERS_PER_MILE * config['max_distance_mi'])})
             </td>
         </tr>

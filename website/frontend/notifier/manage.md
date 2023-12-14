@@ -7,6 +7,12 @@ title: "Sonde Email Notifier — Manage"
     <img src="/images/loading.gif" />
 </div>
 
+<div id="config_error" hidden>
+  We're sorry, the notifier management service seems to be having a problem.
+  Please try <a href="../signup/">signing up again</a>, or <a
+  href="https://www.lectrobox.com/contact/">let us know</a> that it's broken.
+</div>
+
 <div id="management_state" hidden>
     <p>
     Managing notifications for
@@ -99,6 +105,11 @@ function mi_to_km(mi) {
     return mi * 1.60934;
 }
 
+function config_error() {
+  $('#config_error').attr('hidden', false);
+  $('#loading').attr('hidden', true);
+}
+
 function process_config(config) {
     email = config['email'];
     tzname = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -188,6 +199,7 @@ function get_config() {
             process_config(result);
         },
         error: function() {
+            config_error();
         }
     });
 }

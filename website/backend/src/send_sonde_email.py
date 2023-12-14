@@ -297,6 +297,8 @@ class EmailNotifier:
         if place:
             subj += f" ({place})"
 
+        unsub_url = f"https://sondesearch.lectrobox.com/notifier/unsubscribe/?uuid={config['uuid_subscription']}"
+
         # body
         uploaders = [u['uploader_callsign'] for u in landing['uploaders']]
 
@@ -417,22 +419,23 @@ class EmailNotifier:
         This email was sent from the
         <a href="https://sondesearch.lectrobox.com/notifier/">Sonde Notification Service</a>.
         To unsubscribe from this notification,
-        <a href="https://sondesearch.lectrobox.com/notifier/unsubscribe/?uuid={config['uuid_subscription']}">click here</a>.
+        <a href="{unsub_url}">click here</a>.
         To configure your notifications,
         <a href="https://sondesearch.lectrobox.com/notifier/manage/">click here</a>.
     </i></p>
         '''
 
-        return subj, body
+        return subj, body, unsub_url
 
     def send_email(self, config, flight, landing):
-        subj, body = self.get_email_text(config, landing)
+        subj, body, unsub_url = self.get_email_text(config, landing)
 
         # build mime message
         msg = MIMEMultipart('mixed')
         msg['Subject'] = subj
         msg['From'] = constants.FROM_EMAIL_ADDR
         msg['To'] = config['email']
+        msg['List-Unsubscribe'] = f'<{unsub_url}>'
 
         # Generate map link for email
         t = landing['datetime']

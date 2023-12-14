@@ -45,6 +45,9 @@ MAX_SONDEHUB_RETRIES = 6
 SONDEHUB_MAP_URL = 'https://sondehub.org/#!mt=Mapnik&mz=9&qm=12h&f={serial}&q={serial}'
 GMAP_URL = 'https://www.google.com/maps/search/?api=1&query={lat},{lon}'
 
+# random other constants
+DEV_EMAIL = 'jelson@gmail.com'
+
 # Get sonde data from the same live API that the SondeHub web site uses
 class SondeHubTelemetryRetriever:
     def __init__(self):
@@ -353,7 +356,11 @@ class EmailNotifier:
         body += f'''
         <tr>
             <td>Distance</td>
-            <td>{self.render_distance(config, landing['dist_from_home_m'])} from home</td>
+            <td>
+               {self.render_distance(config, landing['dist_from_home_m'])} from home
+               (your configured maximum:
+               {self.render_distance(config, METERS_PER_MILE * config['max_distance_mi'])})
+            </td>
         </tr>
         <tr>
             <td>Bearing</td>
@@ -404,8 +411,16 @@ class EmailNotifier:
         </tr>
             '''
 
-        body += '''
+        body += f'''
     </table>
+    <p><i>
+        This email was sent from the
+        <a href="https://sondesearch.lectrobox.com/notifier/">Sonde Notification Service</a>.
+        To unsubscribe from this notification,
+        <a href="https://sondesearch.lectrobox.com/notifier/unsubscribe/?uuid={config['uuid_subscription']}">click here</a>.
+        To configure your notifications,
+        <a href="https://sondesearch.lectrobox.com/notifier/manage/">click here</a>.
+    </i></p>
         '''
 
         return subj, body
@@ -440,7 +455,7 @@ class EmailNotifier:
         alternatives.attach(MIMEText(body, 'html', 'utf-8'))
         msg.attach(alternatives)
 
-        if self.args.really_send:
+        if self.args.really_send or self.args.live_test:
             self.ses_client.send_raw_email(
                 Source=constants.FROM_EMAIL_ADDR,
                 Destinations=[constants.FROM_EMAIL_ADDR, config['email']],
@@ -453,6 +468,9 @@ class EmailNotifier:
             print(f"Body:\n{body}\n")
 
     def process_one(self, sondes, config):
+        # TODO: Eliminate sondes that have already been reported for this user
+        # from the list of sondes we might possibly report
+
         landing = self.get_nearest_landed_sonde(sondes, config)
         dist_from_home_mi = landing['dist_from_home_m'] / METERS_PER_MILE
 
@@ -471,19 +489,43 @@ class EmailNotifier:
 
         self.send_email(config, flight, landing)
 
+        # TODO: report that we sent the email back to dynamodb
+
     def get_subscriber_data(self):
         table_definitions.create_table_clients(self)
+
+        # Get all user data (e.g. email addresses, units)
         users = util.dynamodb_to_dataframe(self.user_table.scan)
+
+        # Get all subscription data
         subs = util.dynamodb_to_dataframe(
             self.sub_table.scan,
             FilterExpression=Attr('active').eq(True)
         ).astype({
             'lat': float,
             'lon': float,
+            'max_distance_mi': float,
         })
+
+        # If either table was empty, return nothing
         if subs.empty or users.empty:
             return pd.DataFrame()
-        configs = subs.merge(users, left_on='subscriber', right_on='uuid', suffixes=('_subscription', '_user'))
+
+        # Merge the user data into the subscription data. Each subscription
+        # record has a field, "subscriber", which references the uuid field of
+        # the user table.
+        configs = subs.merge(
+            users,
+            left_on='subscriber',
+            right_on='uuid',
+            suffixes=('_subscription', '_user'),
+        )
+
+        # If we're in "live test" mode, filter out all notifications except for
+        # a dev
+        if self.args.live_test:
+            configs = configs.loc[configs['email'] == DEV_EMAIL]
+
         return configs
 
     def process_all(self):
@@ -505,6 +547,7 @@ def get_args():
     parser.add_argument(
         '--really-send',
         default=False,
+        help='Send real notification emails to real people',
         action='store_true',
     )
     parser.add_argument(
@@ -512,6 +555,12 @@ def get_args():
         type=str,
         action='store',
         default=EXTERNAL_IMAGES_ROOT,
+    )
+    parser.add_argument(
+        '--live-test',
+        default=False,
+        help='Send real email only to developers as a test',
+        action='store_true',
     )
     args = parser.parse_args(sys.argv[1:])
 

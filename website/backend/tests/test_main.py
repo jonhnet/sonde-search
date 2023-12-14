@@ -355,6 +355,7 @@ class Test_EmailNotifier:
         args = argparse.Namespace()
         args.really_send = True
         args.external_images_root = tmp_path
+        args.live_test = False
         notifier = send_sonde_email.EmailNotifier(args, FakeSondehub('sondes-V1854526-66-miles-from-seattle'))
         notifier.process_all()
 

@@ -346,23 +346,35 @@ class Test_EmailNotifier:
         })
         return addr
 
+    def run_notifier(self, tmp_path, filename):
+        args = argparse.Namespace()
+        args.really_send = True
+        args.external_images_root = tmp_path
+        args.live_test = False
+        notifier = send_sonde_email.EmailNotifier(args, FakeSondehub(filename))
+        notifier.process_all()
+
+        return self.ses_backend.sent_messages
+
     def test_sends_notification(self, tmp_path):
         # Subscribe twice: 100 mile max and 1 mile max. Only one email should be
         # generated because the sonde in this dataset is 66 miles away.
         addr_yes = self.subscribe_seattle(100)
         addr_no = self.subscribe_seattle(1)
 
-        args = argparse.Namespace()
-        args.really_send = True
-        args.external_images_root = tmp_path
-        args.live_test = False
-        notifier = send_sonde_email.EmailNotifier(args, FakeSondehub('sondes-V1854526-66-miles-from-seattle'))
-        notifier.process_all()
-
-        sent_emails = self.ses_backend.sent_messages
+        sent_emails = self.run_notifier(tmp_path, 'sondes-V1854526-66-miles-from-seattle')
         assert len(sent_emails) == 1
         sent_email = sent_emails[0]
         assert addr_yes in sent_email.destinations
         assert addr_no not in sent_email.destinations
         body = self.get_body(sent_email)
         assert 'V1854526' in body
+
+    def test_nolatlon_receiver(self, tmp_path):
+        addr = self.subscribe_seattle(100)
+        sent_emails = self.run_notifier(tmp_path, 'no-latlon-receiver-seattle')
+        assert len(sent_emails) == 1
+        sent_email = sent_emails[0]
+        assert addr in sent_email.destinations
+        body = self.get_body(sent_email)
+        assert 'V1854451' in body

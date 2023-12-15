@@ -205,24 +205,28 @@ class EmailNotifier:
             arrowprops=dict(arrowstyle='-'),
         )
 
-        # Plot a line from the last receiver to the landing point
-        rx_lat, rx_lon = [float(f) for f in landing['uploader_position'].split(',')]
-        rx_x, rx_y = self.to_mercator_xy(rx_lat, rx_lon)
-        ax.plot([rx_x, sonde_x], [rx_y, sonde_y], color='springgreen', marker='*')
-        ax.annotate(
-            xy=[rx_x, rx_y],
-            text=f"rx ({landing['uploader_callsign']})",
-            xytext=[10, 0],
-            textcoords='offset points',
-            arrowprops=dict(arrowstyle='-'),
-        )
-
-        # Find the limits of the map
-        min_x, min_y, max_x, max_y, zoom = self.get_map_limits([
+        map_limits = [
             [config['lat'], config['lon']],
             [landing['lat'], landing['lon']],
-            [rx_lat, rx_lon],
-        ])
+        ]
+
+        # If the last receiver has a report lat/lon, plot a line from it to the
+        # landing point
+        if not pd.isna(landing['uploader_position']):
+            rx_lat, rx_lon = [float(f) for f in landing['uploader_position'].split(',')]
+            rx_x, rx_y = self.to_mercator_xy(rx_lat, rx_lon)
+            ax.plot([rx_x, sonde_x], [rx_y, sonde_y], color='springgreen', marker='*')
+            ax.annotate(
+                xy=[rx_x, rx_y],
+                text=f"rx ({landing['uploader_callsign']})",
+                xytext=[10, 0],
+                textcoords='offset points',
+                arrowprops=dict(arrowstyle='-'),
+            )
+            map_limits.append([rx_lat, rx_lon])
+
+        # Find the limits of the map
+        min_x, min_y, max_x, max_y, zoom = self.get_map_limits(map_limits)
         ax.set_xlim(min_x, max_x)
         ax.set_ylim(min_y, max_y)
         print(f"{config['email']}: downloading at zoomlevel {zoom}")

@@ -13,6 +13,12 @@
   text: What are radiosondes, and why search for them?
   image: home-thumbs/sonde-intro.webp
 
+- title: Our First Find
+  url: /stories/first-find/
+  tags: stories
+  text: A trail-free adventure in the woods!
+  image: home-thumbs/first-find.webp
+
 - title: Email Notifier
   url: /notifier/
   text: Get email every time a radiosonde lands near you

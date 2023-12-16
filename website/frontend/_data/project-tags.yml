@@ -4,5 +4,8 @@
 - tag: analyzers
   title: Analysis
 
+- tag: stories
+  title: Stories
+
 - tag: dev
   title: Developers

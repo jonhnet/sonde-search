@@ -9,5 +9,8 @@
         "--ignore=E265,E266,E302,E305,E402,E221"
     ],
     "python.analysis.autoImportCompletions": true,
-    "python.analysis.typeCheckingMode": "basic"
+    "python.analysis.typeCheckingMode": "basic",
+    "cSpell.words": [
+        "rainforest"
+    ]
 }

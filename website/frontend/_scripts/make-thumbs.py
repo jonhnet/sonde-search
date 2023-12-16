@@ -7,7 +7,7 @@ from subprocess import call
 
 THUMBS_DIR = "thumbs"
 THUMBS_PREFIX = "thumb-"
-extList = ["jpg", "JPG", "png", "PNG", "gif", "GIF", "webm", "WEBM"]
+extList = ["jpg", "png", "gif", "webm", "webp"]
 
 if not os.path.exists(THUMBS_DIR):
     os.mkdir("thumbs")
@@ -15,6 +15,7 @@ if not os.path.exists(THUMBS_DIR):
 fileList = []
 for ext in extList:
     fileList.extend(glob.glob("*." + ext))
+    fileList.extend(glob.glob("*." + ext.upper()))
 
 for f in fileList:
     if f.startswith(THUMBS_PREFIX):

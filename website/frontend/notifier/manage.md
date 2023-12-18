@@ -2,7 +2,19 @@
 layout: page
 title: "Sonde Email Notifier — Manage"
 ---
-
+<style>
+  table.subs .trash[data-loading] {
+    background-color: darkgray;
+  }
+  table.subs .trash {
+    background-color: transparent;
+    margin: 0;
+  }
+  table.subs td {
+    padding: 4px;
+    vertical-align: middle;
+  }
+</style>
 <div id="loading" class="row t30 text-center">
     <img src="/images/loading.gif" />
 </div>
@@ -92,7 +104,11 @@ title: "Sonde Email Notifier — Manage"
 
     <div class="row">
       <div class="large-12 columns">
-        <button class="button" type="submit" id="subscribe_button" class="button success" style="float: right">Subscribe</button>
+        <button
+          class="button" type="submit" data-style="slide-right"
+          id="subscribe_button" class="button success" style="float: right">
+            Subscribe
+        </button>
       </div>
     </div>
 
@@ -133,7 +149,7 @@ function process_config(config) {
     $('#subscribe_tzname').html(tzname);
 
     // construct the table
-    let table = $('<table>');
+    let table = $('<table class="subs">');
     let headers = $('<tr>');
     let num_subs = 0;
     headers.append($('<th>').text('Home Lat'));
@@ -156,8 +172,8 @@ function process_config(config) {
         row.append($('<td class="text-right">').text(this['lat']));
         row.append($('<td class="text-right">').text(this['lon']));
         row.append($('<td class="text-right">').text('' + Math.round(100*dist)/100 + dist_unit));
-        //let del_button = $('<button class="ladda-button" data-size="xs">');
-        let del_button = $('<div data-size="xs">');
+        let del_button = $('<button class="ladda-button trash" data-style="slide-right" data-size="xs">');
+        //let del_button = $('<div data-size="xs">');
         del_button.append($('<img src="/images/trash.png" width="20" />'));
         let uuid = this['uuid'];
         del_button.click(function() { unsubscribe(del_button, uuid); });

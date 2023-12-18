@@ -3,11 +3,10 @@ layout: page
 title: "Sonde Email Notifier — Manage"
 ---
 <style>
-  table.subs .trash[data-loading] {
-    background-color: darkgray;
+  table.subs .trash:not([data-loading]) {
+    background-color: transparent;
   }
   table.subs .trash {
-    background-color: transparent;
     margin: 0;
   }
   table.subs td {

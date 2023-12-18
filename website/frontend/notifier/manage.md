@@ -30,6 +30,7 @@ title: "Sonde Email Notifier — Manage"
     <button class="button" data-reveal-id="add-subscription">Add New Notification</button>
 </div>
 
+<!--- https://get.foundation/sites/docs-v5/components/forms.html --->
 <div class="reveal-modal" id="add-subscription" data-reveal aria-labelledby="modalTitle" aria-hidden="true" role="dialog">
   <h2> Configure New Notification </h2>
     <form onsubmit="return subscribe()">
@@ -48,23 +49,34 @@ title: "Sonde Email Notifier — Manage"
     <div class="row t10">
       <div class="large-6 columns">
         <label>Desired Units</label>
-        <input type="radio" name="units" onclick="set_units('imperial')" id="unit_imperial"><label for="unit_imperial">Imperial (feet, miles)</label>
-        <input type="radio" name="units" onclick="set_units('metric')" id="unit_metric"><label for="unit_metric">Metric (meters, km)</label>
+        <label for="unit_imperial">
+          <input type="radio" name="units" onclick="set_units('imperial')" id="unit_imperial">
+          Imperial (feet, miles)
+        </label>
+        <label for="unit_metric">
+          <input type="radio" name="units" onclick="set_units('metric')" id="unit_metric">
+          Metric (meters, km)
+        </label>
       </div>
     </div>
 
     <div class="row">
+      <div class="large-12 columns t10">
+        <div>Enter latitude and longitude using decimal degrees, negative for South and West.</div>
+      </div>
+    </div>
+
+    <div class="row t10">
       <div class="large-4 columns">
-        <label>Home Latitude (Decimal Degrees)
+        <label>Home Latitude
         <input type="number" required="true" min="-90" max="90" step="any" id="subscribe_lat" />
         </label>
       </div>
       <div class="large-4 columns">
-        <label>Home Longitude (Decimal Degrees)
+        <label>Home Longitude
         <input type="number" required="true" min="-180" max="180" step="any" id="subscribe_lon" />
         </label>
       </div>
-
       <div class="large-4 columns">
         <div class="row collapse">
           <label>Maximum Distance</label>
@@ -80,7 +92,7 @@ title: "Sonde Email Notifier — Manage"
 
     <div class="row">
       <div class="large-12 columns">
-        <button class="button" id="subscribe_button">Add</button>
+        <button class="button" type="submit" id="subscribe_button" class="button success" style="float: right">Subscribe</button>
       </div>
     </div>
 
@@ -88,8 +100,8 @@ title: "Sonde Email Notifier — Manage"
       <div class="large-12 columns" id="subscribe_result" style="visibility: hidden">
       </div>
     </div>
-
   </form>
+  <a class="close-reveal-modal" aria-label="Close">&#215;</a>
 </div>
 
 <script>
@@ -230,6 +242,7 @@ function subscribe() {
             process_config(result);
             $('#subscribe_lat').val(null);
             $('#subscribe_lon').val(null);
+            $('#subscribe_maxdist').val(100);
             $('#add-subscription').foundation('reveal', 'close');
         },
         error: function(jqXHR, textStatus, errorThrown) {

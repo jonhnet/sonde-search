@@ -2,17 +2,25 @@
 
 import folium
 from folium.plugins import HeatMap
-
+import branca.element
 import sys
 sys.path.insert(0, "..")
 from data.cache import get_sonde_summaries_as_dataframe
 
+EXTRA_STYLE = branca.element.Element('''
+<style>
+  .leaflet-heatmap-layer {
+     opacity: 0.7;
+  }
+</style>
+''')
 
 def draw_map(df, name, **kwargs):
     # Draw heatmap
     fmap = folium.Map(**kwargs)
     hm = HeatMap(df[['lat', 'lon']])
     hm.add_to(fmap)
+    fmap.get_root().header.add_child(EXTRA_STYLE)
     fmap.save(name)
 
 

@@ -22,6 +22,31 @@ def create_tables():
     ddb_client = boto3.resource('dynamodb')
 
     ddb_client.create_table(
+        TableName=NOTIFICATION_TABLE_NAME,
+        KeySchema=[
+            {
+                'AttributeName': 'subscription_uuid',
+                'KeyType': 'HASH',
+            },
+            {
+                'AttributeName': 'time_sent',
+                'KeyType': 'RANGE'
+            }
+        ],
+        AttributeDefinitions=[
+            {
+                'AttributeName': 'subscription_uuid',
+                'AttributeType': 'S',
+            },
+            {
+                'AttributeName': 'time_sent',
+                'AttributeType': 'N',
+            },
+        ],
+        BillingMode='PAY_PER_REQUEST',
+    )
+
+    ddb_client.create_table(
         TableName=USER_TABLE_NAME,
         KeySchema=[{
             'AttributeName': 'uuid',
@@ -81,31 +106,6 @@ def create_tables():
                 'Projection': {
                     'ProjectionType': 'ALL',
                 },
-            },
-        ],
-        BillingMode='PAY_PER_REQUEST',
-    )
-
-    ddb_client.create_table(
-        TableName=NOTIFICATION_TABLE_NAME,
-        KeySchema=[
-            {
-                'AttributeName': 'subscription_uuid',
-                'KeyType': 'HASH',
-            },
-            {
-                'AttributeName': 'time_sent',
-                'KeyType': 'RANGE'
-            }
-        ],
-        AttributeDefinitions=[
-            {
-                'AttributeName': 'subscription_uuid',
-                'AttributeType': 'S',
-            },
-            {
-                'AttributeName': 'time_sent',
-                'AttributeType': 'N',
             },
         ],
         BillingMode='PAY_PER_REQUEST',

@@ -60,7 +60,7 @@ More information can be found at:
   Administration (NOAA)](https://www.noaa.gov/).
 
 * [SondeHub](https://www.sondehub.org)---the largest repository of
-  croudsourced balloon tracking data. It includes live maps and an API
+  crowdsourced balloon tracking data. It includes live maps and an API
   for retrieving both live and historical data. People also report
   which balloons they've found here. The tools on this site use data
   from SondeHub.
@@ -83,7 +83,7 @@ More information can be found at:
 
 * [MySondyGo](https://www.tindie.com/products/mayhemxlabs/radiosonde-tracker-mysondygo-with-404-mhz-antenna/)
   is a portable sonde tracker; a useful self-contained device for
-  picking up transmisisons from nearby balloons while in the field.
+  picking up transmissions from nearby balloons while in the field.
 
 * [Radiosonde North
   America](https://www.facebook.com/groups/444260440607754)---an active,

@@ -11,6 +11,15 @@
     "python.analysis.autoImportCompletions": true,
     "python.analysis.typeCheckingMode": "basic",
     "cSpell.words": [
-        "rainforest"
+        "crowdsourced",
+        "fullwidth",
+        "Klofas",
+        "NOAA",
+        "rainforest",
+        "Sondy",
+        "webm"
+    ],
+    "cSpell.enableFiletypes": [
+        "!python"
     ]
 }

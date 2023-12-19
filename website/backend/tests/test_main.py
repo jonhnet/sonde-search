@@ -6,6 +6,7 @@ import cherrypy
 import email
 import json
 import os
+from pathlib import Path
 import pytest
 import re
 import requests
@@ -70,6 +71,8 @@ def post(url_suffix, expected_status=200, data=None):
 
 @pytest.mark.usefixtures("server")
 class Test_v1:
+    ses_backend: ses_backends
+    apiserver: v1.LectroboxAPI
 
     def sub_args(self, user_token):
         return {
@@ -328,6 +331,9 @@ class FakeSondehub:
 @pytest.mark.usefixtures("mock_aws")
 @pytest.mark.usefixtures("server")
 class Test_EmailNotifier:
+    apiserver: v1.LectroboxAPI
+    ses_backend: ses_backends
+
     def get_body(self, sent_email):
         email_obj = email.message_from_string(sent_email.raw_data)
         body = base64.b64decode(email_obj.get_payload()[0].get_payload()[0].get_payload()).decode('utf8')
@@ -356,13 +362,15 @@ class Test_EmailNotifier:
 
         return self.ses_backend.sent_messages
 
-    def test_sends_notification(self, tmp_path):
+    def test_sends_notification(self, tmp_path: Path):
         # Subscribe twice: 100 mile max and 1 mile max. Only one email should be
         # generated because the sonde in this dataset is 66 miles away.
         addr_yes = self.subscribe_seattle(100)
         addr_no = self.subscribe_seattle(1)
 
         sent_emails = self.run_notifier(tmp_path, 'sondes-V1854526-66-miles-from-seattle')
+        # Run again and ensure there are no duplicate notifications
+        #sent_emails = self.run_notifier(tmp_path, 'sondes-V1854526-66-miles-from-seattle')
         assert len(sent_emails) == 1
         sent_email = sent_emails[0]
         assert addr_yes in sent_email.destinations
@@ -370,7 +378,7 @@ class Test_EmailNotifier:
         body = self.get_body(sent_email)
         assert 'V1854526' in body
 
-    def test_nolatlon_receiver(self, tmp_path):
+    def test_nolatlon_receiver(self, tmp_path: Path):
         addr = self.subscribe_seattle(100)
         sent_emails = self.run_notifier(tmp_path, 'no-latlon-receiver-seattle')
         assert len(sent_emails) == 1

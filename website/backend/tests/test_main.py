@@ -328,6 +328,9 @@ class FakeSondehub:
             }
         return self._data
 
+    def get_elevation_data(self, lat, lon):
+        return {'value': 100}
+
 @pytest.mark.usefixtures("mock_aws")
 @pytest.mark.usefixtures("server")
 class Test_EmailNotifier:
@@ -339,13 +342,13 @@ class Test_EmailNotifier:
         body = base64.b64decode(email_obj.get_payload()[0].get_payload()[0].get_payload()).decode('utf8')
         return body
 
-    def subscribe_seattle(self, distance):
+    def subscribe(self, distance, lat=47.6426, lon=-122.32271):
         addr = f'test.{distance}@supertest.com'
         user_token = self.apiserver.get_user_token(addr)
         post('subscribe', data={
             'user_token': user_token,
-            'lat': '47.6426',
-            'lon': '-122.32271',
+            'lat': str(lat),
+            'lon': str(lon),
             'max_distance_mi': str(distance),
             'units': 'imperial',
             'tzname': 'America/Los_Angeles',
@@ -358,19 +361,19 @@ class Test_EmailNotifier:
         args.external_images_root = tmp_path
         args.live_test = False
         notifier = send_sonde_email.EmailNotifier(args, FakeSondehub(filename))
-        notifier.process_all()
+        notifier.process_all_subs()
 
         return self.ses_backend.sent_messages
 
     def test_sends_notification(self, tmp_path: Path):
         # Subscribe twice: 100 mile max and 1 mile max. Only one email should be
         # generated because the sonde in this dataset is 66 miles away.
-        addr_yes = self.subscribe_seattle(100)
-        addr_no = self.subscribe_seattle(1)
+        addr_yes = self.subscribe(distance=100)
+        addr_no = self.subscribe(distance=1)
 
         sent_emails = self.run_notifier(tmp_path, 'sondes-V1854526-66-miles-from-seattle')
         # Run again and ensure there are no duplicate notifications
-        #sent_emails = self.run_notifier(tmp_path, 'sondes-V1854526-66-miles-from-seattle')
+        sent_emails = self.run_notifier(tmp_path, 'sondes-V1854526-66-miles-from-seattle')
         assert len(sent_emails) == 1
         sent_email = sent_emails[0]
         assert addr_yes in sent_email.destinations
@@ -378,8 +381,27 @@ class Test_EmailNotifier:
         body = self.get_body(sent_email)
         assert 'V1854526' in body
 
+    # Ensure we send more than one notification if there's more than one sonde
+    # in range. In this particular test input we have the following sondes
+    # within 300 miles of the Seattle test location:
+    #
+    # sonde V1854526, range 65.6, landed at 2023-12-08 13:00:13+00:00
+    # sonde V1050122, range 235.8, landed at 2023-12-08 12:58:18+00:00
+    # sonde V3621107, range 250.1, landed at 2023-12-08 13:17:23+00:00
+    # sonde 23040510, range 252.8, landed at 2023-12-08 13:40:15+00:00
+    def test_multi_notifications(self, tmp_path: Path):
+        addr = self.subscribe(distance=240)
+        sent_emails = self.run_notifier(tmp_path, 'sondes-V1854526-66-miles-from-seattle')
+        assert len(sent_emails) == 2
+        for i, serial in enumerate(['V1854526', 'V1050122']):
+            sent_email = sent_emails[i]
+            assert addr in sent_email.destinations
+            body = self.get_body(sent_email)
+            assert serial in body
+
+    # Test to ensure we gracefully handle receivers that have no lat/lon info
     def test_nolatlon_receiver(self, tmp_path: Path):
-        addr = self.subscribe_seattle(100)
+        addr = self.subscribe(distance=100)
         sent_emails = self.run_notifier(tmp_path, 'no-latlon-receiver-seattle')
         assert len(sent_emails) == 1
         sent_email = sent_emails[0]

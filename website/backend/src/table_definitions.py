@@ -9,11 +9,13 @@ import boto3
 
 USER_TABLE_NAME = 'sondesearch-notifier-users'
 SUBSCRIBER_TABLE_NAME = 'sondesearch-notifier-subscriptions'
+NOTIFICATION_TABLE_NAME = 'sondesearch-notifier-notifications'
 
 def create_table_clients(o):
     ddb_client = boto3.resource('dynamodb')
     o.user_table = ddb_client.Table(USER_TABLE_NAME)
     o.sub_table = ddb_client.Table(SUBSCRIBER_TABLE_NAME)
+    o.notification_table = ddb_client.Table(NOTIFICATION_TABLE_NAME)
 
 
 def create_tables():
@@ -79,6 +81,31 @@ def create_tables():
                 'Projection': {
                     'ProjectionType': 'ALL',
                 },
+            },
+        ],
+        BillingMode='PAY_PER_REQUEST',
+    )
+
+    ddb_client.create_table(
+        TableName=NOTIFICATION_TABLE_NAME,
+        KeySchema=[
+            {
+                'AttributeName': 'subscription_uuid',
+                'KeyType': 'HASH',
+            },
+            {
+                'AttributeName': 'time_sent',
+                'KeyType': 'RANGE'
+            }
+        ],
+        AttributeDefinitions=[
+            {
+                'AttributeName': 'subscription_uuid',
+                'AttributeType': 'S',
+            },
+            {
+                'AttributeName': 'time_sent',
+                'AttributeType': 'N',
             },
         ],
         BillingMode='PAY_PER_REQUEST',

@@ -15,7 +15,7 @@ footer: true
 </div>
 
 A [radiosonde](https://www.noaa.gov/jetstream/upperair/radiosondes) is
-the techical term for a weather balloon. It's a small wireless sensor
+the technical term for a weather balloon. It's a small wireless sensor
 package used to gather data about the atmosphere such as temperature,
 humidity, and the wind's speed and direction. These readings are a key
 component of weather prediction and research. At over 1,300 sites
@@ -23,7 +23,7 @@ worldwide, sondes are launched twice a day, hoisted into the upper
 atmosphere by large hydrogen-filled balloons. Over the course of
 several hours, they climb up above 100,000 feet (30,000 meters).
 
-When the balloon bursts, the sonde falls slowly back to Earth under a
+When the balloon bursts, the sonde falls gently back to Earth under a
 small parachute, often never to be seen again. The sondes are low-cost
 and designed to be used only once. For the agencies that launch the
 sondes, that's where the story ends. But for our hobby, that's where

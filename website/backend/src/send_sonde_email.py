@@ -28,8 +28,6 @@ import constants
 import table_definitions
 import util
 
-from boto3.dynamodb.conditions import Attr
-
 matplotlib.use('Agg')
 
 cx.set_cache_dir(os.path.expanduser("~/.cache/geotiles"))
@@ -477,6 +475,8 @@ class EmailNotifier:
             print(f"Subj:\n{subj}\n")
             print(f"Body:\n{body}\n")
 
+        return map_url
+
     def process_one_sub(self, sondes, sub):
         sondes = self.annotate_with_distance(sondes, sub)
 
@@ -515,15 +515,18 @@ class EmailNotifier:
                 f"range {sonde['dist_from_home_m']/METERS_PER_MILE:.1f}, "
                 f"landed at {sonde['datetime'].replace(microsecond=0)}"
             )
-            self.send_email(sub, sonde)
+            map_url = self.send_email(sub, sonde)
             num_emails += 1
 
             # Record this notification so we don't re-notify for the same sonde
-            if self.args.really_send:
+            if self.args.really_send or self.args.live_test:
                 self.notification_table.put_item(Item={
                     'subscription_uuid': sub['uuid_subscription'],
                     'time_sent': Decimal(time.time()),
+                    'map_url': map_url,
                     'serial': sonde['serial'],
+                    'dist_from_home_m': Decimal(round(sonde['dist_from_home_m'])),
+                    'sonde_last_heard': Decimal(sonde['datetime'].timestamp()),
                 })
 
         print(f"{sub['email']}: Max dist {sub['max_distance_mi']:.1f}mi; sent {num_emails} emails")

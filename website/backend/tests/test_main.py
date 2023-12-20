@@ -151,6 +151,37 @@ class Test_v1:
         resp4 = get('get_config', params={'user_token': user_token}).json()
         assert resp3 == resp4
 
+    def test_edit_subscription(self, server):
+        addr = 'test@testme2.net'
+        user_token = self.apiserver.get_user_token(addr)
+        test_sub = self.sub_args(user_token)
+        resp = post('subscribe', data=test_sub).json()
+
+        # Ensure the initial subscription is correct
+        assert resp['email'] == addr
+        assert len(resp['subs']) == 1
+        sub = resp['subs'][0]
+        assert sub['lat'] == float(test_sub['lat'])
+        assert sub['lon'] == float(test_sub['lon'])
+        assert sub['max_distance_mi'] == float(test_sub['max_distance_mi'])
+        assert resp['prefs']['units'] == test_sub['units']
+        assert resp['prefs']['tzname'] == test_sub['tzname']
+
+        # Change the max distance and edit the subscription
+        test_sub['max_distance_mi'] = '150'
+        test_sub['replace_uuid'] = sub['uuid']
+        resp2 = post('subscribe', data=test_sub).json()
+
+        # Ensure the subscription has been edited
+        assert resp2['email'] == addr
+        assert len(resp2['subs']) == 1
+        sub2 = resp2['subs'][0]
+        assert sub2['lat'] == float(test_sub['lat'])
+        assert sub2['lon'] == float(test_sub['lon'])
+        assert sub2['max_distance_mi'] == float(test_sub['max_distance_mi'])
+        assert resp2['prefs']['units'] == test_sub['units']
+        assert resp2['prefs']['tzname'] == test_sub['tzname']
+
     # Test making a subscription, then losing your credentials and
     # asking for another auth link to be emailed. Your subscription
     # state should be retained.

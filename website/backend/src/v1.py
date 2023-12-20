@@ -210,6 +210,12 @@ class LectroboxAPI:
         self._g.user_table.put_item(Item=user_data)
         self._g.sub_table.put_item(Item=sub_item)
 
+        # Editing an entry is actually a combination subscribe + unsubscribe.
+        # Edits set the 'replace_uuid' property to indicate which subscription
+        # should be cancelled one this one is successfully created.
+        if 'replace_uuid' in args:
+            self._unsubscribe_common(args['replace_uuid'])
+
         return self.get_config(user_token)
 
     # Generic unsubscribe. Returns both the cancelled subscription and

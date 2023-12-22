@@ -3,25 +3,25 @@ layout: page
 title: "Sonde Email Notifier — Manage"
 ---
 <style>
-  table.subs .trash:not([data-loading]) {
-    background-color: transparent;
-  }
-  table.subs .trash {
-    margin: 0;
-  }
-  table.subs td {
-    padding: 4px;
-    vertical-align: middle;
-  }
+    table.subs .trash:not([data-loading]) {
+        background-color: transparent;
+    }
+    table.subs .trash {
+        margin: 0;
+    }
+    table.subs td {
+        padding: 4px;
+        vertical-align: middle;
+    }
 </style>
 <div id="loading" class="row t30 text-center">
     <img src="/images/loading.gif" />
 </div>
 
 <div id="config_error" hidden>
-  We're sorry, the notifier management service seems to be having a problem.
-  Please try <a href="../signup/">signing up again</a>, or <a
-  href="https://www.lectrobox.com/contact/">let us know</a> that it's broken.
+    We're sorry, the notifier management service seems to be having a problem.
+    Please try <a href="../signup/">signing up again</a>, or <a
+    href="https://www.lectrobox.com/contact/">let us know</a> that it's broken.
 </div>
 
 <div id="management_state" hidden>
@@ -38,91 +38,95 @@ title: "Sonde Email Notifier — Manage"
     <div id="sub_table_div" class="text-center">
     </div>
 
-    <button class="button" data-reveal-id="add-subscription">Add New Notification</button>
+    <button class="button" onclick="start_subscribe()">Add New Notification</button>
 </div>
 
 <!--- https://get.foundation/sites/docs-v5/components/forms.html --->
 <div class="reveal-modal" id="add-subscription" data-reveal aria-labelledby="modalTitle" aria-hidden="true" role="dialog">
-  <h2> Configure New Notification </h2>
+    <h2 id="subscribe_title"></h2>
     <form onsubmit="return subscribe()">
-     <div class="row t10">
-       <div class="large-6 columns">
-         <label>Notification address</label>
-         <tt><span id="subscribe_email">unknown</span></tt>
-         <a href="../signup/">(Change)</a>
-       </div>
-       <div class="large-6 columns">
-         <label>Time Zone</label>
-         <tt><span id="subscribe_tzname">unknown</span></tt>
-       </div>
-    </div>
-
-    <div class="row t10">
-      <div class="large-6 columns">
-        <label>Desired Units</label>
-        <label for="unit_imperial">
-          <input type="radio" name="units" onclick="set_units('imperial')" id="unit_imperial">
-          Imperial (feet, miles)
-        </label>
-        <label for="unit_metric">
-          <input type="radio" name="units" onclick="set_units('metric')" id="unit_metric">
-          Metric (meters, km)
-        </label>
-      </div>
-    </div>
-
-    <div class="row">
-      <div class="large-12 columns t10">
-        <div>Enter latitude and longitude using decimal degrees, negative for South and West.</div>
-      </div>
-    </div>
-
-    <div class="row t10">
-      <div class="large-4 columns">
-        <label>Home Latitude
-        <input type="number" required="true" min="-90" max="90" step="any" id="subscribe_lat" />
-        </label>
-      </div>
-      <div class="large-4 columns">
-        <label>Home Longitude
-        <input type="number" required="true" min="-180" max="180" step="any" id="subscribe_lon" />
-        </label>
-      </div>
-      <div class="large-4 columns">
-        <div class="row collapse">
-          <label>Maximum Distance</label>
-          <div class="small-9 columns">
-            <input type="number" required="true" value="100" min="0" max="5000" id="subscribe_maxdist"/>
-          </div>
-          <div class="small-3 columns">
-            <span class="postfix" id="maxdist_unit">miles</span>
-          </div>
+        <div class="row t10">
+            <div class="large-6 columns">
+                <label>Notification address</label>
+                <tt><span id="subscribe_email">unknown</span></tt>
+                <a href="../signup/">(Change)</a>
+            </div>
+            <div class="large-6 columns">
+                <label>Time Zone</label>
+                <tt><span id="subscribe_tzname">unknown</span></tt>
+            </div>
         </div>
-      </div>
-    </div>
 
-    <div class="row">
-      <div class="large-12 columns">
-        <button
-          class="button" type="submit" data-style="slide-right"
-          id="subscribe_button" class="button success" style="float: right">
-            Subscribe
-        </button>
-      </div>
-    </div>
+        <div class="row t10">
+            <div class="large-6 columns">
+                <label>Desired Units</label>
+                <label for="unit_imperial">
+                    <input type="radio" name="units" onclick="set_units('imperial')" id="unit_imperial">
+                    Imperial (feet, miles)
+                </label>
+                <label for="unit_metric">
+                    <input type="radio" name="units" onclick="set_units('metric')" id="unit_metric">
+                    Metric (meters, km)
+                </label>
+            </div>
+        </div>
 
-    <div class="row">
-      <div class="large-12 columns" id="subscribe_result" style="visibility: hidden">
-      </div>
-    </div>
-  </form>
-  <a class="close-reveal-modal" aria-label="Close">&#215;</a>
+        <div class="row">
+            <div class="large-12 columns t10">
+                <div>Enter latitude and longitude using decimal degrees, negative for South and West.</div>
+            </div>
+        </div>
+
+        <div class="row t10">
+            <div class="large-4 columns">
+                <label>Home Latitude
+                    <input type="number" required="true" min="-90" max="90" step="any" id="subscribe_lat" />
+                </label>
+            </div>
+            <div class="large-4 columns">
+                <label>Home Longitude
+                    <input type="number" required="true" min="-180" max="180" step="any" id="subscribe_lon" />
+                </label>
+            </div>
+            <div class="large-4 columns">
+                <div class="row collapse">
+                    <label>Maximum Distance</label>
+                    <div class="small-9 columns">
+                        <input type="number" required="true" min="0" max="5000" id="subscribe_maxdist"/>
+                    </div>
+                    <div class="small-3 columns">
+                        <span class="postfix" id="maxdist_unit">miles</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="large-12 columns">
+                <button class="button" type="button" data-style="slide-right"
+                class="button" style="float: left"
+                onclick="cancel_subscribe();">
+                 Cancel
+             </button>
+             <button class="button" type="submit" data-style="slide-right"
+                 id="subscribe_button" class="button success" style="float: right">
+             </button>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="large-12 columns" id="subscribe_result" style="visibility: hidden">
+            </div>
+        </div>
+    </form>
+    <a class="close-reveal-modal" aria-label="Close">&#215;</a>
 </div>
 
 <script>
 let base_url = "https://api.sondesearch.lectrobox.com/api/v1/";
 var tzname = null;
 var units = null;
+var editing_uuid = null;
 
 function km_to_mi(km) {
     return km / 1.60934;
@@ -132,9 +136,27 @@ function mi_to_km(mi) {
     return mi * 1.60934;
 }
 
+function get_distance_in_desired_units(sub) {
+    let dist = sub['max_distance_mi'];
+    if (units == 'metric') {
+        dist = mi_to_km(dist);
+    }
+    return Math.round(100*dist)/100;
+}
+
+function render_distance(sub) {
+    let dist = get_distance_in_desired_units(sub);
+    if (units == 'metric') {
+        dist_unit = ' km';
+    } else {
+        dist_unit = ' mi';
+    }
+    return '' + dist + dist_unit;
+}
+
 function config_error() {
-  $('#config_error').attr('hidden', false);
-  $('#loading').attr('hidden', true);
+    $('#config_error').attr('hidden', false);
+    $('#loading').attr('hidden', true);
 }
 
 function process_config(config) {
@@ -154,23 +176,24 @@ function process_config(config) {
     headers.append($('<th>').text('Home Lat'));
     headers.append($('<th>').text('Home Lon'));
     headers.append($('<th>').text('Max Dist'));
+    headers.append($('<th>').text('Edit'));
     headers.append($('<th>').text('Delete'));
     table.append(headers);
-    var dist_unit = ' mi';
-    if (units == 'metric') {
-        dist_unit = ' km';
-    }
+
     $.each(config['subs'] || [], function() {
-        console.log(this);
         num_subs += 1;
-        let dist = this['max_distance_mi'];
-        if (units == 'metric') {
-            dist = mi_to_km(dist);
-        }
         let row = $('<tr>');
         row.append($('<td class="text-right">').text(this['lat']));
         row.append($('<td class="text-right">').text(this['lon']));
-        row.append($('<td class="text-right">').text('' + Math.round(100*dist)/100 + dist_unit));
+        row.append($('<td class="text-right">').text(render_distance(this)));
+
+        // edit
+        let edit_button = $('<img src="/images/edit.png" width="20" />');
+        let sub = this;
+        edit_button.click(function() { start_edit(sub); });
+        row.append($('<td class="text-center">').html(edit_button));
+
+        // delete
         let del_button = $('<button class="ladda-button trash" data-style="slide-right" data-size="xs">');
         //let del_button = $('<div data-size="xs">');
         del_button.append($('<img src="/images/trash.png" width="20" />'));
@@ -231,6 +254,31 @@ function get_config() {
     });
 }
 
+function start_subscribe() {
+    $('#subscribe_title').text('Add New Notification');
+    $('#subscribe_button').html('Subscribe');
+    $('#subscribe_lat').val(null);
+    $('#subscribe_lon').val(null);
+    $('#subscribe_maxdist').val(100);
+    editing_uuid = null;
+    $('#add-subscription').foundation('reveal', 'open');
+}
+
+function start_edit(sub) {
+    $('#subscribe_title').text('Edit Notification');
+    $('#subscribe_button').html('Update');
+    $('#subscribe_lat').val(sub['lat']);
+    $('#subscribe_lon').val(sub['lon']);
+    $('#subscribe_maxdist').val(get_distance_in_desired_units(sub));
+    $('#add-subscription').foundation('reveal', 'open');
+    editing_uuid = sub['uuid'];
+}
+
+function cancel_subscribe() {
+    $('#add-subscription').foundation('reveal', 'close');
+    return false;
+}
+
 function subscribe() {
     let button = $('#subscribe_button');
     var l = Ladda.create(button[0]);
@@ -240,25 +288,26 @@ function subscribe() {
     if (units == 'metric') {
         dist = km_to_mi(dist);
     }
+    sub_data = {
+        'user_token': user_token,
+        'units': units,
+        'tzname': tzname,
+        'lat': $('#subscribe_lat').val(),
+        'lon': $('#subscribe_lon').val(),
+        'max_distance_mi': dist,
+    }
+    if (editing_uuid != null) {
+        sub_data['replace_uuid'] = editing_uuid;
+    }
 
     $.ajax({
         method: 'POST',
         url: base_url + 'subscribe',
-        data: {
-            'user_token': user_token,
-            'units': units,
-            'tzname': tzname,
-            'lat': $('#subscribe_lat').val(),
-            'lon': $('#subscribe_lon').val(),
-            'max_distance_mi': dist,
-        },
+        data: sub_data,
         success: function(result) {
             l.stop();
             process_config(result);
-            $('#subscribe_lat').val(null);
-            $('#subscribe_lon').val(null);
-            $('#subscribe_maxdist').val(100);
-            $('#add-subscription').foundation('reveal', 'close');
+            cancel_subscribe();
         },
         error: function(jqXHR, textStatus, errorThrown) {
             l.stop();

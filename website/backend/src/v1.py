@@ -5,6 +5,7 @@ import boto3
 import cherrypy
 import datetime
 import os
+import pandas as pd
 import sys
 import time
 import uuid
@@ -14,10 +15,11 @@ from boto3.dynamodb.conditions import Key, Attr
 sys.path.insert(0, os.path.dirname(__file__))
 import constants
 import table_definitions
+import util
 
 EMAIL_DESTINATION = 'https://sondesearch.lectrobox.com/'
 
-# A placeholder for expensive setup that should only be done once. This
+# A placeholder for expensive setup that should only be> done once. This
 # iteration of the program no longer has any such setup so this now has nothing
 # in it.
 class GlobalConfig:
@@ -274,6 +276,33 @@ class LectroboxAPI:
             raise ClientError('user token does not match subscriber of uuid')
 
         return res['config']
+
+    @cherrypy.expose
+    @cherrypy.tools.json_out()
+    def get_notification_history(self, user_token):
+        cherrypy.response.headers['Access-Control-Allow-Origin'] = '*'
+
+        NUM_HISTORY_DAYS = 30
+        time_sent_cutoff = Decimal(time.time() - NUM_HISTORY_DAYS * 86400)
+
+        # First, get all of this user's subscriptions
+        subs = util.dynamodb_to_dataframe(
+            self.tables.subscriptions.query,
+            IndexName='subscriber-index',
+            KeyConditionExpression=Key('subscriber').eq(user_token),
+        )
+
+        # Next, get all notifications for all subscriptions
+        dfs = []
+        for sub in subs['uuid']:
+            dfs.append(util.dynamodb_to_dataframe(
+                self.tables.notifications.query,
+                KeyConditionExpression=Key('subscription_uuid').eq(sub) &
+                Key('time_sent').gt(time_sent_cutoff),
+            ))
+        notifications = pd.concat(dfs)
+        return notifications.to_dict(orient='records')
+
 
 global_config = None
 

@@ -11,6 +11,7 @@ import pytest
 import re
 import requests
 import sys
+from typing import Dict
 
 from moto import mock_dynamodb, mock_ses
 from moto.core import DEFAULT_ACCOUNT_ID
@@ -48,6 +49,7 @@ def mock_aws(request):
 @pytest.fixture
 def server(request, mock_aws):
     request.cls.apiserver = v1.mount_server_instance()
+    request.cls.user_tokens = {}
     cherrypy.config.update({
         'request.throw_errors': True,
     })
@@ -369,6 +371,7 @@ class FakeSondehub:
 class Test_EmailNotifier:
     apiserver: v1.LectroboxAPI
     ses_backend: ses_backends
+    user_tokens: Dict[str, str]
 
     def get_body(self, sent_email):
         email_obj = email.message_from_string(sent_email.raw_data)
@@ -378,6 +381,7 @@ class Test_EmailNotifier:
     def subscribe(self, distance, lat=47.6426, lon=-122.32271):
         addr = f'test.{distance}@supertest.com'
         user_token = self.apiserver.get_user_token(addr)
+        self.user_tokens[addr] = user_token
         post('subscribe', data={
             'user_token': user_token,
             'lat': str(lat),
@@ -426,11 +430,21 @@ class Test_EmailNotifier:
         addr = self.subscribe(distance=240)
         sent_emails = self.run_notifier(tmp_path, 'sondes-V1854526-66-miles-from-seattle')
         assert len(sent_emails) == 2
-        for i, serial in enumerate(['V1854526', 'V1050122']):
+        EXPECTED_SONDES = ['V1854526', 'V1050122']
+        for i, serial in enumerate(EXPECTED_SONDES):
             sent_email = sent_emails[i]
             assert addr in sent_email.destinations
             body = self.get_body(sent_email)
             assert serial in body
+
+        # Also test to ensure we get notification history
+        history = post('get_notification_history', data={
+            'user_token': self.user_tokens[addr],
+        }).json()
+        print(json.dumps(history, indent=2))
+        assert len(history) == len(EXPECTED_SONDES)
+        history_serials = [rec['serial'] for rec in history]
+        assert sorted(history_serials) == sorted(EXPECTED_SONDES)
 
     # Test to ensure we gracefully handle receivers that have no lat/lon info
     def test_nolatlon_receiver(self, tmp_path: Path):

@@ -278,7 +278,6 @@ class LectroboxAPI:
         return res['config']
 
     @cherrypy.expose
-    @cherrypy.tools.json_out()
     def get_notification_history(self, user_token):
         cherrypy.response.headers['Access-Control-Allow-Origin'] = '*'
 
@@ -301,7 +300,7 @@ class LectroboxAPI:
                 Key('time_sent').gt(time_sent_cutoff),
             ))
         notifications = pd.concat(dfs)
-        return notifications.to_dict(orient='records')
+        return notifications.to_json(orient='records')
 
 
 global_config = None

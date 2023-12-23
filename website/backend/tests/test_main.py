@@ -192,8 +192,10 @@ class Test_v1:
         assert resp['email'] == addr
         assert len(resp['subs']) == 1
 
-        # ask for new credentials and make sure the sub is still there
-        user_token2 = self.apiserver.get_user_token(addr)
+        # ask for new credentials and make sure the sub is still there. We ask
+        # for uppercase email address to test the case-insensitivity of email
+        # lookup
+        user_token2 = self.apiserver.get_user_token(addr.upper())
 
         resp2 = get('get_config', params={'user_token': user_token2}).json()
         assert resp == resp2

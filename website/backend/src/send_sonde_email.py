@@ -490,9 +490,10 @@ class EmailNotifier:
         # this subscription)
         time_sent_cutoff = Decimal(time.time() - SONDE_HISTORY_LOOKBACK_TIME_SEC)
         sondes_emailed = util.dynamodb_to_dataframe(
-            self.notification_table.query,
+            self.tables.notifications.query,
             KeyConditionExpression=
-                Key('subscription_uuid').eq(sub['uuid_subscription']) & Key('time_sent').gt(time_sent_cutoff),
+               Key('subscription_uuid').eq(sub['uuid_subscription']) &
+               Key('time_sent').gt(time_sent_cutoff),
         )
         if sondes_emailed.empty:
             sondes_emailed = set()
@@ -520,7 +521,7 @@ class EmailNotifier:
 
             # Record this notification so we don't re-notify for the same sonde
             if self.args.really_send or self.args.live_test:
-                self.notification_table.put_item(Item={
+                self.tables.notifications.put_item(Item={
                     'subscription_uuid': sub['uuid_subscription'],
                     'time_sent': Decimal(time.time()),
                     'map_url': map_url,
@@ -532,14 +533,14 @@ class EmailNotifier:
         print(f"{sub['email']}: Max dist {sub['max_distance_mi']:.1f}mi; sent {num_emails} emails")
 
     def get_subscriber_data(self):
-        table_definitions.create_table_clients(self)
+        self.tables = table_definitions.TableClients()
 
         # Get all user data (e.g. email addresses, units)
-        users = util.dynamodb_to_dataframe(self.user_table.scan)
+        users = util.dynamodb_to_dataframe(self.tables.users.scan)
 
-        # Get all subscription data
+        # Get all subscriptions
         subs = util.dynamodb_to_dataframe(
-            self.sub_table.scan,
+            self.tables.subscriptions.scan,
             FilterExpression=Attr('active').eq(True)
         ).astype({
             'lat': float,

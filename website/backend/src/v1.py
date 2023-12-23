@@ -21,7 +21,7 @@ EMAIL_DESTINATION = 'https://sondesearch.lectrobox.com/'
 class GlobalConfig:
     def __init__(self):
         print('Global setup')
-        table_definitions.create_table_clients(self)
+        self.tables = table_definitions.TableClients()
 
 
 class ClientError(cherrypy.HTTPError):
@@ -42,7 +42,7 @@ class LectroboxAPI:
     VALID_UNITS = ('metric', 'imperial')
     VERIFY_EMAIL_SUBJ = 'Verify your email to receive sonde notifications'
 
-    def __init__(self, global_config):
+    def __init__(self, global_config: GlobalConfig):
         self._g = global_config
 
     @cherrypy.expose
@@ -55,9 +55,9 @@ class LectroboxAPI:
     def get_user_token(self, email):
         # Check to see if this email already exists in the system. If
         # so, simply return the existing UUID.
-        rv = self._g.user_table.query(
-            IndexName='email-index',
-            KeyConditionExpression=Key('email').eq(email)
+        rv = self._g.tables.users.query(
+            IndexName='email-lc-index',
+            KeyConditionExpression=Key('email_lc').eq(email.lower())
         )['Items']
         if len(rv) > 0:
             return rv[0]['uuid']
@@ -67,12 +67,13 @@ class LectroboxAPI:
         user_item = {
             'uuid': uuid.uuid4().hex,
             'email': email,
+            'email_lc': email.lower(),
         }
-        self._g.user_table.put_item(Item=user_item)
+        self._g.tables.users.put_item(Item=user_item)
         return user_item['uuid']
 
     def get_user_data(self, user_token):
-        rv = self._g.user_table.query(
+        rv = self._g.tables.users.query(
             KeyConditionExpression=Key('uuid').eq(user_token)
         )['Items']
 
@@ -137,7 +138,7 @@ class LectroboxAPI:
                 prefs[pref] = user_data[pref]
 
         # Get subscriptions
-        db_items = self._g.sub_table.query(
+        db_items = self._g.tables.subscriptions.query(
             IndexName='subscriber-index',
             KeyConditionExpression=Key('subscriber').eq(user_data['uuid']),
             FilterExpression=Attr('active').eq(True),
@@ -207,8 +208,8 @@ class LectroboxAPI:
         if sub_item['max_distance_mi'] <= 0:
             raise ClientError('max_distance_mi must be positive')
 
-        self._g.user_table.put_item(Item=user_data)
-        self._g.sub_table.put_item(Item=sub_item)
+        self._g.tables.users.put_item(Item=user_data)
+        self._g.tables.subscriptions.put_item(Item=sub_item)
 
         # Editing an entry is actually a combination subscribe + unsubscribe.
         # Edits set the 'replace_uuid' property to indicate which subscription
@@ -222,7 +223,7 @@ class LectroboxAPI:
     # the full config after unsubscription has been processed.
     def _unsubscribe_common(self, uuid):
         # Unsubscribe
-        rv = self._g.sub_table.update_item(
+        rv = self._g.tables.subscriptions.update_item(
             Key={
                 'uuid': uuid,
             },

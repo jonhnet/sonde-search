@@ -11,12 +11,12 @@ USER_TABLE_NAME = 'sondesearch-notifier-users'
 SUBSCRIBER_TABLE_NAME = 'sondesearch-notifier-subscriptions'
 NOTIFICATION_TABLE_NAME = 'sondesearch-notifier-notifications'
 
-def create_table_clients(o):
-    ddb_client = boto3.resource('dynamodb')
-    o.user_table = ddb_client.Table(USER_TABLE_NAME)
-    o.sub_table = ddb_client.Table(SUBSCRIBER_TABLE_NAME)
-    o.notification_table = ddb_client.Table(NOTIFICATION_TABLE_NAME)
-
+class TableClients:
+    def __init__(self):
+        ddb_client = boto3.resource('dynamodb')
+        self.users = ddb_client.Table(USER_TABLE_NAME)
+        self.subscriptions = ddb_client.Table(SUBSCRIBER_TABLE_NAME)
+        self.notifications = ddb_client.Table(NOTIFICATION_TABLE_NAME)
 
 def create_tables():
     ddb_client = boto3.resource('dynamodb')
@@ -58,7 +58,7 @@ def create_tables():
                 'AttributeType': 'S',
             },
             {
-                'AttributeName': 'email',
+                'AttributeName': 'email_lc',
                 'AttributeType': 'S',
             },
         ],
@@ -67,9 +67,9 @@ def create_tables():
         # uuid
         GlobalSecondaryIndexes=[
             {
-                'IndexName': 'email-index',
+                'IndexName': 'email-lc-index',
                 'KeySchema': [{
-                    'AttributeName': 'email',
+                    'AttributeName': 'email_lc',
                     'KeyType': 'HASH',
                 }],
                 'Projection': {

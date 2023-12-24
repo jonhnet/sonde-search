@@ -117,7 +117,7 @@ of winds aloft and terrain.
 Sondes last heard at high altitudes depend more heavily on these
 models, increasing the potential for error. The notifier guesses the
 error of the landing estimate by estimating how far the sonde was
-travelled laterally before reaching the ground from its last known
+traveled laterally before reaching the ground from its last known
 location. For example, if a sonde is last heard at 1000' MSL above
 200' high terrain while descending at 100' per second, it's about 8
 seconds from landing. Multiplying 8 seconds by its horizontal speed
@@ -152,6 +152,27 @@ reported by a receive site indicate the sonde's vertical and
 horizontal velocities are both close to zero. In this case, the
 notifier will send an email whose subject excitedly proclaims "GROUND
 RECEPTION!".
+
+### Notification History
+
+If you've received at least one notification in the past 30 days, the management
+page will also show you a list of the most recent notifications you've received.
+It will show you the date each sonde was last heard, a link to its SondeHub
+page, and a link to the same map that was in the notification email. Here's an
+example:
+
+<table id="history_table"  style="margin: 0 auto;">
+        <tbody><tr>
+            <th>Sonde Last Heard</th>
+            <th>Dist from Home</th>
+            <th>Sonde ID</th>
+            <th>Map</th>
+        </tr>
+        <tr><td class="text-right">12/23/2023, 4:57:08 PM</td><td class="text-right">94.2 mi</td><td class="text-right"><a href="https://sondehub.org/#!mt=Mapnik&amp;mz=9&amp;qm=12h&amp;f=V1750589&amp;q=V1750589">V1750589</a></td><td class="text-right"><a href="https://sondemaps.lectrobox.com/792dac8089004349a86f54940b3a7716/2023/12/24-0-47.88929--124.30961.jpg">Map</a></td></tr>
+        <tr><td class="text-right">12/23/2023, 5:03:06 AM</td><td class="text-right">71 mi</td><td class="text-right"><a href="https://sondehub.org/#!mt=Mapnik&amp;mz=9&amp;qm=12h&amp;f=V1750579&amp;q=V1750579">V1750579</a></td><td class="text-right"><a href="https://sondemaps.lectrobox.com/792dac8089004349a86f54940b3a7716/2023/12/23-13-47.72163--123.84317.jpg">Map</a></td></tr>
+        <tr><td class="text-right">12/22/2023, 5:29:15 AM</td><td class="text-right">152.6 mi</td><td class="text-right"><a href="https://sondehub.org/#!mt=Mapnik&amp;mz=9&amp;qm=12h&amp;f=V4030234&amp;q=V4030234">V4030234</a></td><td class="text-right"><a href="https://sondemaps.lectrobox.com/9feabde880ef4d2bb80c538070bf9426/2023/12/22-13-45.41774--122.69893.jpg">Map</a></td></tr>
+        </tbody>
+</table>
 
 ### Signing Up for Notifications
 

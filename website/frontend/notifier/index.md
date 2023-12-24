@@ -155,11 +155,10 @@ RECEPTION!".
 
 ### Notification History
 
-If you've received at least one notification in the past 30 days, the management
-page will also show you a list of the most recent notifications you've received.
-It will show you the date each sonde was last heard, a link to its SondeHub
-page, and a link to the same map that was in the notification email. Here's an
-example:
+The management page lists all of the notifications you've received in the past 30
+days. For each sonde that landed nearby, you'll see the date and time of the
+sonde's final reception, the sonde's serial number, a link to SondeHub's page,
+and the map attached to the notification. Here's an example:
 
 <table id="history_table"  style="margin: 0 auto;">
         <tbody><tr>

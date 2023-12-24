@@ -21,5 +21,12 @@
     ],
     "cSpell.enableFiletypes": [
         "!python"
-    ]
+    ],
+    "files.watcherExclude": {
+        "**/_site/**": true,
+        "**/.git/objects/**": true,
+        "**/.git/subtree-cache/**": true,
+        "**/node_modules/*/**": true,
+        "**/.hg/store/**": true
+    }
 }

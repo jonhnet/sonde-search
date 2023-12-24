@@ -41,6 +41,19 @@ title: "Sonde Email Notifier — Manage"
     <button class="button" onclick="start_subscribe()">Add New Notification</button>
 </div>
 
+<div id="history" hidden>
+    <h3> Recent Notifications </h3>
+
+    <table id="history_table">
+        <tr>
+            <th>Sonde Last Heard</th>
+            <th>Dist from Home</th>
+            <th>Sonde ID</th>
+            <th>Map</th>
+        </tr>
+    </table>
+</div>
+
 <!--- https://get.foundation/sites/docs-v5/components/forms.html --->
 <div class="reveal-modal" id="add-subscription" data-reveal aria-labelledby="modalTitle" aria-hidden="true" role="dialog">
     <h2 id="subscribe_title"></h2>
@@ -92,7 +105,7 @@ title: "Sonde Email Notifier — Manage"
                 <div class="row collapse">
                     <label>Maximum Distance</label>
                     <div class="small-9 columns">
-                        <input type="number" required="true" min="0" max="5000" id="subscribe_maxdist"/>
+                        <input type="number" required="true" min="0" max="5000" step="0.1" id="subscribe_maxdist"/>
                     </div>
                     <div class="small-3 columns">
                         <span class="postfix" id="maxdist_unit">miles</span>
@@ -136,16 +149,20 @@ function mi_to_km(mi) {
     return mi * 1.60934;
 }
 
-function get_distance_in_desired_units(sub) {
-    let dist = sub['max_distance_mi'];
-    if (units == 'metric') {
-        dist = mi_to_km(dist);
-    }
-    return Math.round(100*dist)/100;
+function m_to_mi(m) {
+    return m / 1609.34;
 }
 
-function render_distance(sub) {
-    let dist = get_distance_in_desired_units(sub);
+function miles_to_desired_units(dist_mi) {
+    let dist = dist_mi;
+    if (units == 'metric') {
+        dist = mi_to_km(dist_mi);
+    }
+    return Math.round(10*dist)/10;
+}
+
+function render_distance_miles(dist_mi) {
+    let dist = miles_to_desired_units(dist_mi);
     if (units == 'metric') {
         dist_unit = ' km';
     } else {
@@ -185,10 +202,11 @@ function process_config(config) {
         let row = $('<tr>');
         row.append($('<td class="text-right">').text(this['lat']));
         row.append($('<td class="text-right">').text(this['lon']));
-        row.append($('<td class="text-right">').text(render_distance(this)));
+        row.append($('<td class="text-right">').text(render_distance_miles(this['max_distance_mi'])));
 
         // edit
-        let edit_button = $('<img src="/images/edit.png" width="20" />');
+        let edit_button = $('<button class="trash" style="padding: 0;">');
+        edit_button.append($('<img src="/images/edit.png" width="20" />'));
         let sub = this;
         edit_button.click(function() { start_edit(sub); });
         row.append($('<td class="text-center">').html(edit_button));
@@ -254,6 +272,56 @@ function get_config() {
     });
 }
 
+// Called when we've successfully retrieved the notification history
+function process_history(history) {
+    if (history == null || history.length == 0) {
+        return;
+    }
+
+    // sort history by time of sonde landing, most recent first
+    history.sort(function(a, b) { return b['sonde_last_heard'] - a['sonde_last_heard']});
+
+    // add each history entry to the table
+    $.each(history, function() {
+        if (this['sonde_last_heard'] == null) {
+            return;
+        }
+        let row = $('<tr>');
+        let date = new Date(this['sonde_last_heard'] * 1000);
+        row.append($('<td class="text-right">').text(date.toLocaleString()));
+        let dist = render_distance_miles(m_to_mi(this['dist_from_home_m']));
+        row.append($('<td class="text-right">').text(dist));
+        let serial = this['serial'];
+        let url = `https://sondehub.org/#!mt=Mapnik&mz=9&qm=12h&f=${serial}&q=${serial}`;
+        row.append($('<td class="text-right">').html($('<a>',{
+            text: serial,
+            href: url,
+        })));
+        row.append($('<td class="text-right">').html($('<a>',{
+            text: 'Map',
+            href: this['map_url'],
+        })));
+        $('#history_table').append(row);
+    });
+
+    $('#history').attr('hidden', false);
+}
+
+function get_history() {
+    $.ajax({
+        type: 'GET',
+        url: base_url + 'get_notification_history',
+        data: {
+            'user_token': Cookies.get('notifier_user_token')
+        },
+        success: function(result) {
+            process_history(result);
+        },
+        error: function(xhr, status, e) {
+            console.log("Error getting history: " + status + ', ' + e);
+        }
+    });
+}
 function start_subscribe() {
     $('#subscribe_title').text('Add New Notification');
     $('#subscribe_button').html('Subscribe');
@@ -269,7 +337,7 @@ function start_edit(sub) {
     $('#subscribe_button').html('Update');
     $('#subscribe_lat').val(sub['lat']);
     $('#subscribe_lon').val(sub['lon']);
-    $('#subscribe_maxdist').val(get_distance_in_desired_units(sub));
+    $('#subscribe_maxdist').val(miles_to_desired_units(sub['max_distance_mi']));
     $('#add-subscription').foundation('reveal', 'open');
     editing_uuid = sub['uuid'];
 }
@@ -347,6 +415,7 @@ function unsubscribe(del_icon, uuid) {
 
 function OnLoadTrigger() {
     get_config();
+    get_history();
 }
 
 </script>

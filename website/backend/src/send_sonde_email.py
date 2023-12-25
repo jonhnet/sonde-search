@@ -494,6 +494,7 @@ class EmailNotifier:
             KeyConditionExpression=
                Key('subscription_uuid').eq(sub['uuid_subscription']) &
                Key('time_sent').gt(time_sent_cutoff),
+            ProjectionExpression='serial',
         )
         if sondes_emailed.empty:
             sondes_emailed = set()

@@ -530,7 +530,9 @@ class EmailNotifier:
                     'sonde_last_heard': Decimal(sonde['datetime'].timestamp()),
                 })
 
-        print(f"{sub['email']}: Max dist {sub['max_distance_mi']:.1f}mi; sent {num_emails} emails")
+        print(f"{sub['email']}: Max range {sub['max_distance_mi']:.1f}mi; "
+              f"nearest sonde {sondes.iloc[0]['dist_from_home_m'] / METERS_PER_MILE:.1f}mi; "
+              f"sent {num_emails} emails")
 
     def get_subscriber_data(self):
         self.tables = table_definitions.TableClients()

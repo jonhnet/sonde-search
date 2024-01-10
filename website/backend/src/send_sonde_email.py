@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 EXTERNAL_IMAGES_ROOT = '/mnt/storage/sondemaps'
-EXTERNAL_IMAGES_URL = 'https://sondemaps.lectrobox.com/'
+EXTERNAL_IMAGES_URL = 'https://maps.sondesearch.lectrobox.com/'
 
 from boto3.dynamodb.conditions import Key, Attr
 from decimal import Decimal
@@ -613,7 +613,7 @@ def get_args():
 def main():
     args = get_args()
 
-    if not args.really_send:
+    if not args.really_send and not args.live_test:
         args.external_images_root = "./test-maps"
         if not os.path.exists(args.external_images_root):
             os.makedirs(args.external_images_root)

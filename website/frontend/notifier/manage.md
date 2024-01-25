@@ -179,7 +179,7 @@ function config_error() {
 function process_config(config) {
     email = config['email'];
     tzname = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    var prefs = config['prefs'] || {};
+    const prefs = config['prefs'] || {};
     set_units(prefs['units'] || 'imperial');
 
     $('#state_email').html(email);
@@ -212,14 +212,14 @@ function process_config(config) {
         row.append($('<td class="text-center">').html(edit_button));
 
         // delete
-        let del_button = $('<button class="ladda-button trash" data-style="slide-right" data-size="xs">');
-        //let del_button = $('<div data-size="xs">');
-        del_button.append($('<img src="/images/trash.png" width="20" />'));
+        let del_outer_button = $('<button class="ladda-button trash" data-style="slide-right" data-size="xs">');
+        let del_inner_button = del_outer_button.append($('<img src="/images/trash.png" width="20" />'));
         let uuid = this['uuid'];
-        del_button.click(function() { unsubscribe(del_button, uuid); });
-        row.append($('<td class="text-center">').html(del_button));
+        del_inner_button.click(function() { unsubscribe(del_outer_button, uuid); });
+        row.append($('<td class="text-center">').html(del_outer_button));
         table.append(row);
     });
+
     if (num_subs == 0) {
         $('#no_subs').attr('hidden', false);
         $('#sub_table_div').attr('hidden', true);
@@ -241,35 +241,6 @@ function set_units(units_arg) {
         $('#maxdist_unit').html('miles');
         $('#unit_imperial').prop('checked', true);
     }
-}
-
-function get_config() {
-    // If an auth token was provided in the URL, convert it into a cookie
-    let searchParams = new URLSearchParams(window.location.search);
-    if (searchParams.has('user_token')) {
-        Cookies.set('notifier_user_token', searchParams.get('user_token'), { expires: 365 });
-    }
-
-    // If there's been no authorization, redirect to the signup page
-    let user_token = Cookies.get('notifier_user_token');
-    if (user_token == null) {
-        //$('#result').html('no auth');
-        window.location.href = window.location.origin + '/notifier/signup';
-    }
-
-    $.ajax({
-        type: 'GET',
-        url: base_url + 'get_config',
-        data: {
-            'user_token': user_token,
-        },
-        success: function(result) {
-            process_config(result);
-        },
-        error: function() {
-            config_error();
-        }
-    });
 }
 
 // Called when we've successfully retrieved the notification history
@@ -307,21 +278,36 @@ function process_history(history) {
     $('#history').attr('hidden', false);
 }
 
-function get_history() {
-    $.ajax({
-        type: 'GET',
-        url: base_url + 'get_notification_history',
-        data: {
-            'user_token': Cookies.get('notifier_user_token')
-        },
-        success: function(result) {
-            process_history(result);
-        },
-        error: function(xhr, status, e) {
-            console.log("Error getting history: " + status + ', ' + e);
-        }
-    });
+async function get_state() {
+    // If an auth token was provided in the URL, convert it into a cookie
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.has('user_token')) {
+        Cookies.set('notifier_user_token', searchParams.get('user_token'), { expires: 365 });
+    }
+
+    // If there's been no authorization, redirect to the signup page
+    const user_token = Cookies.get('notifier_user_token');
+    if (user_token == null) {
+        //$('#result').html('no auth');
+        window.location.href = window.location.origin + '/notifier/signup';
+    }
+
+    // Fetch both the config and the history in parallel
+    let config_req = fetch(base_url + 'get_config?' +  new URLSearchParams({
+        'user_token': user_token,
+    }));
+
+    let history_req = fetch(base_url + 'get_notification_history?' +  new URLSearchParams({
+        'user_token': user_token,
+    }));
+
+    let config = await (await config_req).json();
+    let history = await (await history_req).json();
+
+    process_config(config);
+    process_history(history);
 }
+
 function start_subscribe() {
     $('#subscribe_title').text('Add New Notification');
     $('#subscribe_button').html('Subscribe');
@@ -414,8 +400,7 @@ function unsubscribe(del_icon, uuid) {
 }
 
 function OnLoadTrigger() {
-    get_config();
-    get_history();
+    get_state();
 }
 
 </script>

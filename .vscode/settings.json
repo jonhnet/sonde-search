@@ -14,9 +14,12 @@
         "crowdsourced",
         "fullwidth",
         "Klofas",
+        "maxdist",
         "NOAA",
+        "prefs",
         "rainforest",
         "Sondy",
+        "tzname",
         "webm"
     ],
     "cSpell.enableFiletypes": [

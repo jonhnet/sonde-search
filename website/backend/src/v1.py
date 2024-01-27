@@ -19,7 +19,7 @@ import util
 
 EMAIL_DESTINATION = 'https://sondesearch.lectrobox.com/'
 
-# A placeholder for expensive setup that should only be> done once. This
+# A placeholder for expensive setup that should only be done once. This
 # iteration of the program no longer has any such setup so this now has nothing
 # in it.
 class GlobalConfig:

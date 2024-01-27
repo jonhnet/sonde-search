@@ -94,6 +94,7 @@ class EmailNotifier:
                 'lon': float,
             })
         except Exception as e:
+            print(f'Error converting sondehub data to floats: {e}')
             print(sondes)
             return None
 

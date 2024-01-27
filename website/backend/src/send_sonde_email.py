@@ -85,13 +85,17 @@ class EmailNotifier:
     # Clean up and annotate telemetry returned by sondehub
     def cleanup_sonde_data(self, sondes):
         # Sometimes lat/lon comes as a string instead of float
-        sondes = sondes.astype({
-            'alt': float,
-            'vel_v': float,
-            'vel_h': float,
-            'lat': float,
-            'lon': float,
-        })
+        try:
+            sondes = sondes.astype({
+                'alt': float,
+                'vel_v': float,
+                'vel_h': float,
+                'lat': float,
+                'lon': float,
+            })
+        except Exception as e:
+            print(sondes)
+            return None
 
         sondes['datetime'] = pd.to_datetime(sondes['datetime'])
 

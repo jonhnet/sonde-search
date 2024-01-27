@@ -102,6 +102,12 @@ class Test_v1:
         assert resp.pop('subs') == []
         assert resp == {}
 
+        # Also test to ensure we get an empty notification history
+        history = get('get_notification_history', params={
+            'user_token': user_token,
+        }).json()
+        assert history == []
+
     # Test sending a notification email
     def test_send_validation_email(self):
         addr = 'jelson@gmail.com'
@@ -139,6 +145,12 @@ class Test_v1:
         # Get config and ensure we get the same config block back again
         resp2 = get('get_config', params={'user_token': user_token}).json()
         assert resp == resp2
+
+        # Ensure we get an empty notification history
+        history = get('get_notification_history', params={
+            'user_token': user_token,
+        }).json()
+        assert history == []
 
         # Unsubscribe
         resp3 = post('managed_unsubscribe', data={

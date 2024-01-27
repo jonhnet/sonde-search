@@ -292,16 +292,22 @@ class LectroboxAPI:
             KeyConditionExpression=Key('subscriber').eq(user_token),
         )
 
-        # Next, get all notifications for all subscriptions
-        dfs = []
-        for sub in subs['uuid']:
-            dfs.append(util.dynamodb_to_dataframe(
-                self.tables.notifications.query,
-                KeyConditionExpression=Key('subscription_uuid').eq(sub) &
-                Key('time_sent').gt(time_sent_cutoff),
-            ))
-        notifications = pd.concat(dfs)
-        return notifications.to_json(orient='records').encode('utf-8')
+        if subs.empty:
+            # If there are no subscriptions, return nothing
+            rv = '[]'
+        else:
+            # Get notification history for each subscription
+            dfs = []
+            for sub in subs['uuid']:
+                dfs.append(util.dynamodb_to_dataframe(
+                    self.tables.notifications.query,
+                    KeyConditionExpression=Key('subscription_uuid').eq(sub) &
+                    Key('time_sent').gt(time_sent_cutoff),
+                ))
+            notifications = pd.concat(dfs)
+            rv = notifications.to_json(orient='records')
+
+        return rv.encode('utf-8')
 
 
 global_config = None

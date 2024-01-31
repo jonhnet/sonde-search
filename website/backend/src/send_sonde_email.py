@@ -545,6 +545,10 @@ class EmailNotifier:
                     'sonde_last_heard': Decimal(sonde['datetime'].timestamp()),
                 })
 
+            # Sleep after each email sent to avoid hitting various external APIs
+            # too quickly
+            time.sleep(1)
+
         print(f"{sub['email']}: Max range {sub['max_distance_mi']:.1f}mi; "
               f"nearest sonde {sondes.iloc[0]['dist_from_home_m'] / METERS_PER_MILE:.1f}mi; "
               f"sent {num_emails} emails")
@@ -598,7 +602,6 @@ class EmailNotifier:
 
         for i, sub in subs.iterrows():
             self.process_one_sub(now, sondes, sub)
-            time.sleep(1)
 
 def get_args():
     parser = argparse.ArgumentParser()

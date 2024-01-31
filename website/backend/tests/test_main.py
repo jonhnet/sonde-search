@@ -4,6 +4,7 @@ import boto3
 import bz2
 import cherrypy
 import email
+import email.header
 import json
 import os
 from pathlib import Path
@@ -393,7 +394,7 @@ class Test_EmailNotifier:
 
     def get_subject(self, sent_email: RawMessage) -> str:
         email_obj = email.message_from_string(sent_email.raw_data)
-        subj_enc, encoding = email.header.decode_header(email_obj.get('Subject'))[0]
+        subj_enc, encoding = email.header.decode_header(email_obj['Subject'])[0]
         return subj_enc.decode(encoding)
 
     def subscribe(self, distance, lat=47.6426, lon=-122.32271):

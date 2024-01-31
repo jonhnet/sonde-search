@@ -57,7 +57,7 @@ class SondeHubTelemetryRetriever:
     def get_sonde_data(self, params):
         response = requests.get(SONDEHUB_DATA_URL, params=params)
         response.raise_for_status()
-        return response.json()
+        return response.json(), pd.Timestamp.utcnow()
 
     def get_elevation_data(self, lat, lon):
         resp = requests.get('https://epqs.nationalmap.gov/v1/json', params={
@@ -104,10 +104,10 @@ class EmailNotifier:
 
     def get_sonde_data_once(self, params):
         try:
-            response = self.retriever.get_sonde_data(params)
+            response, now = self.retriever.get_sonde_data(params)
         except Exception as e:
             print(f'Error getting data from sondehub: {e}')
-            return None
+            return None, None
 
         def unpack_list():
             for sonde, timeblock in response.items():
@@ -115,7 +115,7 @@ class EmailNotifier:
                     yield record
         sondes = pd.DataFrame(unpack_list())
         sondes = self.cleanup_sonde_data(sondes)
-        return sondes
+        return sondes, now
 
     def get_sonde_data(self, params):
         retries = 0
@@ -124,9 +124,9 @@ class EmailNotifier:
                 print("Sondehub data failure; retrying after a short sleep...")
                 time.sleep((2**retries) * 4)
             retries += 1
-            sondes = self.get_sonde_data_once(params)
+            sondes, now = self.get_sonde_data_once(params)
             if sondes is not None and len(sondes) > 0:
-                return sondes
+                return sondes, now
             print('Sondehub returned empty dataframe -- trying again')
 
         raise Exception(f"Couldn't get sondehub data, even after {MAX_SONDEHUB_RETRIES} retries")
@@ -146,6 +146,9 @@ class EmailNotifier:
             get_path,
             axis=1,
             result_type='expand')
+
+        # sonde still in contact from the ground?
+        sondes['ground_reception'] = (sondes['vel_v'].abs() < 1) & (sondes['vel_h'].abs() < 1)
 
         return sondes
 
@@ -273,9 +276,6 @@ class EmailNotifier:
         geo = geocoder.osm(f"{landing['lat']}, {landing['lon']}")
         elev = self.get_elevation(landing['lat'], landing['lon'])
 
-        # sonde still in contact from the ground?
-        ground_reception = abs(landing['vel_v']) < 1 and abs(landing['vel_h']) < 1
-
         place = ""
         if geo and geo.county:
             if geo.town:
@@ -289,7 +289,7 @@ class EmailNotifier:
 
         # subject line
         subj = ""
-        if ground_reception:
+        if landing['ground_reception']:
             subj += 'GROUND RECEPTION! '
         subj += f"{landing_localtime.month_name()} {landing_localtime.day} "
         subj += "morning" if landing_localtime.hour < 12 else "afternoon"
@@ -383,7 +383,7 @@ class EmailNotifier:
         </tr>
         '''
 
-        if ground_reception:
+        if landing['ground_reception']:
             body += '''
         <tr>
             <td colspan="2">Ground Reception</td>
@@ -433,7 +433,7 @@ class EmailNotifier:
 
     def send_email(self, sub, landing):
         # Query SondeHub for detail on the flight
-        flight = self.get_sonde_data(params={
+        flight, now = self.get_sonde_data(params={
             'duration': '1d',
             'serial': landing['serial'],
         })
@@ -482,7 +482,7 @@ class EmailNotifier:
 
         return map_url
 
-    def process_one_sub(self, sondes, sub):
+    def process_one_sub(self, now, sondes, sub):
         sondes = self.annotate_with_distance(sondes, sub)
 
         # Sort all landings by distance-to-home
@@ -510,8 +510,17 @@ class EmailNotifier:
         # within range and for which we've not yet sent a notification
         num_emails = 0
         for _, sonde in sondes.iterrows():
+            # if we've reached sondes that are beyond our desired distance, stop
             if sonde['dist_from_home_m'] > distance_threshold_m:
                 break
+
+            # if this sonde is still being tracked, do not report -- unless it's
+            # a ground reception
+            age = now - sonde['datetime']
+            if age < pd.Timedelta(minutes=10) and not sonde['ground_reception']:
+                print(f"{sub['email']}: Skipping sonde {sonde['serial']}; "
+                      f"tracked {age} ago (at {sonde['datetime']}; curr time: {now})")
+                continue
 
             if sonde['serial'] in sondes_emailed:
                 print(f"{sub['email']}: Skipping sonde {sonde['serial']}; already notified")
@@ -582,13 +591,13 @@ class EmailNotifier:
         subs = self.get_subscriber_data()
 
         # Get sonde data from SondeHub
-        sondes = self.get_sonde_data(params={'duration': '6h'})
+        sondes, now = self.get_sonde_data(params={'duration': '6h'})
 
         # Filter the data down to just the last frame received from each sonde
         sondes = sondes.loc[sondes.groupby('serial')['frame'].idxmax()]
 
         for i, sub in subs.iterrows():
-            self.process_one_sub(sondes, sub)
+            self.process_one_sub(now, sondes, sub)
             time.sleep(1)
 
 def get_args():

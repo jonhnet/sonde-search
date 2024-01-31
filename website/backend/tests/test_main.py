@@ -1,3 +1,9 @@
+from moto import mock_dynamodb, mock_ses
+from moto.core import DEFAULT_ACCOUNT_ID
+from moto.ses import ses_backends
+from moto.ses.models import RawMessage
+from pathlib import Path
+from typing import Dict
 import argparse
 import base64
 import boto3
@@ -7,17 +13,11 @@ import email
 import email.header
 import json
 import os
-from pathlib import Path
+import pandas as pd
 import pytest
 import re
 import requests
 import sys
-from typing import Dict
-
-from moto import mock_dynamodb, mock_ses
-from moto.core import DEFAULT_ACCOUNT_ID
-from moto.ses import ses_backends
-from moto.ses.models import RawMessage
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from src import v1, send_sonde_email, table_definitions, constants
@@ -368,14 +368,25 @@ class FakeSondehub:
         fn = os.path.join(os.path.dirname(__file__), 'data', filename + '.json.bz2')
         with bz2.open(fn) as ifh:
             self._data = json.load(ifh)
+        self._time = None
+        for sondeid, receptions in self._data.items():
+            for timestamp, datablock in receptions.items():
+                if 'datetime' in datablock:
+                    ts = pd.to_datetime(datablock['datetime'])
+                    if not self._time or ts > self._time:
+                        self._time = ts
+        print(f"{filename} fake time: {self._time}")
 
     def get_sonde_data(self, params):
         if 'serial' in params:
             serial = params['serial']
-            return {
+            rv = {
                 serial: self._data[serial]
             }
-        return self._data
+        else:
+            rv = self._data
+
+        return rv, self._time
 
     def get_elevation_data(self, lat, lon):
         return {'value': 100}
@@ -396,6 +407,13 @@ class Test_EmailNotifier:
         email_obj = email.message_from_string(sent_email.raw_data)
         subj_enc, encoding = email.header.decode_header(email_obj['Subject'])[0]
         return subj_enc.decode(encoding)
+
+    def is_ground_reception(self, sent_email: RawMessage):
+        body_gr = 'Ground Reception' in self.get_body(sent_email)
+        subj_gr = self.get_subject(sent_email).startswith('GROUND RECEPTION')
+
+        assert body_gr == subj_gr
+        return body_gr
 
     def subscribe(self, distance, lat=47.6426, lon=-122.32271):
         addr = f'test.{distance}@supertest.com'
@@ -436,6 +454,7 @@ class Test_EmailNotifier:
         assert addr_no not in sent_email.destinations
         body = self.get_body(sent_email)
         assert 'V1854526' in body
+        assert not self.is_ground_reception(sent_email)
 
     # Ensure we send more than one notification if there's more than one sonde
     # in range. In this particular test input we have the following sondes
@@ -455,6 +474,7 @@ class Test_EmailNotifier:
             assert addr in sent_email.destinations
             body = self.get_body(sent_email)
             assert serial in body
+            assert not self.is_ground_reception(sent_email)
 
         # Also test to ensure we get notification history
         history = post('get_notification_history', data={
@@ -464,6 +484,12 @@ class Test_EmailNotifier:
         assert len(history) == len(EXPECTED_SONDES)
         history_serials = [rec['serial'] for rec in history]
         assert sorted(history_serials) == sorted(EXPECTED_SONDES)
+
+    # No notification should be sent if the sonde is still in the air
+    def test_no_email_for_airborne(self, tmp_path: Path):
+        self.subscribe(distance=40, lat=50, lon=8)
+        sent_emails = self.run_notifier(tmp_path, 'sondes-V1854526-66-miles-from-seattle')
+        assert len(sent_emails) == 0
 
     # Test to ensure we gracefully handle receivers that have no lat/lon info
     def test_nolatlon_receiver(self, tmp_path: Path):
@@ -483,5 +509,4 @@ class Test_EmailNotifier:
         assert addr in sent_email.destinations
         body = self.get_body(sent_email)
         assert '23037859' in body
-        assert 'Ground Reception' in body
-        assert self.get_subject(sent_email).startswith('GROUND RECEPTION')
+        assert self.is_ground_reception(sent_email)

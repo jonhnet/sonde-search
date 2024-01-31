@@ -16,6 +16,7 @@ from typing import Dict
 from moto import mock_dynamodb, mock_ses
 from moto.core import DEFAULT_ACCOUNT_ID
 from moto.ses import ses_backends
+from moto.ses.models import RawMessage
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from src import v1, send_sonde_email, table_definitions, constants
@@ -385,10 +386,15 @@ class Test_EmailNotifier:
     ses_backend: ses_backends
     user_tokens: Dict[str, str]
 
-    def get_body(self, sent_email):
+    def get_body(self, sent_email: RawMessage) -> str:
         email_obj = email.message_from_string(sent_email.raw_data)
         body = base64.b64decode(email_obj.get_payload()[0].get_payload()[0].get_payload()).decode('utf8')
         return body
+
+    def get_subject(self, sent_email: RawMessage) -> str:
+        email_obj = email.message_from_string(sent_email.raw_data)
+        subj_enc, encoding = email.header.decode_header(email_obj.get('Subject'))[0]
+        return subj_enc.decode(encoding)
 
     def subscribe(self, distance, lat=47.6426, lon=-122.32271):
         addr = f'test.{distance}@supertest.com'
@@ -467,3 +473,14 @@ class Test_EmailNotifier:
         assert addr in sent_email.destinations
         body = self.get_body(sent_email)
         assert 'V1854451' in body
+
+    def test_ground_reception(self, tmp_path: Path):
+        addr = self.subscribe(distance=100, lat=41, lon=-112)
+        sent_emails = self.run_notifier(tmp_path, 'ground-reception/ground-reception-23037859')
+        assert len(sent_emails) == 1
+        sent_email = sent_emails[0]
+        assert addr in sent_email.destinations
+        body = self.get_body(sent_email)
+        assert '23037859' in body
+        assert 'Ground Reception' in body
+        assert self.get_subject(sent_email).startswith('GROUND RECEPTION')

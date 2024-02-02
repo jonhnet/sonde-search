@@ -59,58 +59,65 @@ title: "Sonde Email Notifier — Manage"
     <h2 id="subscribe_title"></h2>
     <form onsubmit="return subscribe()">
         <div class="row t10">
-            <div class="large-6 columns">
+            <div class="small-6 columns">
                 <label>Notification address</label>
                 <tt><span id="subscribe_email">unknown</span></tt>
                 <a href="../signup/">(Change)</a>
             </div>
-            <div class="large-6 columns">
+            <div class="small-6 columns">
                 <label>Time Zone</label>
                 <tt><span id="subscribe_tzname">unknown</span></tt>
             </div>
         </div>
 
-        <div class="row t10">
-            <div class="large-6 columns">
-                <label>Desired Units</label>
-                <label for="unit_imperial">
-                    <input type="radio" name="units" onclick="set_units('imperial')" id="unit_imperial">
-                    Imperial (feet, miles)
-                </label>
-                <label for="unit_metric">
-                    <input type="radio" name="units" onclick="set_units('metric')" id="unit_metric">
-                    Metric (meters, km)
-                </label>
+        <div class="row t20 collapse">
+            <label>
+                Maximum Distance
+            </label>
+
+            <div class="small-6 columns">
+                <input type="number" required="true" min="0" max="5000" step="0.1" id="subscribe_maxdist"/>
+            </div>
+
+            <div class="small-6 columns">
+                <select id="subscribe_units">
+                    <option value="imperial">Miles</option>
+                    <option value="metric"  >Kilometers</option>
+                </select>
             </div>
         </div>
 
-        <div class="row">
-            <div class="large-12 columns t10">
-                <div>Enter latitude and longitude using decimal degrees, negative for South and West.</div>
+        <div class="row collapse">
+            <label>
+                Home Latitude
+            </label>
+
+            <div class="small-6 columns">
+                <input type="number" required="true" min="0" max="90" step="any" id="subscribe_lat" />
+            </div>
+
+            <div class="small-6 columns">
+                <select id="subscribe_lat_sign">
+                    <option value="north">North</option>
+                    <option value="south">South</option>
+                </select>
             </div>
         </div>
 
-        <div class="row t10">
-            <div class="large-4 columns">
-                <label>Home Latitude
-                    <input type="number" required="true" min="-90" max="90" step="any" id="subscribe_lat" />
-                </label>
+        <div class="row collapse">
+            <label>
+                Home Longitude
+            </label>
+
+            <div class="small-6 columns">
+                <input type="number" required="true" min="0" max="180" step="any" id="subscribe_lon" />
             </div>
-            <div class="large-4 columns">
-                <label>Home Longitude
-                    <input type="number" required="true" min="-180" max="180" step="any" id="subscribe_lon" />
-                </label>
-            </div>
-            <div class="large-4 columns">
-                <div class="row collapse">
-                    <label>Maximum Distance</label>
-                    <div class="small-9 columns">
-                        <input type="number" required="true" min="0" max="5000" step="0.1" id="subscribe_maxdist"/>
-                    </div>
-                    <div class="small-3 columns">
-                        <span class="postfix" id="maxdist_unit">miles</span>
-                    </div>
-                </div>
+
+            <div class="small-6 columns">
+                <select id="subscribe_lon_sign">
+                    <option value="east">East</option>
+                    <option value="west">West</option>
+                </select>
             </div>
         </div>
 
@@ -234,13 +241,7 @@ function process_config(config) {
 
 function set_units(units_arg) {
     units = units_arg;
-    if (units == 'metric') {
-        $('#maxdist_unit').html('km');
-        $('#unit_metric').prop('checked', true);
-    } else {
-        $('#maxdist_unit').html('miles');
-        $('#unit_imperial').prop('checked', true);
-    }
+    $('#subscribe_units').val(units);
 }
 
 // Called when we've successfully retrieved the notification history
@@ -313,7 +314,10 @@ function start_subscribe() {
     $('#subscribe_button').html('Subscribe');
     $('#subscribe_lat').val(null);
     $('#subscribe_lon').val(null);
+    $('#subscribe_lat_sign').val('north');
+    $('#subscribe_lon_sign').val('west');
     $('#subscribe_maxdist').val(100);
+
     editing_uuid = null;
     $('#add-subscription').foundation('reveal', 'open');
 }
@@ -321,8 +325,25 @@ function start_subscribe() {
 function start_edit(sub) {
     $('#subscribe_title').text('Edit Notification');
     $('#subscribe_button').html('Update');
-    $('#subscribe_lat').val(sub['lat']);
-    $('#subscribe_lon').val(sub['lon']);
+
+    let lat = sub['lat'];
+    if (lat < 0) {
+        $('#subscribe_lat').val(-lat);
+        $('#subscribe_lat_sign').val('south');
+    } else {
+        $('#subscribe_lat').val(lat);
+        $('#subscribe_lat_sign').val('north');
+    }
+
+    let lon = sub['lon'];
+    if (lon < 0) {
+        $('#subscribe_lon').val(-lon);
+        $('#subscribe_lon_sign').val('west');
+    } else {
+        $('#subscribe_lon').val(lon);
+        $('#subscribe_lon_sign').val('east');
+    }
+
     $('#subscribe_maxdist').val(miles_to_desired_units(sub['max_distance_mi']));
     $('#add-subscription').foundation('reveal', 'open');
     editing_uuid = sub['uuid'];
@@ -338,16 +359,28 @@ function subscribe() {
     var l = Ladda.create(button[0]);
     l.start();
     let user_token = Cookies.get('notifier_user_token');
+    set_units($('#subscribe_units').val());
     var dist = $('#subscribe_maxdist').val();
     if (units == 'metric') {
         dist = km_to_mi(dist);
     }
+
+    // get lat and lon with hemispheres
+    let lat = $('#subscribe_lat').val();
+    if ($('#subscribe_lat_sign').val() == 'south') {
+        lat = -lat;
+    }
+    let lon = $('#subscribe_lon').val();
+    if ($('#subscribe_lon_sign').val() == 'west') {
+        lon = -lon;
+    }
+
     sub_data = {
         'user_token': user_token,
         'units': units,
         'tzname': tzname,
-        'lat': $('#subscribe_lat').val(),
-        'lon': $('#subscribe_lon').val(),
+        'lat': lat,
+        'lon': lon,
         'max_distance_mi': dist,
     }
     if (editing_uuid != null) {

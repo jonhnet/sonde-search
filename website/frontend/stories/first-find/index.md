@@ -4,6 +4,8 @@ title: "Our First Find"
 footer: true
 ---
 
+*December 10, 2023*
+
 This is the story of an end to a journey that started in 2007!
 
 Way back then, my friend Jon and I learned that weather balloons are launched

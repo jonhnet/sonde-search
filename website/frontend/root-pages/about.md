@@ -29,16 +29,15 @@ and designed to be used only once. For the agencies that launch the
 sondes, that's where the story ends. But for our hobby, that's where
 it begins!
 
-Sonde-hunting enthusiasts around the world collaborate to track the
-sondes and find them after they land. Every second, the devices
-transmit data back to their launch point, including their current
-GPS-derived position (latitude, longitude and altitude). These
-transmissions are not encrypted, so hobbyists have learned to receive
-and decode them, typically with a cheap [software-defined
-radio](https://www.rtl-sdr.com/about-rtl-sdr/). Volunteers have set up
-hundreds of listening posts worldwide. The next step is to get out
-into the field and try to find the sonde based on its tracking data.
-It's a great way to touch grass!
+Sonde-hunting enthusiasts around the world collaborate to track the sondes and
+find them after they land. Every second that they're aloft, the devices transmit
+data back to their launch point. The transmissions include their current
+GPS-derived position (latitude, longitude and altitude). The data is considered
+public information and is not encrypted, so hobbyists have learned to receive
+and decode the transmissions, typically with a cheap [software-defined
+radio](https://www.rtl-sdr.com/about-rtl-sdr/). Volunteers have set up hundreds
+of listening posts worldwide. The next step is to get out into the field and try
+to find the sonde based on its tracking data. It's a great way to touch grass!
 
 [SondeHub](https://www.sondehub.org) is the largest public repository of
 radiosonde data collected by hobbyists. Over the past couple of years, I've

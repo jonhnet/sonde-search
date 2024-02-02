@@ -59,12 +59,12 @@ title: "Sonde Email Notifier — Manage"
     <h2 id="subscribe_title"></h2>
     <form onsubmit="return subscribe()">
         <div class="row t10">
-            <div class="small-6 columns">
+            <div class="large-6 columns">
                 <label>Notification address</label>
                 <tt><span id="subscribe_email">unknown</span></tt>
                 <a href="../signup/">(Change)</a>
             </div>
-            <div class="small-6 columns">
+            <div class="large-6 columns">
                 <label>Time Zone</label>
                 <tt><span id="subscribe_tzname">unknown</span></tt>
             </div>

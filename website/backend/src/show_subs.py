@@ -19,17 +19,26 @@ def show_subs():
     users = users.sort_values('email_lc')
 
     subs = util.dynamodb_to_dataframe(t.subscriptions.scan)
-    subs['subscribe_time'] = pd.to_datetime(subs['subscribe_time'].fillna(0).astype(float), unit='s')
+    for c in ('subscribe_time', 'unsubscribe_time'):
+        subs[c] = pd.to_datetime(subs[c].astype(float).fillna(0), unit='s')
+
+    def print_time(t):
+        if pd.isna(t) or t.year < 2000:
+            return ' ' * 19
+        else:
+            return str(t.floor('s'))
 
     for _, user in users.iterrows():
         print(f"{user['uuid']} {user['email']}")
         for _, sub in subs.loc[subs['subscriber'] == user['uuid']].sort_values('subscribe_time').iterrows():
             s = '     '
-            s += str(sub['subscribe_time'].floor('s'))
-            s += ' * ' if sub['active'] else '   '
-            s += f"{sub['max_distance_mi']:5.1f}"
-            s += f"{sub['lat']:8.3f}"
-            s += f"{sub['lon']:9.3f}"
+            s += '* ' if sub['active'] else '  '
+            s += print_time(sub['subscribe_time'])
+            s += ' - '
+            s += print_time(sub['unsubscribe_time'])
+            s += f"{sub['max_distance_mi']:9.1f}"
+            s += f"{sub['lat']:10.4f}"
+            s += f"{sub['lon']:11.4f}"
             print(s)
 
         print()

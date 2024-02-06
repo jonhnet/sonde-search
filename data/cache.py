@@ -41,3 +41,5 @@ def get_sonde_summaries_as_dataframe():
 if __name__ == "__main__":
     df = get_sonde_summaries_as_dataframe()
     print(df)
+    df = df.sort_values('datetime')
+    print(df['datetime'])

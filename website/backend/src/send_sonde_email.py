@@ -89,11 +89,14 @@ class EmailNotifier:
         try:
             sondes = sondes.astype({
                 'alt': float,
-                'vel_v': float,
-                'vel_h': float,
                 'lat': float,
                 'lon': float,
             })
+            if 'vel_v' in sondes and 'vel_h' in sondes:
+                sondes = sondes.astype({
+                    'vel_v': float,
+                    'vel_h': float,
+                })
         except Exception as e:
             print(f'Error converting sondehub data to floats: {e}')
             print(sondes.columns)
@@ -281,6 +284,9 @@ class EmailNotifier:
         # attempt a geocode and DEM lookup
         geo = geocoder.osm(f"{landing['lat']}, {landing['lon']}")
         elev = self.get_elevation(landing['lat'], landing['lon'])
+        vel_v = landing.get('vel_v', None)
+        vel_h = landing.get('vel_h', None)
+        has_known_velocity = not(pd.isna(vel_v) or pd.isna(vel_h))
 
         place = ""
         if geo and geo.county:
@@ -378,33 +384,39 @@ class EmailNotifier:
             <td>Bearing</td>
             <td>{round(landing['bearing_from_home'])}° from home</td>
         </tr>
-        <tr>
-            <td>Descent Rate</td>
-            <td>
-            {self.render_elevation(sub, -landing['vel_v'])}/s,
-            moving laterally
-            {self.render_elevation(sub, landing['vel_h'])}/s,
-            heading {round(landing['heading'])}°
-            </td>
-        </tr>
         '''
+
+        if has_known_velocity:
+            body += f'''
+            <tr>
+                <td>Descent Rate</td>
+                <td>
+                {self.render_elevation(sub, -vel_v)}/s,
+                moving laterally
+                {self.render_elevation(sub, vel_h)}/s,
+                heading {round(landing['heading'])}°
+                </td>
+            </tr>
+            '''
+
+        if elev:
+            body += f'''
+                <tr>
+                    <td>Ground Elevation</td>
+                    <td>{self.render_elevation(sub, elev)}</td>
+                </tr>
+                '''
 
         if landing['ground_reception']:
             body += '''
-        <tr>
-            <td colspan="2">Ground Reception</td>
-        </tr>
-            '''
-            if elev:
-                body += f'''
-        <tr>
-            <td>Elevation</td>
-            <td>{self.render_elevation(sub, elev)}</td>
-        </tr>
-                '''
-        elif elev:
-            time_to_landing = (landing['alt'] - elev) / -landing['vel_v']
-            horiz_error = landing['vel_h'] * time_to_landing
+                <tr>
+                    <td colspan="2"><b>Ground Reception</b></td>
+                </tr>
+                    '''
+
+        elif elev and has_known_velocity:
+            time_to_landing = (landing['alt'] - elev) / -vel_v
+            horiz_error = vel_h * time_to_landing
             body += f'''
         <tr>
             <th colspan="2">Landing Estimation</th>
@@ -610,7 +622,7 @@ class EmailNotifier:
             try:
                 self.process_one_sub(now, sondes, sub)
             except Exception as e:
-                traceback.format_exc()
+                traceback.print_exc()
                 print(f"Error notifying {sub['email']}: {e}")
 
 def get_args():

@@ -22,6 +22,7 @@ import pandas as pd
 import requests
 import sys
 import time
+import traceback
 
 sys.path.insert(0, os.path.dirname(__file__))
 import constants
@@ -95,8 +96,9 @@ class EmailNotifier:
             })
         except Exception as e:
             print(f'Error converting sondehub data to floats: {e}')
-            print(sondes)
-            return None
+            print(sondes.columns)
+            print(sondes.iloc[0])
+            raise
 
         sondes['datetime'] = pd.to_datetime(sondes['datetime'])
 
@@ -114,22 +116,26 @@ class EmailNotifier:
                 for _, record in timeblock.items():
                     yield record
         sondes = pd.DataFrame(unpack_list())
-        sondes = self.cleanup_sonde_data(sondes)
         return sondes, now
 
     def get_sonde_data(self, params):
         retries = 0
-        while retries <= MAX_SONDEHUB_RETRIES:
+        while True:
+            if retries > MAX_SONDEHUB_RETRIES:
+                raise Exception(f"Couldn't get sondehub data, even after {MAX_SONDEHUB_RETRIES} retries")
             if retries > 0:
                 print("Sondehub data failure; retrying after a short sleep...")
                 time.sleep((2**retries) * 4)
             retries += 1
             sondes, now = self.get_sonde_data_once(params)
-            if sondes is not None and len(sondes) > 0:
-                return sondes, now
-            print('Sondehub returned empty dataframe -- trying again')
+            if sondes is not None and len(sondes) == 0:
+                print('Sondehub returned empty dataframe -- trying again')
+                continue
 
-        raise Exception(f"Couldn't get sondehub data, even after {MAX_SONDEHUB_RETRIES} retries")
+            # Sonde data retrieved!
+            sondes = self.cleanup_sonde_data(sondes)
+            return sondes, now
+
 
     ### Getting the nearest sonde
 
@@ -601,7 +607,11 @@ class EmailNotifier:
         sondes = sondes.loc[sondes.groupby('serial')['frame'].idxmax()]
 
         for i, sub in subs.iterrows():
-            self.process_one_sub(now, sondes, sub)
+            try:
+                self.process_one_sub(now, sondes, sub)
+            except Exception as e:
+                traceback.format_exc()
+                print(f"Error notifying {sub['email']}: {e}")
 
 def get_args():
     parser = argparse.ArgumentParser()

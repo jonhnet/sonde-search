@@ -30,7 +30,9 @@ def show_subs():
 
     for _, user in users.iterrows():
         print(f"{user['uuid']} {user['email']}")
-        for _, sub in subs.loc[subs['subscriber'] == user['uuid']].sort_values('subscribe_time').iterrows():
+        usubs = subs.loc[subs['subscriber'] == user['uuid']]
+        usubs = usubs.sort_values(['subscribe_time', 'unsubscribe_time'])
+        for _, sub in usubs.iterrows():
             s = '     '
             s += '* ' if sub['active'] else '  '
             s += print_time(sub['subscribe_time'])

@@ -19,7 +19,7 @@ weather, such as atmospheric rivers, Seattle-area sonde monitors on
 [SondeHub](https://www.sondehub.org) started to pick up *extra* balloons
 launched up to 8 times per day, which Jon began to call "bonus sondes." They
 appeared to originate near Tacoma, Washington, a couple dozen miles south of
-Seattle. The nearest receive site would only begin to pick up the balloon's
+Seattle. The nearest hobbyist receiver only began to pick up the balloon's
 signal once it had gained several thousand feet of altitude. This was good
 enough to narrow the launches down to a few square miles, but the exact location
 of the launches remained mysterious.

@@ -19,6 +19,12 @@
   text: A trail-free adventure in the woods!
   image: home-thumbs/first-find.webp
 
+- title: A Launch-Site Mystery
+  url: /stories/launch-site-mystery/
+  tags: stories
+  text: During times of bad weather, dozens of extra sondes are launched—but from where?
+  image: home-thumbs/launch-site-mystery.webp
+
 - title: Email Notifier
   url: /notifier/
   text: Get email every time a radiosonde lands near you

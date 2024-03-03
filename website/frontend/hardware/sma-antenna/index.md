@@ -87,7 +87,11 @@ The easiest way to print it is to split it in half just below the SMA holder, as
 {% include thumb-image.html image="fully-assembled-frame.webp" %}
 </div>
 
-Another variation is a simple windowsill mount. This one isn't quite as sturdy because it doesn't give the arms support, and isn't for portable use. But, it's worked well to keep an antenna permanently mounted on my window sill.
+Another variation is a [simple windowsill
+mount](https://github.com/jonhnet/sonde-search/blob/main/3d-models/windowsill-antenna-mount/windowsill-mount-revB-Body.stl).
+This one isn't quite as sturdy because it doesn't give the arms support, and
+isn't for portable use. But, it's worked well to keep an antenna permanently
+mounted on my window sill.
 
 <div class="lec-inline-images">
 {% include thumb-image.html image="windowsill-mount.webp" %}

@@ -10,10 +10,10 @@
   side: left
 
   dropdown:
-    - title: About
+    - title: About the Sonde Notifier
       url: "/notifier/"
 
-    - title: Sign Up / Manage
+    - title: Sign Up / Manage Notifications
       url: "/notifier/manage/"
 
 - title: "Lectrobox Home"

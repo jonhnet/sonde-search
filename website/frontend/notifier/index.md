@@ -1,21 +1,20 @@
 ---
 layout: page-fullwidth
-title: "Sonde Email Notifier"
+title: "Radiosonde (Weather Balloon) Email Notifier"
 footer: true
 ---
 
-[Sign up here](manage) to receive email notifications when a sonde
+[Sign up here](manage) to receive email notifications when a radiosonde
 lands near you!
 
-Not many radiosondes land in my home of Seattle. The balloons launched
+Not many radiosondes land in my home of Seattle. The weather balloons launched
 from Quillayute, about 100 miles (170km) west, usually land somewhere
-inaccessible such as in the Olympic forest or the ocean. Only rarely
-do they come far enough east to land in civilization. My habit was to
-check [SondeHub](https://www.sondehub.org/") to see if the day's
-flights landed nearby. This was an annoying chore, so I set up a
-system that would query SondeHub's API for me and send an email if a
-radiosonde landed less than a configured distance from home. This
-facility is now available to anyone!
+inaccessible such as in the Olympic forest or the ocean. Only rarely do they
+come far enough east to land in civilization. My habit was to check
+[SondeHub](https://www.sondehub.org/") to see if the day's flights landed
+nearby. This was an annoying chore, so I set up a system that would query
+SondeHub's API for me and send an email if a radiosonde landed less than a
+configured distance from home. This facility is now available to anyone!
 
 Notifications are configured with:
 

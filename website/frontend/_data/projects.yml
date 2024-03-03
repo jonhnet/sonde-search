@@ -33,20 +33,26 @@
 - title: Landing Heatmaps
   url: /heatmaps/
   text: Interactive map showing landing locations worldwide
-  tags: maps
+  tags: analysis
   image: home-thumbs/heatmap.webp
 
 - title: Landing Map-Calendars
   url: /calendars/
   text: 12-map images showing where landings tend to happen month by month
-  tags: maps
+  tags: analysis
   image: home-thumbs/landing-calendar.webp
 
 - title: Receive Site Analyzer
   url: /analyzers/receiver/
-  tags: analyzers
+  tags: analysis
   text: Analyze which SondeHub feeder sites were best at receiving a sonde flight
   image: home-thumbs/listeners.webp
+
+- title: SMA Antenna with Frame
+  url: /hardware/sma-antenna
+  tags: hardware
+  text: A 3D-printable frame to hold a simple radiosonde antenna with an SMA connector
+  image: home-thumbs/windowsill-mount-teaser.webp
 
 - title: Raw Data
   url: /data/

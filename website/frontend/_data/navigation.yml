@@ -8,13 +8,12 @@
 
 - title: Notifier
   side: left
-  url: "/notifier/"
 
   dropdown:
-    - title: Signup
-      url: "/notifier/signup/"
+    - title: About
+      url: "/notifier/"
 
-    - title: Manage
+    - title: Sign Up / Manage
       url: "/notifier/manage/"
 
 - title: "Lectrobox Home"

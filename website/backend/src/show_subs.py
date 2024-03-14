@@ -35,6 +35,7 @@ def show_subs():
         for _, sub in usubs.iterrows():
             s = '     '
             s += '* ' if sub['active'] else '  '
+            s += f"[{sub['uuid']:.8}] "
             s += print_time(sub['subscribe_time'])
             s += ' - '
             s += print_time(sub['unsubscribe_time'])

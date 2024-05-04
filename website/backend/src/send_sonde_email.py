@@ -19,7 +19,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
-import requests
 import sys
 import time
 import traceback
@@ -38,10 +37,6 @@ METERS_PER_MILE = 1609.34
 METERS_PER_KM   = 1000
 METERS_PER_FOOT = 0.3048
 
-# sondehup API
-SONDEHUB_DATA_URL = 'https://api.v2.sondehub.org/sondes/telemetry'
-MAX_SONDEHUB_RETRIES = 6
-
 # URLs for email body
 SONDEHUB_MAP_URL = 'https://sondehub.org/#!mt=Mapnik&mz=9&qm=12h&f={serial}&q={serial}'
 GMAP_URL = 'https://www.google.com/maps/search/?api=1&query={lat},{lon}'
@@ -49,28 +44,6 @@ GMAP_URL = 'https://www.google.com/maps/search/?api=1&query={lat},{lon}'
 # random other constants
 DEV_EMAIL = 'jelson@gmail.com'
 SONDE_HISTORY_LOOKBACK_TIME_SEC = 86400
-
-# Get sonde data from the same live API that the SondeHub web site uses
-class SondeHubTelemetryRetriever:
-    def __init__(self):
-        pass
-
-    def get_sonde_data(self, params):
-        response = requests.get(SONDEHUB_DATA_URL, params=params)
-        response.raise_for_status()
-        return response.json(), pd.Timestamp.utcnow()
-
-    def get_elevation_data(self, lat, lon):
-        resp = requests.get('https://epqs.nationalmap.gov/v1/json', params={
-            'x': lon,
-            'y': lat,
-            'units': 'Meters',
-            'wkid': '4326',
-            'includeDate': 'True',
-        })
-        resp.raise_for_status()
-        return resp.json()
-
 
 class EmailNotifier:
     def __init__(self, args, retriever):
@@ -83,65 +56,7 @@ class EmailNotifier:
     # Sonde data retrieval
     #
 
-    # Clean up and annotate telemetry returned by sondehub
-    def cleanup_sonde_data(self, sondes):
-        # Sometimes lat/lon comes as a string instead of float
-        try:
-            sondes = sondes.astype({
-                'alt': float,
-                'lat': float,
-                'lon': float,
-            })
-            if 'vel_v' in sondes and 'vel_h' in sondes:
-                sondes = sondes.astype({
-                    'vel_v': float,
-                    'vel_h': float,
-                })
-        except Exception as e:
-            print(f'Error converting sondehub data to floats: {e}')
-            print(sondes.columns)
-            print(sondes.iloc[0])
-            raise
-
-        sondes['datetime'] = pd.to_datetime(sondes['datetime'])
-
-        return sondes
-
-    def get_sonde_data_once(self, params):
-        try:
-            response, now = self.retriever.get_sonde_data(params)
-        except Exception as e:
-            print(f'Error getting data from sondehub: {e}')
-            return None, None
-
-        def unpack_list():
-            for sonde, timeblock in response.items():
-                for _, record in timeblock.items():
-                    yield record
-        sondes = pd.DataFrame(unpack_list())
-        return sondes, now
-
-    def get_sonde_data(self, params):
-        retries = 0
-        while True:
-            if retries > MAX_SONDEHUB_RETRIES:
-                raise Exception(f"Couldn't get sondehub data, even after {MAX_SONDEHUB_RETRIES} retries")
-            if retries > 0:
-                print("Sondehub data failure; retrying after a short sleep...")
-                time.sleep((2**retries) * 4)
-            retries += 1
-            sondes, now = self.get_sonde_data_once(params)
-            if sondes is not None and len(sondes) == 0:
-                print('Sondehub returned empty dataframe -- trying again')
-                continue
-
-            # Sonde data retrieved!
-            sondes = self.cleanup_sonde_data(sondes)
-            return sondes, now
-
-
     ### Getting the nearest sonde
-
     def annotate_with_distance(self, sondes, sub):
         def get_path(sonde):
             path = Geodesic.WGS84.Inverse(sub['lat'], sub['lon'], sonde['lat'], sonde['lon'])
@@ -286,7 +201,7 @@ class EmailNotifier:
         elev = self.get_elevation(landing['lat'], landing['lon'])
         vel_v = landing.get('vel_v', None)
         vel_h = landing.get('vel_h', None)
-        has_known_velocity = not(pd.isna(vel_v) or pd.isna(vel_h))
+        has_known_velocity = not (pd.isna(vel_v) or pd.isna(vel_h))
 
         place = ""
         if geo and geo.county:
@@ -451,7 +366,7 @@ class EmailNotifier:
 
     def send_email(self, sub, landing):
         # Query SondeHub for detail on the flight
-        flight, now = self.get_sonde_data(params={
+        flight, now = self.retriever.get_sonde_data(params={
             'duration': '1d',
             'serial': landing['serial'],
         })
@@ -613,7 +528,7 @@ class EmailNotifier:
         subs = self.get_subscriber_data()
 
         # Get sonde data from SondeHub
-        sondes, now = self.get_sonde_data(params={'duration': '6h'})
+        sondes, now = self.retriever.get_sonde_data(params={'duration': '6h'})
 
         # Filter the data down to just the last frame received from each sonde
         sondes = sondes.loc[sondes.groupby('serial')['frame'].idxmax()]
@@ -660,7 +575,7 @@ def main():
     if not os.path.exists(args.external_images_root):
         raise Exception(f"External images root {args.external_images_root} does not exist")
 
-    notifier = EmailNotifier(args, SondeHubTelemetryRetriever())
+    notifier = EmailNotifier(args, util.LiveSondeHub())
     notifier.process_all_subs()
 
 if __name__ == "__main__":

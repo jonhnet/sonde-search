@@ -7,20 +7,18 @@ from typing import Dict
 import argparse
 import base64
 import boto3
-import bz2
 import cherrypy
 import email
 import email.header
 import json
 import os
-import pandas as pd
 import pytest
 import re
 import requests
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from src import v1, send_sonde_email, table_definitions, constants
+from src import v1, send_sonde_email, table_definitions, constants, util
 
 @pytest.fixture
 def mock_aws(request):
@@ -76,7 +74,7 @@ def post(url_suffix, expected_status=200, data=None):
 @pytest.mark.usefixtures("server")
 class Test_v1:
     ses_backend: ses_backends
-    apiserver: v1.LectroboxAPI
+    apiserver: v1.SondesearchAPI
 
     def sub_args(self, user_token):
         return {
@@ -363,38 +361,10 @@ class Test_v1:
         assert resp1['subs'][0]['max_distance_mi'] == 222
 
 
-class FakeSondehub:
-    def __init__(self, filename):
-        fn = os.path.join(os.path.dirname(__file__), 'data', filename + '.json.bz2')
-        with bz2.open(fn) as ifh:
-            self._data = json.load(ifh)
-        self._time = None
-        for sondeid, receptions in self._data.items():
-            for timestamp, datablock in receptions.items():
-                if 'datetime' in datablock:
-                    ts = pd.to_datetime(datablock['datetime'])
-                    if not self._time or ts > self._time:
-                        self._time = ts
-        print(f"{filename} fake time: {self._time}")
-
-    def get_sonde_data(self, params):
-        if 'serial' in params:
-            serial = params['serial']
-            rv = {
-                serial: self._data[serial]
-            }
-        else:
-            rv = self._data
-
-        return rv, self._time
-
-    def get_elevation_data(self, lat, lon):
-        return {'value': 100}
-
 @pytest.mark.usefixtures("mock_aws")
 @pytest.mark.usefixtures("server")
 class Test_EmailNotifier:
-    apiserver: v1.LectroboxAPI
+    apiserver: v1.SondesearchAPI
     ses_backend: ses_backends
     user_tokens: Dict[str, str]
 
@@ -434,7 +404,7 @@ class Test_EmailNotifier:
         args.really_send = True
         args.external_images_root = tmp_path
         args.live_test = False
-        notifier = send_sonde_email.EmailNotifier(args, FakeSondehub(filename))
+        notifier = send_sonde_email.EmailNotifier(args, util.FakeSondeHub(filename))
         notifier.process_all_subs()
 
         return self.ses_backend.sent_messages

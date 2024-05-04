@@ -40,7 +40,7 @@ class ClientError(cherrypy.HTTPError):
         response.headers.pop('Content-Length', None)
 
 
-class LectroboxAPI:
+class SondesearchAPI:
     PREFERENCES = ('units', 'tzname')
     VALID_UNITS = ('metric', 'imperial')
     VERIFY_EMAIL_SUBJ = 'Verify your email to receive sonde notifications'
@@ -309,6 +309,9 @@ class LectroboxAPI:
 
         return rv.encode('utf-8')
 
+#    @cherrypy.expose
+#    def get_sonde_kml(self, serial):
+#        cherrypy.response.headers['Content-Disposition'] = f'attachment; filename="{fn}"'
 
 global_config = None
 
@@ -318,7 +321,7 @@ def mount_server_instance():
     if not global_config:
         global_config = GlobalConfig()
 
-    apiserver = LectroboxAPI(global_config)
+    apiserver = SondesearchAPI(global_config)
     cherrypy.tree.mount(apiserver)
     return apiserver
 

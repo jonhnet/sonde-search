@@ -48,7 +48,9 @@ def mock_aws(request):
 #   https://schneide.blog/2017/02/06/integration-tests-with-cherrypy-and-requests/
 @pytest.fixture
 def server(request, mock_aws):
-    request.cls.apiserver = v1.mount_server_instance()
+    api = util.FakeSondeHub('V1854526-singlesonde')
+    api.MAX_SONDEHUB_RETRIES = 1
+    request.cls.apiserver = v1.mount_server_instance(api)
     request.cls.user_tokens = {}
     cherrypy.config.update({
         'request.throw_errors': True,
@@ -360,6 +362,14 @@ class Test_v1:
         assert len(resp1['subs']) == 1
         assert resp1['subs'][0]['max_distance_mi'] == 222
 
+    def test_kml_conversion(self, server):
+        resp = get('get_sonde_kml', params={'serial': 'V1854526'})
+
+        import xml.etree.ElementTree as ET
+        tree = ET.fromstring(resp.text)
+
+        assert tree.tag.endswith('}kml')
+
 
 @pytest.mark.usefixtures("mock_aws")
 @pytest.mark.usefixtures("server")
@@ -404,7 +414,9 @@ class Test_EmailNotifier:
         args.really_send = True
         args.external_images_root = tmp_path
         args.live_test = False
-        notifier = send_sonde_email.EmailNotifier(args, util.FakeSondeHub(filename))
+        sh = util.FakeSondeHub(filename)
+        sh.MAX_SONDEHUB_RETRIES = 1
+        notifier = send_sonde_email.EmailNotifier(args, sh)
         notifier.process_all_subs()
 
         return self.ses_backend.sent_messages

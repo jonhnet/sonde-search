@@ -12,8 +12,11 @@ class SondeHubRetrieverBase:
     def __init__(self):
         pass
 
-    # This should be overridden in subclasses
-    def make_sonde_data_request(self, params):
+    # These should be overridden in subclasses
+    def make_telemetry_request(self, params):
+        raise NotImplementedError
+
+    def make_singlesonde_request(self, serial):
         raise NotImplementedError
 
     def cleanup_sonde_data(self, sondes):
@@ -39,19 +42,33 @@ class SondeHubRetrieverBase:
 
         return sondes
 
-    def get_sonde_data_once(self, params):
+    def get_telemetry_once(self, params):
         try:
-            response, now = self.make_sonde_data_request(params)
+            response, now = self.make_telemetry_request(params)
         except Exception as e:
             print(f'Error getting data from sondehub: {e}')
             return None, None
 
         def unpack_list():
-            for sonde, timeblock in response.items():
-                for _, record in timeblock.items():
+            for serial, timeblocks in response.items():
+                for timestamp, record in timeblocks.items():
                     yield record
         sondes = pd.DataFrame(unpack_list())
+        sondes = self.cleanup_sonde_data(sondes)
         return sondes, now
+
+    def get_singlesonde_once(self, serial):
+        try:
+            response, now = self.make_singlesonde_request(serial)
+        except Exception as e:
+            print(f'Error getting singlesonde data: {e}')
+            if self.MAX_SONDEHUB_RETRIES == 1:
+                raise e
+            return None, None
+
+        sonde = pd.DataFrame(response)
+        sonde = self.cleanup_sonde_data(sonde)
+        return sonde, now
 
     def get_sonde_data(self, params):
         retries = 0
@@ -62,23 +79,34 @@ class SondeHubRetrieverBase:
                 print("Sondehub data failure; retrying after a short sleep...")
                 time.sleep((2**retries) * 4)
             retries += 1
-            sondes, now = self.get_sonde_data_once(params)
-            if sondes is not None and len(sondes) == 0:
-                print('Sondehub returned empty dataframe -- trying again')
+
+            if 'serial' in params:
+                sondes, now = self.get_singlesonde_once(params['serial'])
+            else:
+                sondes, now = self.get_telemetry_once(params)
+
+            if sondes is None or len(sondes) == 0:
+                print('Sondehub returned no data -- trying again')
                 continue
 
-            return self.cleanup_sonde_data(sondes), now
+            return sondes, now
 
 # Subclass of SondeHubRetriever that gets real data from the live service on the
 # Internet
 class LiveSondeHub(SondeHubRetrieverBase):
-    SONDEHUB_DATA_URL = 'https://api.v2.sondehub.org/sondes/telemetry'
+    SONDEHUB_DATA_URL     = 'https://api.v2.sondehub.org/sondes/telemetry'
+    SONDEHUB_ONESONDE_URL = 'https://api.v2.sondehub.org/sonde/'
 
     def __init__(self):
         super(LiveSondeHub, self).__init__()
 
-    def make_sonde_data_request(self, params):
+    def make_telemetry_request(self, params):
         response = requests.get(self.SONDEHUB_DATA_URL, params=params)
+        response.raise_for_status()
+        return response.json(), pd.Timestamp.utcnow()
+
+    def make_singlesonde_request(self, serial):
+        response = requests.get(self.SONDEHUB_ONESONDE_URL + serial)
         response.raise_for_status()
         return response.json(), pd.Timestamp.utcnow()
 
@@ -98,25 +126,31 @@ class FakeSondeHub(SondeHubRetrieverBase):
         fn = os.path.join(os.path.dirname(__file__), '..', 'tests', 'data', filename + '.json.bz2')
         with bz2.open(fn) as ifh:
             self._data = json.load(ifh)
+
+        # Convert the singlesonde format to the telemetry format, for consistency
+        if 'singlesonde' in filename:
+            serial = self._data[0]['serial']
+            print(f'loading fake {serial}')
+            self._data = {
+                serial: {rec['datetime']: rec for rec in self._data}
+            }
+
         self._time = None
-        for sondeid, receptions in self._data.items():
-            for timestamp, datablock in receptions.items():
-                if 'datetime' in datablock:
-                    ts = pd.to_datetime(datablock['datetime'])
+        for serial, timeblocks in self._data.items():
+            for timestamp, record in timeblocks.items():
+                if 'datetime' in record:
+                    ts = pd.to_datetime(record['datetime'])
                     if not self._time or ts > self._time:
                         self._time = ts
         print(f"{filename} fake time: {self._time}")
 
-    def make_sonde_data_request(self, params):
-        if 'serial' in params:
-            serial = params['serial']
-            rv = {
-                serial: self._data[serial]
-            }
-        else:
-            rv = self._data
+    def make_telemetry_request(self, params):
+        assert 'serial' not in params
+        return self._data, self._time
 
-        return rv, self._time
+    def make_singlesonde_request(self, serial):
+        records = self._data[serial].values()
+        return records, self._time
 
     def get_elevation_data(self, lat, lon):
         return {'value': 100}

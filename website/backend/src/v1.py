@@ -6,6 +6,7 @@ import cherrypy
 import datetime
 import os
 import pandas as pd
+import simplekml
 import sys
 import time
 import uuid
@@ -23,8 +24,9 @@ EMAIL_DESTINATION = 'https://sondesearch.lectrobox.com/'
 # iteration of the program no longer has any such setup so this now has nothing
 # in it.
 class GlobalConfig:
-    def __init__(self):
+    def __init__(self, retriever):
         print('Global setup')
+        self.retriever = retriever
 
 
 class ClientError(cherrypy.HTTPError):
@@ -309,17 +311,46 @@ class SondesearchAPI:
 
         return rv.encode('utf-8')
 
-#    @cherrypy.expose
-#    def get_sonde_kml(self, serial):
-#        cherrypy.response.headers['Content-Disposition'] = f'attachment; filename="{fn}"'
+    @cherrypy.expose
+    def get_sonde_kml(self, serial):
+        sonde, now = self._g.retriever.get_sonde_data(params={
+            'serial': serial,
+        })
+
+        # Index by datetime and drop all columns other than lat, lon, alt
+        sonde = sonde.set_index('datetime')[['lon', 'lat', 'alt']]
+
+        # For each minute, take the last location a sonde was seen during that
+        # minute. Also add the very first sonde sighting.
+        by_minute = pd.concat([
+            sonde.head(1),
+            sonde.resample('1 min', label='right').last()
+        ])
+
+        # Drop empty samples
+        by_minute = by_minute.dropna()
+
+        # Create KML document
+        kml = simplekml.Kml()
+        kml.document.name = serial
+        linestring = kml.newlinestring(name='Serial')
+        linestring.coords = list(by_minute.itertuples(index=False, name=None))
+        linestring.altitudemode = simplekml.AltitudeMode.absolute
+        linestring.extrude = 1
+        linestring.style.linestyle.color = simplekml.Color.red
+        linestring.style.linestyle.width = 5
+
+        cherrypy.response.headers['Content-Type'] = 'application/vnd.google-earth.kml+xml'
+        cherrypy.response.headers['Content-Disposition'] = f'attachment; filename="{serial}.kml"'
+        return kml.kml().encode('utf8')
 
 global_config = None
 
 # This is called both by the uwsgi path, via application(), and the unit test
-def mount_server_instance():
+def mount_server_instance(retriever):
     global global_config
     if not global_config:
-        global_config = GlobalConfig()
+        global_config = GlobalConfig(retriever=retriever)
 
     apiserver = SondesearchAPI(global_config)
     cherrypy.tree.mount(apiserver)
@@ -327,7 +358,7 @@ def mount_server_instance():
 
 # "application" is the magic function called by Apache's wsgi module
 def application(environ, start_response):
-    mount_server_instance()
+    mount_server_instance(retriever=util.LiveSondeHub())
     cherrypy.config.update({
         'log.screen': True,
         'environment': 'production',

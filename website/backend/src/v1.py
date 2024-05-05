@@ -333,7 +333,7 @@ class SondesearchAPI:
         # Create KML document
         kml = simplekml.Kml()
         kml.document.name = serial
-        linestring = kml.newlinestring(name='Serial')
+        linestring = kml.newlinestring(name=serial)
         linestring.coords = list(by_minute.itertuples(index=False, name=None))
         linestring.altitudemode = simplekml.AltitudeMode.absolute
         linestring.extrude = 1

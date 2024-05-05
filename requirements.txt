@@ -10,4 +10,5 @@ geopandas
 pandas
 pyarrow
 pyproj
+simplekml
 sondehub

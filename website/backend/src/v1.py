@@ -317,18 +317,23 @@ class SondesearchAPI:
             'serial': serial,
         })
 
+        if sonde.empty:
+            return f"Sorry, it seems that sonde {serial} does not exist."
+
         # Index by datetime and drop all columns other than lat, lon, alt
         sonde = sonde.set_index('datetime')[['lon', 'lat', 'alt']]
 
         # For each minute, take the last location a sonde was seen during that
-        # minute. Also add the very first sonde sighting.
+        # minute. Also add the very first sonde sighting, and the highest
+        # altitude point. Note for the highest point we take head(1) in case
+        # there are multiple reports at that highest altitude. We pass a list
+        # to sonde.loc[] to ensure we get a dataframe back from loc, not a series,
+        # in case the label is uinque.
         by_minute = pd.concat([
             sonde.head(1),
-            sonde.resample('1 min', label='right').last()
-        ])
-
-        # Drop empty samples
-        by_minute = by_minute.dropna()
+            sonde.resample('1 min', label='right').last(),
+            sonde.loc[[sonde['alt'].idxmax()]].head(1),
+        ]).dropna().sort_index()
 
         # Create KML document
         kml = simplekml.Kml()
@@ -356,11 +361,18 @@ def mount_server_instance(retriever):
     cherrypy.tree.mount(apiserver)
     return apiserver
 
-# "application" is the magic function called by Apache's wsgi module
+# "application" is the magic function called by Apache's wsgi module or uwsgi
 def application(environ, start_response):
-    mount_server_instance(retriever=util.LiveSondeHub())
     cherrypy.config.update({
         'log.screen': True,
         'environment': 'production',
     })
     return cherrypy.tree(environ, start_response)
+
+# For local testing
+if __name__ == "__main__":
+    cherrypy.config.update({
+        'log.screen': True,
+    })
+    cherrypy.server.socket_host = '::'
+    cherrypy.quickstart(mount_server_instance(retriever=util.LiveSondeHub()), '/')

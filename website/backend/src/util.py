@@ -7,7 +7,7 @@ import json
 
 # Get sonde data from the same live API that the SondeHub web site uses
 class SondeHubRetrieverBase:
-    MAX_SONDEHUB_RETRIES = 6
+    MAX_SONDEHUB_TRIES = 6
 
     def __init__(self):
         pass
@@ -43,52 +43,40 @@ class SondeHubRetrieverBase:
         return sondes
 
     def get_telemetry_once(self, params):
-        try:
-            response, now = self.make_telemetry_request(params)
-        except Exception as e:
-            print(f'Error getting data from sondehub: {e}')
-            return None, None
+        response, now = self.make_telemetry_request(params)
 
         def unpack_list():
             for serial, timeblocks in response.items():
                 for timestamp, record in timeblocks.items():
                     yield record
         sondes = pd.DataFrame(unpack_list())
-        sondes = self.cleanup_sonde_data(sondes)
         return sondes, now
 
     def get_singlesonde_once(self, serial):
-        try:
-            response, now = self.make_singlesonde_request(serial)
-        except Exception as e:
-            print(f'Error getting singlesonde data: {e}')
-            if self.MAX_SONDEHUB_RETRIES == 1:
-                raise e
-            return None, None
-
+        response, now = self.make_singlesonde_request(serial)
         sonde = pd.DataFrame(response)
-        sonde = self.cleanup_sonde_data(sonde)
         return sonde, now
 
     def get_sonde_data(self, params):
-        retries = 0
+        tries = 1
         while True:
-            if retries > self.MAX_SONDEHUB_RETRIES:
-                raise Exception(f"Couldn't get sondehub data, even after {self.MAX_SONDEHUB_RETRIES} retries")
-            if retries > 0:
-                print("Sondehub data failure; retrying after a short sleep...")
-                time.sleep((2**retries) * 4)
-            retries += 1
+            try:
+                if 'serial' in params:
+                    sondes, now = self.get_singlesonde_once(params['serial'])
+                else:
+                    sondes, now = self.get_telemetry_once(params)
+            except Exception as e:
+                if tries >= self.MAX_SONDEHUB_TRIES:
+                    print(f"Couldn't get sondehub data, even after {self.MAX_SONDEHUB_TRIES} tries!")
+                    raise e
 
-            if 'serial' in params:
-                sondes, now = self.get_singlesonde_once(params['serial'])
-            else:
-                sondes, now = self.get_telemetry_once(params)
-
-            if sondes is None or len(sondes) == 0:
-                print('Sondehub returned no data -- trying again')
+                print(f"Failure {tries} retrieving data from Sondehub ({e}); retrying after a short sleep...")
+                time.sleep((2**tries) * 2)
+                tries += 1
                 continue
 
+            if not sondes.empty:
+                sondes = self.cleanup_sonde_data(sondes)
             return sondes, now
 
 # Subclass of SondeHubRetriever that gets real data from the live service on the

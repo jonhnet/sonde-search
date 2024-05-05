@@ -42,6 +42,12 @@
   tags: analysis
   image: home-thumbs/landing-calendar.webp
 
+- title: KML Converter for Google Earth
+  url: /analyzers/kml-converter/
+  tags: analysis
+  text: Convert the flight data of a sonde to Google Earth to view it in 3D
+  image: home-thumbs/kml-example-teaser.webp
+
 - title: Receive Site Analyzer
   url: /analyzers/receiver/
   tags: analysis

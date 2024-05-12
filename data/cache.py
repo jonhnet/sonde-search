@@ -35,7 +35,9 @@ def get_sonde_summaries_as_dataframe():
         # load and parse
         dfs.append(pd.read_parquet(os.path.join(dirname, filename)))
 
-    return pd.concat(dfs)
+    # Concatenate the dataframes and create a new index, to ensure each index
+    # entry is unique
+    return pd.concat(dfs).reset_index(drop=True)
 
 
 if __name__ == "__main__":

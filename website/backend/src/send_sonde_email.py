@@ -393,6 +393,7 @@ class EmailNotifier:
         os.makedirs(map_dir, exist_ok=True)
         fig = self.get_email_image(sub, 22, flight, landing)
         fig.savefig(map_local_fn, bbox_inches='tight')
+        plt.close('all')
 
         # all done
         body += '</body></html>'

@@ -197,7 +197,11 @@ class EmailNotifier:
 
     def get_email_text(self, sub, landing):
         # attempt a geocode and DEM lookup
-        geo = geocoder.osm(f"{landing['lat']}, {landing['lon']}")
+        geo = geocoder.osm(
+            [landing['lat'], landing['lon']],
+            method='reverse',
+            headers={'User-Agent': 'jelson@gmail.com'}
+        )
         elev = self.get_elevation(landing['lat'], landing['lon'])
         vel_v = landing.get('vel_v', None)
         vel_h = landing.get('vel_h', None)

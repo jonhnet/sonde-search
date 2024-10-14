@@ -113,6 +113,7 @@ class EmailNotifier:
     def get_email_image(self, sub, size, flight, landing):
         fig, ax = plt.subplots(figsize=(size, size))
         ax.axis('off')
+        ax.set_aspect('equal')
 
         # Plot the balloon's path
         (flight_x, flight_y) = self.to_mercator_xy(flight.lat, flight.lon)
@@ -159,6 +160,7 @@ class EmailNotifier:
         cx.add_basemap(
             ax,
             zoom=zoom,
+            crs='EPSG:3857',
             source=cx.providers.OpenStreetMap.Mapnik,
             #source=cx.providers.CyclOSM,
             #source=cx.providers.Stamen.Terrain,

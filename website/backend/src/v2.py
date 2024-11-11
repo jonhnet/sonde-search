@@ -53,7 +53,7 @@ class SondesearchAPI:
 
     @cherrypy.expose
     def hello(self):
-        return f"{datetime.datetime.now()}: hello from the sondesearch api! pid {os.getpid()}"
+        return f"{datetime.datetime.now()}: hello from the v2 sondesearch api! pid {os.getpid()}"
 
     def get_time(self):
         return Decimal(time.time())
@@ -374,6 +374,7 @@ def mount_server_instance(retriever):
 
 # "application" is the magic function called by Apache's wsgi module or uwsgi
 def application(environ, start_response):
+    mount_server_instance(retriever=util.LiveSondeHub())
     cherrypy.config.update({
         'log.screen': True,
         'environment': 'production',

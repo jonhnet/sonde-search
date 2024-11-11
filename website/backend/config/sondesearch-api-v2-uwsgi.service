@@ -1,0 +1,14 @@
+[Unit]
+Description=Sondesearch API
+StartLimitIntervalSec=0
+
+[Service]
+Restart=always
+RestartSec=30
+WorkingDirectory=/home/jelson/projects/sonde-search/website/backend/config
+ExecStart=/home/jelson/miniforge3/envs/sondesearch/bin/uwsgi --ini ./uwsgi-v2.conf
+User=jelson
+
+[Install]
+WantedBy=multi-user.target
+

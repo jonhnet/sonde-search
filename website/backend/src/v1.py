@@ -53,7 +53,7 @@ class SondesearchAPI:
 
     @cherrypy.expose
     def hello(self):
-        return f"{datetime.datetime.now()}: hello from the sondesearch api! pid {os.getpid()}"
+        return f"{datetime.datetime.now()}: hello from the v1 sondesearch api! pid {os.getpid()}"
 
     def get_time(self):
         return Decimal(time.time())

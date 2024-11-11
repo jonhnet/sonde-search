@@ -6,7 +6,7 @@ StartLimitIntervalSec=0
 Restart=always
 RestartSec=30
 WorkingDirectory=/home/jelson/projects/sonde-search/website/backend/config
-ExecStart=uwsgi --ini ./uwsgi.conf
+ExecStart=/home/jelson/miniforge3/envs/sondesearch/bin/uwsgi --ini ./uwsgi-v1.conf
 User=jelson
 
 [Install]

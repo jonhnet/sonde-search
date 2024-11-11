@@ -43,7 +43,7 @@ title: "Sonde Email Notifier — Unsubscribe"
 
 
 <script>
-let base_url = "https://api.sondesearch.lectrobox.com/api/v1/";
+let base_url = "https://api.sondesearch.lectrobox.com/api/v2/";
 
 function process_failure() {
     $('#loading').attr('hidden', true);

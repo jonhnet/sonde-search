@@ -280,24 +280,11 @@ function process_history(history) {
 }
 
 async function get_state() {
-    // If an auth token was provided in the URL, convert it into a cookie
-    const searchParams = new URLSearchParams(window.location.search);
-    if (searchParams.has('user_token')) {
-        Cookies.set(
-            'notifier_user_token',
-            searchParams.get('user_token'),
-            {
-                expires: 365,
-                domain: '.sondesearch.lectrobox.com',
-            }
-        );
-    }
-
     // If there's been no authorization, redirect to the signup page
     const user_token = Cookies.get('notifier_user_token');
     if (user_token == null) {
         //$('#result').html('no auth');
-        window.location.href = window.location.origin + '/notifier/signup';
+        window.location.href = window.location + '../signup';
     }
 
     // Fetch both the config and the history in parallel

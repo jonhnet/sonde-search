@@ -20,7 +20,7 @@ KML file. Check your browser's "downloads" folder to see the KML file.
 
 <script>
   //let base_url = 'http://home.circlemud.org:8080/';
-  let base_url = 'https://api.sondesearch.lectrobox.com/api/v1/';
+  let base_url = 'https://api.sondesearch.lectrobox.com/api/v2/';
 
   function download() {
     let serial = $('#serial_input_box').val();

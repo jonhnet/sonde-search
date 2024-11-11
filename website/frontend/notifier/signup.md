@@ -23,7 +23,7 @@ authorizes you to configure notifications for that address.
         var email = $('#email_input_box').val();
         $.ajax({
             method: "POST",
-            url: "https://api.sondesearch.lectrobox.com/api/v1/send_validation_email",
+            url: "https://api.sondesearch.lectrobox.com/api/v2/send_validation_email",
 	    data: {
 		'email': email,
 		'url': window.location.href,

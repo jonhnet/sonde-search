@@ -2,6 +2,7 @@
 
 import datetime
 import boto3
+import click
 import json
 import os
 import subprocess
@@ -29,8 +30,9 @@ def get_cloudfront_function(htaccess_path):
     out = template.replace('@REDIRECTS@', json.dumps(redirects, indent=3))
     return out.encode('utf-8')
 
-
-def main():
+@click.command()
+@click.argument('mode', nargs=1, type=click.Choice(['test', 'prod']))
+def main(mode):
     with tempfile.TemporaryDirectory() as tmpdir:
         print(f'Emitting to {tmpdir}')
         date = str(datetime.datetime.now().replace(microsecond=0))
@@ -41,11 +43,17 @@ def main():
 
         os.environ['AWS_PROFILE'] = AWS_PROFILE
 
-        print("Syncing to s3")
-        subprocess.check_call([
-            "aws", "s3", "sync", "--delete", tmpdir, DEST_BUCKET,
-            "--exclude", "vault/*",
-        ])
+        if mode == 'prod':
+            print("Syncing to s3")
+            subprocess.check_call([
+                "aws", "s3", "sync", "--delete", tmpdir, DEST_BUCKET,
+                "--exclude", "vault/*",
+            ])
+        else:
+            print("Copying to s3 test dir")
+            subprocess.check_call([
+                "aws", "s3", "cp", "--recursive", tmpdir, f"{DEST_BUCKET}/TEST/",
+            ])
 
         # upload the htaccess function
         print("Generating new htaccess-ish cloudfront function")

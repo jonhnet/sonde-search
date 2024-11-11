@@ -143,7 +143,7 @@ title: "Sonde Email Notifier — Manage"
 </div>
 
 <script>
-let base_url = "https://api.sondesearch.lectrobox.com/api/v1/";
+let base_url = "https://api.sondesearch.lectrobox.com/api/v2/";
 var tzname = null;
 var units = null;
 var editing_uuid = null;
@@ -283,7 +283,14 @@ async function get_state() {
     // If an auth token was provided in the URL, convert it into a cookie
     const searchParams = new URLSearchParams(window.location.search);
     if (searchParams.has('user_token')) {
-        Cookies.set('notifier_user_token', searchParams.get('user_token'), { expires: 365 });
+        Cookies.set(
+            'notifier_user_token',
+            searchParams.get('user_token'),
+            {
+                expires: 365,
+                domain: '.sondesearch.lectrobox.com',
+            }
+        );
     }
 
     // If there's been no authorization, redirect to the signup page
@@ -294,13 +301,12 @@ async function get_state() {
     }
 
     // Fetch both the config and the history in parallel
-    let config_req = fetch(base_url + 'get_config?' +  new URLSearchParams({
-        'user_token': user_token,
-    }));
-
-    let history_req = fetch(base_url + 'get_notification_history?' +  new URLSearchParams({
-        'user_token': user_token,
-    }));
+    let config_req = fetch(base_url + 'get_config', {
+        credentials: 'include',
+    })
+    let history_req = fetch(base_url + 'get_notification_history', {
+        credentials: 'include',
+    })
 
     let config = await (await config_req).json();
     let history = await (await history_req).json();
@@ -358,7 +364,6 @@ function subscribe() {
     let button = $('#subscribe_button');
     var l = Ladda.create(button[0]);
     l.start();
-    let user_token = Cookies.get('notifier_user_token');
     set_units($('#subscribe_units').val());
     var dist = $('#subscribe_maxdist').val();
     if (units == 'metric') {
@@ -376,7 +381,6 @@ function subscribe() {
     }
 
     sub_data = {
-        'user_token': user_token,
         'units': units,
         'tzname': tzname,
         'lat': lat,
@@ -390,6 +394,9 @@ function subscribe() {
     $.ajax({
         method: 'POST',
         url: base_url + 'subscribe',
+        xhrFields: {
+            withCredentials: true,
+        },
         data: sub_data,
         success: function(result) {
             l.stop();
@@ -410,13 +417,14 @@ function subscribe() {
 function unsubscribe(del_icon, uuid) {
     var l = Ladda.create(del_icon[0]);
     l.start();
-    let user_token = Cookies.get('notifier_user_token');
 
     $.ajax({
         method: 'POST',
         url: base_url + 'managed_unsubscribe',
+        xhrFields: {
+            withCredentials: true,
+        },
         data: {
-            'user_token': user_token,
             'uuid': uuid,
         },
         success: function(result) {

@@ -91,7 +91,7 @@ class Test_v2:
 
     def test_hello(self):
         resp = get('hello')
-        assert 'hello from the sondesearch api' in resp.text
+        assert 'hello from the v2 sondesearch api' in resp.text
 
     # Ensure that for a new user, the email address returned for the
     # token corresponds to the email address we generated the token

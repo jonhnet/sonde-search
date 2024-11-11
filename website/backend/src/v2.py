@@ -42,6 +42,14 @@ class ClientError(cherrypy.HTTPError):
         response.headers.pop('Content-Length', None)
 
 
+def allow_cors(func):
+    def wrapper(*args, **kwargs):
+        cherrypy.response.headers['Access-Control-Allow-Origin'] = 'https://sondesearch.lectrobox.com'
+        cherrypy.response.headers['Access-Control-Allow-Credentials'] = 'true'
+        return func(*args, **kwargs)
+
+    return wrapper
+
 class SondesearchAPI:
     PREFERENCES = ('units', 'tzname')
     VALID_UNITS = ('metric', 'imperial')
@@ -97,9 +105,8 @@ class SondesearchAPI:
 
     @cherrypy.expose
     @cherrypy.tools.json_out()
+    @allow_cors
     def send_validation_email(self, email, url):
-        cherrypy.response.headers['Access-Control-Allow-Origin'] = 'https://sondesearch.lectrobox.com'
-
         print(f'got validation request: e={email}, u={url}')
         user_token = self.get_user_token_from_email(email)
 
@@ -140,9 +147,8 @@ class SondesearchAPI:
 
     @cherrypy.expose
     @cherrypy.tools.json_out()
+    @allow_cors
     def get_config(self):
-        cherrypy.response.headers['Access-Control-Allow-Origin'] = 'https://sondesearch.lectrobox.com'
-
         user_data = self.get_user_data()
 
         # Get preferences
@@ -186,9 +192,8 @@ class SondesearchAPI:
 
     @cherrypy.expose
     @cherrypy.tools.json_out()
+    @allow_cors
     def subscribe(self, **args):
-        cherrypy.response.headers['Access-Control-Allow-Origin'] = 'https://sondesearch.lectrobox.com'
-
         user_data = self.get_user_data()
 
         # Construct the preferences object
@@ -264,9 +269,8 @@ class SondesearchAPI:
     # possible.
     @cherrypy.expose
     @cherrypy.tools.json_out()
+    @allow_cors
     def oneclick_unsubscribe(self, uuid):
-        cherrypy.response.headers['Access-Control-Allow-Origin'] = 'https://sondesearch.lectrobox.com'
-
         res = self._unsubscribe_common(uuid)
         return {
             'success': True,
@@ -280,16 +284,15 @@ class SondesearchAPI:
     # a second RTT to get the new config.
     @cherrypy.expose
     @cherrypy.tools.json_out()
+    @allow_cors
     def managed_unsubscribe(self, uuid):
-        cherrypy.response.headers['Access-Control-Allow-Origin'] = 'https://sondesearch.lectrobox.com'
-
         user_token = self.get_user_token_from_request()
         self._unsubscribe_common(uuid, user_token=user_token)
         return self.get_config()
 
     @cherrypy.expose
+    @allow_cors
     def get_notification_history(self):
-        cherrypy.response.headers['Access-Control-Allow-Origin'] = 'https://sondesearch.lectrobox.com'
         cherrypy.response.headers['Content-Type'] = 'application/json'
 
         NUM_HISTORY_DAYS = 30

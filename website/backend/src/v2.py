@@ -98,7 +98,7 @@ class SondesearchAPI:
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def send_validation_email(self, email, url):
-        cherrypy.response.headers['Access-Control-Allow-Origin'] = '*'
+        cherrypy.response.headers['Access-Control-Allow-Origin'] = 'https://sondesearch.lectrobox.com'
 
         print(f'got validation request: e={email}, u={url}')
         user_token = self.get_user_token_from_email(email)
@@ -141,7 +141,7 @@ class SondesearchAPI:
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def get_config(self):
-        cherrypy.response.headers['Access-Control-Allow-Origin'] = '*'
+        cherrypy.response.headers['Access-Control-Allow-Origin'] = 'https://sondesearch.lectrobox.com'
 
         user_data = self.get_user_data()
 
@@ -187,7 +187,7 @@ class SondesearchAPI:
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def subscribe(self, **args):
-        cherrypy.response.headers['Access-Control-Allow-Origin'] = '*'
+        cherrypy.response.headers['Access-Control-Allow-Origin'] = 'https://sondesearch.lectrobox.com'
 
         user_data = self.get_user_data()
 
@@ -265,7 +265,7 @@ class SondesearchAPI:
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def oneclick_unsubscribe(self, uuid):
-        cherrypy.response.headers['Access-Control-Allow-Origin'] = '*'
+        cherrypy.response.headers['Access-Control-Allow-Origin'] = 'https://sondesearch.lectrobox.com'
 
         res = self._unsubscribe_common(uuid)
         return {
@@ -281,7 +281,7 @@ class SondesearchAPI:
     @cherrypy.expose
     @cherrypy.tools.json_out()
     def managed_unsubscribe(self, uuid):
-        cherrypy.response.headers['Access-Control-Allow-Origin'] = '*'
+        cherrypy.response.headers['Access-Control-Allow-Origin'] = 'https://sondesearch.lectrobox.com'
 
         user_token = self.get_user_token_from_request()
         self._unsubscribe_common(uuid, user_token=user_token)
@@ -289,7 +289,7 @@ class SondesearchAPI:
 
     @cherrypy.expose
     def get_notification_history(self):
-        cherrypy.response.headers['Access-Control-Allow-Origin'] = '*'
+        cherrypy.response.headers['Access-Control-Allow-Origin'] = 'https://sondesearch.lectrobox.com'
         cherrypy.response.headers['Content-Type'] = 'application/json'
 
         NUM_HISTORY_DAYS = 30

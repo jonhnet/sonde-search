@@ -113,7 +113,7 @@ class SondesearchAPI:
         # The client sends its URL to us. Replace the tail (/signup)
         # with "/manage", plus the user token.
         idx = url.index('/signup')
-        next_url = url[0:idx] + f'/manage/?user_token={user_token}'
+        next_url = url[0:idx] + f'/verify/?user_token={user_token}'
         print(f'got signup request from {email}: sending to {next_url}')
 
         # construct the email body

@@ -280,6 +280,13 @@ function process_history(history) {
 }
 
 async function get_state() {
+    // Backcompat for old links: send over to the verify page
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.has('user_token')) {
+        window.location.href = window.location.origin + window.location.pathname + '../verify/' + window.location.search;
+        return;
+    }
+
     // If there's been no authorization, redirect to the signup page
     const user_token = Cookies.get('notifier_user_token');
     if (user_token == null) {

@@ -2,6 +2,7 @@
 
 # Prints a list of all subscriptions
 
+import click
 import sys
 import os
 import pandas as pd
@@ -10,7 +11,13 @@ sys.path.insert(0, os.path.dirname(__file__))
 import table_definitions
 import util
 
-def show_subs():
+@click.command()
+@click.option(
+    '--cancellations',
+    is_flag=True,
+    default=False,
+)
+def show_subs(cancellations):
     t = table_definitions.TableClients()
 
     # Get all user and subscription data
@@ -29,9 +36,15 @@ def show_subs():
             return str(t.floor('s'))
 
     for _, user in users.iterrows():
-        print(f"{user['uuid']} {user['email']}")
         usubs = subs.loc[subs['subscriber'] == user['uuid']]
         usubs = usubs.sort_values(['subscribe_time', 'unsubscribe_time'])
+        is_active = any(usubs['active'])
+        is_cancellation = len(usubs) > 0 and not is_active
+
+        if cancellations and not is_cancellation:
+            continue
+
+        print(f"{user['uuid']} {user['email']}")
         for _, sub in usubs.iterrows():
             s = '     '
             s += '* ' if sub['active'] else '  '

@@ -7,8 +7,8 @@ footer: true
 [Sign up here](manage) to receive email notifications when a radiosonde
 lands near you!
 
-Not many radiosondes land in my home of Seattle. The weather balloons launched
-from Quillayute, about 100 miles (170km) west, usually land somewhere
+Not many radiosondes land near my home town of Seattle. The weather balloons
+launched from Quillayute, about 100 miles (170km) west, usually land somewhere
 inaccessible such as in the Olympic forest or the ocean. Only rarely do they
 come far enough east to land in civilization. My habit was to check
 [SondeHub](https://www.sondehub.org/") to see if the day's flights landed

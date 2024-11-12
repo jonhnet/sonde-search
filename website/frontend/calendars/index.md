@@ -19,11 +19,11 @@ finding sondes, I created a tool that would draw a "map calendar"---12 small
 maps in a grid, one for each month of the year, showing the historical landing
 locations of sondes during that month.
 
-In my home of Seattle, for example, sondes are hard to retrieve. The nearest
-launch site is Quillayute, about 100 miles (170km) west, with the Olympic forest
-in between. Sondes sometimes make it far enough east to be close to
-civilization, but often land in the ocean or deep in inaccessible parts of the
-Olympics.
+In my home town of Seattle, for example, sondes are hard to retrieve. The
+nearest launch site is Quillayute, about 100 miles (170km) west, with the
+Olympic forest in between. Sondes sometimes make it far enough east to be close
+to civilization, but often land in the ocean or deep in inaccessible parts of
+the Olympics.
 
 The [Seattle-area
 calendar](https://sondesearch.lectrobox.com/vault/calendars/seattle-landings-by-month.webp)

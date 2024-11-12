@@ -296,7 +296,7 @@ class SondesearchAPI:
     def get_notification_history(self):
         cherrypy.response.headers['Content-Type'] = 'application/json'
 
-        NUM_HISTORY_DAYS = 30
+        NUM_HISTORY_DAYS = 31
         time_sent_cutoff = Decimal(time.time() - NUM_HISTORY_DAYS * 86400)
 
         # Get the user token

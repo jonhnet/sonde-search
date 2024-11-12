@@ -32,6 +32,7 @@ class GlobalConfig:
 class ClientError(cherrypy.HTTPError):
     def __init__(self, message):
         super().__init__()
+        print(f"client error: {message}")
         self._msg = message.encode('utf8')
 
     def set_response(self):

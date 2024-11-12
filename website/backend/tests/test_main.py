@@ -85,7 +85,7 @@ class Test_v2:
                 'tzname': 'America/Los_Angeles',
             },
             'cookies': {
-                'notifier_user_token': user_token,
+                'notifier_user_token_v2': user_token,
             },
         }
 
@@ -99,7 +99,7 @@ class Test_v2:
     def test_get_config_newuser(self):
         addr = 'test@foo.bar'
         user_token = self.apiserver.get_user_token_from_email(addr)
-        resp = get('get_config', cookies={'notifier_user_token': user_token}).json()
+        resp = get('get_config', cookies={'notifier_user_token_v2': user_token}).json()
         assert resp.pop('email') == addr
         assert resp.pop('prefs') == {}
         assert resp.pop('subs') == []
@@ -107,7 +107,7 @@ class Test_v2:
 
         # Also test to ensure we get an empty notification history
         history = get('get_notification_history', cookies={
-            'notifier_user_token': user_token,
+            'notifier_user_token_v2': user_token,
         }).json()
         assert history == []
 
@@ -147,12 +147,12 @@ class Test_v2:
         assert resp['prefs']['tzname'] == test_sub['tzname']
 
         # Get config and ensure we get the same config block back again
-        resp2 = get('get_config', cookies={'notifier_user_token': user_token}).json()
+        resp2 = get('get_config', cookies={'notifier_user_token_v2': user_token}).json()
         assert resp == resp2
 
         # Ensure we get an empty notification history
         history = get('get_notification_history', cookies={
-            'notifier_user_token': user_token,
+            'notifier_user_token_v2': user_token,
         }).json()
         assert history == []
 
@@ -160,14 +160,14 @@ class Test_v2:
         resp3 = post('managed_unsubscribe', data={
             'uuid': sub['uuid'],
         }, cookies={
-            'notifier_user_token': user_token,
+            'notifier_user_token_v2': user_token,
         }).json()
 
         assert len(resp3['subs']) == 0
         assert resp3['email'] == addr
 
         # Get config again, ensure it's the same as the unsubscribe response
-        resp4 = get('get_config', cookies={'notifier_user_token': user_token}).json()
+        resp4 = get('get_config', cookies={'notifier_user_token_v2': user_token}).json()
         assert resp3 == resp4
 
     def test_unsubscribe_without_cookies(self, server):
@@ -185,25 +185,25 @@ class Test_v2:
         })
 
         # Make sure the subscription is still there
-        resp3 = get('get_config', cookies={'notifier_user_token': user_token}).json()
+        resp3 = get('get_config', cookies={'notifier_user_token_v2': user_token}).json()
         assert len(resp3['subs']) == 1
 
         # Unsubscribe with wrong cookie
         post('managed_unsubscribe', expected_status=500, data={
             'uuid': sub['uuid'],
         }, cookies={
-            'notifier_user_token': 'foo'
+            'notifier_user_token_v2': 'foo'
         })
-        resp4 = get('get_config', cookies={'notifier_user_token': user_token}).json()
+        resp4 = get('get_config', cookies={'notifier_user_token_v2': user_token}).json()
         assert len(resp4['subs']) == 1
 
         # Unsubscribe with right cookie
         post('managed_unsubscribe', expected_status=200, data={
             'uuid': sub['uuid'],
         }, cookies={
-            'notifier_user_token': user_token,
+            'notifier_user_token_v2': user_token,
         })
-        resp5 = get('get_config', cookies={'notifier_user_token': user_token}).json()
+        resp5 = get('get_config', cookies={'notifier_user_token_v2': user_token}).json()
         assert len(resp5['subs']) == 0
 
     def test_edit_subscription(self, server):
@@ -254,7 +254,7 @@ class Test_v2:
         # lookup
         user_token2 = self.apiserver.get_user_token_from_email(addr.upper())
 
-        resp2 = get('get_config', cookies={'notifier_user_token': user_token2}).json()
+        resp2 = get('get_config', cookies={'notifier_user_token_v2': user_token2}).json()
         assert resp == resp2
 
     def test_multiple_subscriptions(self, server):
@@ -282,11 +282,11 @@ class Test_v2:
                 post('managed_unsubscribe', data={
                     'uuid': sub['uuid'],
                 }, cookies={
-                    'notifier_user_token': user_token,
+                    'notifier_user_token_v2': user_token,
                 })
 
         # make sure 2 remains
-        resp = get('get_config', cookies={'notifier_user_token': user_token}).json()
+        resp = get('get_config', cookies={'notifier_user_token_v2': user_token}).json()
         assert len(resp['subs']) == 1
         assert resp['subs'][0]['lat'] == 2
         assert resp['subs'][0]['lon'] == 2
@@ -360,7 +360,7 @@ class Test_v2:
         assert len(resp2['subs']) == 2
 
         # make sure there are two subscriptons returned from get_config
-        resp3 = get('get_config', cookies={'notifier_user_token': user_token}).json()
+        resp3 = get('get_config', cookies={'notifier_user_token_v2': user_token}).json()
         assert len(resp3['subs']) == 2
 
         # unsubscribe from sub1 using the uuid-only API
@@ -375,7 +375,7 @@ class Test_v2:
 
         # use the authorized-user management api to get the config;
         # make sure sub1 is gone and sub2 is still there
-        resp5 = get('get_config', cookies={'notifier_user_token': user_token}).json()
+        resp5 = get('get_config', cookies={'notifier_user_token_v2': user_token}).json()
         assert resp5['email'] == addr
         assert len(resp5['subs']) == 1
         assert resp5['subs'][0]['lat'] == sub2['data']['lat']
@@ -398,13 +398,13 @@ class Test_v2:
         post('subscribe', **sub2).json()
 
         # verify user 1
-        resp1 = get('get_config', cookies={'notifier_user_token': user_token1}).json()
+        resp1 = get('get_config', cookies={'notifier_user_token_v2': user_token1}).json()
         assert resp1['email'] == addr1
         assert len(resp1['subs']) == 1
         assert resp1['subs'][0]['max_distance_mi'] == 111
 
         # verify user 2
-        resp1 = get('get_config', cookies={'notifier_user_token': user_token2}).json()
+        resp1 = get('get_config', cookies={'notifier_user_token_v2': user_token2}).json()
         assert resp1['email'] == addr2
         assert len(resp1['subs']) == 1
         assert resp1['subs'][0]['max_distance_mi'] == 222
@@ -453,7 +453,7 @@ class Test_EmailNotifier:
             'units': 'imperial',
             'tzname': 'America/Los_Angeles',
         }, cookies={
-            'notifier_user_token': user_token,
+            'notifier_user_token_v2': user_token,
         })
         return addr
 
@@ -508,7 +508,7 @@ class Test_EmailNotifier:
 
         # Also test to ensure we get notification history
         history = post('get_notification_history', cookies={
-            'notifier_user_token': self.user_tokens[addr],
+            'notifier_user_token_v2': self.user_tokens[addr],
         }).json()
         print(json.dumps(history, indent=2))
         assert len(history) == len(EXPECTED_SONDES)

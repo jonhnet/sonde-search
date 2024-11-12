@@ -102,7 +102,10 @@ class SondesearchAPI:
 
         if len(rv) == 0:
             raise ClientError(f"unknown user token {user_token}")
-        return rv[0]
+        assert len(rv) == 1
+        rv = rv[0]
+        print(f"Got user data for uuid {rv['uuid']}, email {rv['email']}")
+        return rv
 
     @cherrypy.expose
     @cherrypy.tools.json_out()
@@ -227,6 +230,8 @@ class SondesearchAPI:
         if sub_item['max_distance_mi'] <= 0:
             raise ClientError('max_distance_mi must be positive')
 
+        print(f"subscriber {sub_item['subscriber']}: new subscription {sub_item['uuid']}")
+
         self.tables.users.put_item(Item=user_data)
         self.tables.subscriptions.put_item(Item=sub_item)
 
@@ -234,6 +239,7 @@ class SondesearchAPI:
         # Edits set the 'replace_uuid' property to indicate which subscription
         # should be cancelled one this one is successfully created.
         if 'replace_uuid' in args:
+            print(f"deleting old subscription {args['replace_uuid']}")
             self._unsubscribe_common(args['replace_uuid'])
 
         return self.get_config()
@@ -273,6 +279,7 @@ class SondesearchAPI:
     @allow_lectrobox_cors
     def oneclick_unsubscribe(self, uuid):
         res = self._unsubscribe_common(uuid)
+        print(f"one-click unsubscribe of subscription {uuid}")
         return {
             'success': True,
             'cancelled_sub_lat': res['cancelled_sub']['lat'],
@@ -288,6 +295,7 @@ class SondesearchAPI:
     @allow_lectrobox_cors
     def managed_unsubscribe(self, uuid):
         user_token = self.get_user_token_from_request()
+        print(f"subscriber {user_token} unsubscribing from subscription {uuid}")
         self._unsubscribe_common(uuid, user_token=user_token)
         return self.get_config()
 

@@ -42,7 +42,7 @@ class ClientError(cherrypy.HTTPError):
         response.headers.pop('Content-Length', None)
 
 
-def allow_cors(func):
+def allow_lectrobox_cors(func):
     def wrapper(*args, **kwargs):
         cherrypy.response.headers['Access-Control-Allow-Origin'] = 'https://sondesearch.lectrobox.com'
         cherrypy.response.headers['Access-Control-Allow-Credentials'] = 'true'
@@ -105,7 +105,7 @@ class SondesearchAPI:
 
     @cherrypy.expose
     @cherrypy.tools.json_out()
-    @allow_cors
+    @allow_lectrobox_cors
     def send_validation_email(self, email, url):
         print(f'got validation request: e={email}, u={url}')
         user_token = self.get_user_token_from_email(email)
@@ -147,7 +147,7 @@ class SondesearchAPI:
 
     @cherrypy.expose
     @cherrypy.tools.json_out()
-    @allow_cors
+    @allow_lectrobox_cors
     def get_config(self):
         user_data = self.get_user_data()
 
@@ -192,7 +192,7 @@ class SondesearchAPI:
 
     @cherrypy.expose
     @cherrypy.tools.json_out()
-    @allow_cors
+    @allow_lectrobox_cors
     def subscribe(self, **args):
         user_data = self.get_user_data()
 
@@ -269,7 +269,7 @@ class SondesearchAPI:
     # possible.
     @cherrypy.expose
     @cherrypy.tools.json_out()
-    @allow_cors
+    @allow_lectrobox_cors
     def oneclick_unsubscribe(self, uuid):
         res = self._unsubscribe_common(uuid)
         return {
@@ -284,14 +284,14 @@ class SondesearchAPI:
     # a second RTT to get the new config.
     @cherrypy.expose
     @cherrypy.tools.json_out()
-    @allow_cors
+    @allow_lectrobox_cors
     def managed_unsubscribe(self, uuid):
         user_token = self.get_user_token_from_request()
         self._unsubscribe_common(uuid, user_token=user_token)
         return self.get_config()
 
     @cherrypy.expose
-    @allow_cors
+    @allow_lectrobox_cors
     def get_notification_history(self):
         cherrypy.response.headers['Content-Type'] = 'application/json'
 
@@ -381,6 +381,7 @@ def application(environ, start_response):
     cherrypy.config.update({
         'log.screen': True,
         'environment': 'production',
+        'tools.proxy.on': True,
     })
     return cherrypy.tree(environ, start_response)
 

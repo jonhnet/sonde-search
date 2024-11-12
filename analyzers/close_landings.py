@@ -24,6 +24,7 @@ def get_close_landings(lat_min, lat_max, lon_min, lon_max):
     near = near.loc[(near.lon >= lon_min) & (near.lon < lon_max)]
 
     dfs = []
+    
     for i in range(len(near)):
         nearpairs = get_near_pairs(near, i)
         if not nearpairs.empty:

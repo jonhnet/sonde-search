@@ -288,7 +288,10 @@ async function get_state() {
     }
 
     // If there's been no authorization, redirect to the signup page
-    const user_token = Cookies.get('notifier_user_token');
+    const user_token = Cookies.get('notifier_user_token_v2', {
+        domain: '.sondesearch.lectrobox.com',
+    })
+
     if (user_token == null) {
         //$('#result').html('no auth');
         window.location.href = window.location + '../signup';

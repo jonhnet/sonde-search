@@ -7,15 +7,22 @@ function OnLoadTrigger() {
     const searchParams = new URLSearchParams(window.location.search);
     if (searchParams.has('user_token')) {
         Cookies.remove('notifier_user_token');
+        Cookies.remove('notifier_user_token_v2');
         Cookies.remove(
             'notifier_user_token',
             {
                 domain: '.sondesearch.lectrobox.com',
             }
         )
+        Cookies.remove(
+            'notifier_user_token_v2',
+            {
+                domain: '.sondesearch.lectrobox.com',
+            }
+        )
 
         Cookies.set(
-            'notifier_user_token',
+            'notifier_user_token_v2',
             searchParams.get('user_token'),
             {
                 expires: 365,

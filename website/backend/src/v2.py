@@ -89,10 +89,10 @@ class SondesearchAPI:
         return user_item['uuid']
 
     def get_user_token_from_request(self):
-        if 'notifier_user_token' not in cherrypy.request.cookie:
+        if 'notifier_user_token_v2' not in cherrypy.request.cookie:
             raise ClientError("no user token in request cookies")
 
-        return cherrypy.request.cookie['notifier_user_token'].value
+        return cherrypy.request.cookie['notifier_user_token_v2'].value
 
     def get_user_data(self):
         user_token = self.get_user_token_from_request()

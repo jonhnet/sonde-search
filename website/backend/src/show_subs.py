@@ -20,11 +20,11 @@ def show_subs():
 
     subs = util.dynamodb_to_dataframe(t.subscriptions.scan)
     for c in ('subscribe_time', 'unsubscribe_time'):
-        subs[c] = pd.to_datetime(subs[c].astype(float).fillna(0), unit='s')
+        subs[c] = pd.to_datetime(subs[c].astype(float).fillna(0), unit='s', utc=True).dt.tz_convert(tz='US/Pacific')
 
     def print_time(t):
         if pd.isna(t) or t.year < 2000:
-            return ' ' * 19
+            return ' ' * 25
         else:
             return str(t.floor('s'))
 

@@ -311,11 +311,11 @@ async function get_state() {
 
     // If there's been no authorization, redirect to the signup page
 {% if site.dev_mode == 1 %}
+    const user_token = Cookies.get('notifier_user_token_v2');
+{% else %}
     const user_token = Cookies.get('notifier_user_token_v2', {
         domain: '.sondesearch.lectrobox.com',
     });
-{% else %}
-    const user_token = Cookies.get('notifier_user_token_v2');
 {% endif %}
 
     if (user_token == null) {

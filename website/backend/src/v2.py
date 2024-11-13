@@ -18,7 +18,7 @@ import constants
 import table_definitions
 import util
 
-DEFAULT_HOST = 'https://sondesearch.lectrobox.com/'
+DEFAULT_HOST = 'https://sondesearch.lectrobox.com'
 DEV_HOST = 'http://localhost:4000'
 
 # A placeholder for expensive setup that should only be done once. This

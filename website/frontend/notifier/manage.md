@@ -242,7 +242,7 @@ function process_config(config) {
         let link = "../map/?lat=" + this['lat'];
         link += "&lon=" + this['lon'];
         link += "&r=" + mi_to_m(this['max_distance_mi']);
-        let map_inner_button = $('<img src="/images/map.svg" width="20" />');
+        let map_inner_button = $('<img src="/images/map.svg" width="20" style="cursor: pointer"/>');
         map_inner_button.click(function() { window.open(link, 'Notification Area', 'width=600,height=600')})
         row.append($('<td class="text-center">').html(map_inner_button));
 

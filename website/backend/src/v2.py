@@ -252,6 +252,7 @@ class SondesearchAPI:
     # the full config after unsubscription has been processed.
     # If optional user token is given, ensure it matches.
     def _unsubscribe_common(self, uuid, user_token=None):
+        print(f"Unsubscribe headers: {cherrypy.request.headers}")
         # Unsubscribe
         args = {
             'Key': {

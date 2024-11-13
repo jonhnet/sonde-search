@@ -9,9 +9,9 @@ layout: compress
 <body id="top-of-page" class="{{ layout.format }}" onload="if (typeof OnLoadTrigger === 'function') { OnLoadTrigger(); }">
         {% unless page.skip_nav %}
         {% include _navigation.html %}
+        {% include _masthead.html %}
         {% endunless %}
 
-        {% include _masthead.html %}
         {{ content }}
 
         {% if page.footer %}

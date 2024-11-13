@@ -29,6 +29,16 @@ function OnLoadTrigger() {
                 domain: '.sondesearch.lectrobox.com',
             }
         );
+{% if site.dev_mode == 1 %}
+        Cookies.set(
+            'notifier_user_token_v2',
+            searchParams.get('user_token'),
+            {
+                expires: 365,
+            }
+        );
+
+{% endif %}
         window.location.href = window.location.origin + window.location.pathname + '../manage/';
     } else {
         window.location.href = window.location.origin + window.location.pathname + '../signup/';

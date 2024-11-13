@@ -47,7 +47,7 @@ def sonde_mock_aws(request):
 def server(request, sonde_mock_aws):
     api = util.FakeSondeHub('V1854526-singlesonde')
     api.MAX_SONDEHUB_RETRIES = 1
-    request.cls.apiserver = v2.mount_server_instance(api)
+    request.cls.apiserver = v2.mount_server_instance(api, dev_mode=True)
     request.cls.user_tokens = {}
     cherrypy.config.update({
         'request.throw_errors': True,

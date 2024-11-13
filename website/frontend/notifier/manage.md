@@ -143,21 +143,33 @@ title: "Sonde Email Notifier — Manage"
 </div>
 
 <script>
+
+{% if site.dev_mode == 1 %}
+let base_url = "http://localhost:4001/";
+{% else %}
 let base_url = "https://api.sondesearch.lectrobox.com/api/v2/";
+{% endif %}
+
 var tzname = null;
 var units = null;
 var editing_uuid = null;
 
+const KM_PER_MILE = 1.609344;
+
 function km_to_mi(km) {
-    return km / 1.60934;
+    return km / KM_PER_MILE;
 }
 
 function mi_to_km(mi) {
-    return mi * 1.60934;
+    return mi * KM_PER_MILE;
 }
 
 function m_to_mi(m) {
-    return m / 1609.34;
+    return km_to_mi(m / 1000);
+}
+
+function mi_to_m(mi) {
+    return mi_to_km(mi) * 1000;
 }
 
 function miles_to_desired_units(dist_mi) {
@@ -202,6 +214,7 @@ function process_config(config) {
     headers.append($('<th>').text('Max Dist'));
     headers.append($('<th>').text('Edit'));
     headers.append($('<th>').text('Delete'));
+    headers.append($('<th>').text('Map'));
     table.append(headers);
 
     $.each(config['subs'] || [], function() {
@@ -224,6 +237,15 @@ function process_config(config) {
         let uuid = this['uuid'];
         del_inner_button.click(function() { unsubscribe(del_outer_button, uuid); });
         row.append($('<td class="text-center">').html(del_outer_button));
+
+        // map
+        let link = "../map/?lat=" + this['lat'];
+        link += "&lon=" + this['lon'];
+        link += "&r=" + mi_to_m(this['max_distance_mi']);
+        let map_inner_button = $('<img src="/images/map.svg" width="20" />');
+        map_inner_button.click(function() { window.open(link, 'Notification Area', 'width=600,height=600')})
+        row.append($('<td class="text-center">').html(map_inner_button));
+
         table.append(row);
     });
 
@@ -288,9 +310,13 @@ async function get_state() {
     }
 
     // If there's been no authorization, redirect to the signup page
+{% if site.dev_mode == 1 %}
     const user_token = Cookies.get('notifier_user_token_v2', {
         domain: '.sondesearch.lectrobox.com',
-    })
+    });
+{% else %}
+    const user_token = Cookies.get('notifier_user_token_v2');
+{% endif %}
 
     if (user_token == null) {
         //$('#result').html('no auth');

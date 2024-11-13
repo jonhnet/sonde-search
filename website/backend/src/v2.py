@@ -18,16 +18,17 @@ import constants
 import table_definitions
 import util
 
-EMAIL_DESTINATION = 'https://sondesearch.lectrobox.com/'
+DEFAULT_HOST = 'https://sondesearch.lectrobox.com/'
+DEV_HOST = 'http://localhost:4000'
 
 # A placeholder for expensive setup that should only be done once. This
 # iteration of the program no longer has any such setup so this now has nothing
 # in it.
 class GlobalConfig:
-    def __init__(self, retriever):
+    def __init__(self, retriever, dev_mode):
         print('Global setup')
         self.retriever = retriever
-
+        self.dev_mode = dev_mode
 
 class ClientError(cherrypy.HTTPError):
     def __init__(self, message):
@@ -43,14 +44,6 @@ class ClientError(cherrypy.HTTPError):
         response.headers.pop('Content-Length', None)
 
 
-def allow_lectrobox_cors(func):
-    def wrapper(*args, **kwargs):
-        cherrypy.response.headers['Access-Control-Allow-Origin'] = 'https://sondesearch.lectrobox.com'
-        cherrypy.response.headers['Access-Control-Allow-Credentials'] = 'true'
-        return func(*args, **kwargs)
-
-    return wrapper
-
 class SondesearchAPI:
     PREFERENCES = ('units', 'tzname')
     VALID_UNITS = ('metric', 'imperial')
@@ -59,6 +52,17 @@ class SondesearchAPI:
     def __init__(self, global_config: GlobalConfig):
         self._g = global_config
         self.tables = table_definitions.TableClients()
+
+    @staticmethod
+    def allow_lectrobox_cors(func):
+        def wrapper(*args, **kwargs):
+            self = args[0]
+            origin = DEV_HOST if self._g.dev_mode else DEFAULT_HOST
+            cherrypy.response.headers['Access-Control-Allow-Origin'] = origin
+            cherrypy.response.headers['Access-Control-Allow-Credentials'] = 'true'
+            return func(*args, **kwargs)
+
+        return wrapper
 
     @cherrypy.expose
     def hello(self):
@@ -172,9 +176,9 @@ class SondesearchAPI:
         for item in db_items['Items']:
             subs.append({
                 'uuid': item['uuid'],
-                'lat': item['lat'],
-                'lon': item['lon'],
-                'max_distance_mi': item['max_distance_mi'],
+                'lat': float(item['lat']),
+                'lon': float(item['lon']),
+                'max_distance_mi': float(item['max_distance_mi']),
             })
 
         # Return both preferences and subscriptions
@@ -282,8 +286,8 @@ class SondesearchAPI:
         print(f"one-click unsubscribe of subscription {uuid}")
         return {
             'success': True,
-            'cancelled_sub_lat': res['cancelled_sub']['lat'],
-            'cancelled_sub_lon': res['cancelled_sub']['lon'],
+            'cancelled_sub_lat': float(res['cancelled_sub']['lat']),
+            'cancelled_sub_lon': float(res['cancelled_sub']['lon']),
         }
 
     # Management portal unsubscribe where a user token is provided. If
@@ -375,10 +379,10 @@ class SondesearchAPI:
 global_config = None
 
 # This is called both by the uwsgi path, via application(), and the unit test
-def mount_server_instance(retriever):
+def mount_server_instance(retriever, dev_mode):
     global global_config
     if not global_config:
-        global_config = GlobalConfig(retriever=retriever)
+        global_config = GlobalConfig(retriever=retriever, dev_mode=dev_mode)
 
     apiserver = SondesearchAPI(global_config)
     cherrypy.tree.mount(apiserver)
@@ -386,7 +390,7 @@ def mount_server_instance(retriever):
 
 # "application" is the magic function called by Apache's wsgi module or uwsgi
 def application(environ, start_response):
-    mount_server_instance(retriever=util.LiveSondeHub())
+    mount_server_instance(retriever=util.LiveSondeHub(), dev_mode=False)
     cherrypy.config.update({
         'log.screen': True,
         'environment': 'production',
@@ -398,6 +402,13 @@ def application(environ, start_response):
 if __name__ == "__main__":
     cherrypy.config.update({
         'log.screen': True,
+        'server.socket_port': 4001,
     })
     cherrypy.server.socket_host = '::'
-    cherrypy.quickstart(mount_server_instance(retriever=util.LiveSondeHub()), '/')
+    cherrypy.quickstart(
+        mount_server_instance(
+            retriever=util.LiveSondeHub(),
+            dev_mode=True,
+        ),
+        '/'
+    )

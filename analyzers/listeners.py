@@ -28,11 +28,14 @@ def get_listeners(sondeid):
         sys.exit(f"Can not find sonde '{sondeid}'")
     if live:
         print("Warning: using data api that only returns one listener per data point")
+
+    # Get only the first instance of each frame returned by each uploader
+    df = df.groupby(['uploader_callsign', 'frame']).first().reset_index()
+
     df['date'] = pd.to_datetime(df['datetime']).round('s')
     df['time'] = df['date'].dt.strftime("%H:%M:%SZ")
     df['alt'] = df['alt'].astype(int)
     df['vel_v'] = df['vel_v'].astype(float).round(1)
-    df = df.sort_values('frame')
     agg = df.groupby('uploader_callsign').agg({
         'frame': ['first', 'last', 'count'],
         'time': ['first', 'last'],

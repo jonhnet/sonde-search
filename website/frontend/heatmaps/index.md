@@ -6,19 +6,19 @@ footer: true
 
 <div class="lec-right-image">
   <div class="lec-captioned-image">
-    <a href="https://sondesearch.lectrobox.com/vault/heatmaps/worldwide-sonde-landings-2021-2023.html">
+    <a href="https://sondesearch.lectrobox.com/vault/heatmaps/worldwide-sonde-landings-2021-2024.html">
        <img width="400" src="images/worldwide.webp" />
     </a>
-    <div class="caption">Worldwide sonde landings tracked by SondeHub, 2021-2023</div>
+    <div class="caption">Worldwide sonde landings tracked by SondeHub, 2021-2024</div>
   </div>
 </div>
 
 <div class="lec-right-image" style="clear: right">
   <div class="lec-captioned-image">
-    <a href="https://sondesearch.lectrobox.com/vault/heatmaps/us-sonde-landings-2021-2023.html">
+    <a href="https://sondesearch.lectrobox.com/vault/heatmaps/us-sonde-landings-2021-2024.html">
        <img width="400" src="images/usa.webp" />
     </a>
-    <div class="caption">U.S. sonde landings tracked by SondeHub, 2021-2023</div>
+    <div class="caption">U.S. sonde landings tracked by SondeHub, 2021-2024</div>
   </div>
 </div>
 
@@ -27,7 +27,7 @@ sondes typically land. SondeHub shows you where *today's* sonde landed, but is
 that typical? I drew heatmaps to answer that question.
 
 Heatmaps are interactive maps showing you the last-tracked location of every
-sonde reported to SondeHub from 2021 to 2023. A sonde might land a few miles
+sonde reported to SondeHub from 2021 to 2024. A sonde might land a few miles
 from its last-tracked location, but the maps are still a great way to get a
 sense for the parts of the world where sondes tend to land.
 

@@ -4,21 +4,25 @@ import folium
 from folium.plugins import HeatMap
 import branca.element
 import sys
+
 sys.path.insert(0, "..")
 from data.cache import get_sonde_summaries_as_dataframe, years_covered
 
-EXTRA_STYLE = branca.element.Element('''
+EXTRA_STYLE = branca.element.Element(
+    """
 <style>
   .leaflet-heatmap-layer {
      opacity: 0.7;
   }
 </style>
-''')
+"""
+)
+
 
 def draw_map(df, name, **kwargs):
     # Draw heatmap
     fmap = folium.Map(**kwargs)
-    hm = HeatMap(df[['lat', 'lon']])
+    hm = HeatMap(df[["lat", "lon"]])
     hm.add_to(fmap)
     fmap.get_root().header.add_child(EXTRA_STYLE)
     fmap.save(name)
@@ -60,7 +64,10 @@ def main():
     ndf = ndf.loc[(ndf.lon > -125) & (ndf.lon < -100)]
     draw_map(
         ndf,
-        f"west-coast-sonde-landings-{range_string}.html", location=[40, -120], zoom_start=4,)
+        f"west-coast-sonde-landings-{range_string}.html",
+        location=[40, -120],
+        zoom_start=4,
+    )
 
 
 if __name__ == "__main__":

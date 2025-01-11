@@ -36,10 +36,10 @@ MAPS = {
 def get_filtered_data(df, config):
     # get local landings
     df = df.loc[
-        (df["lat"] >= config["bottomleft"][0]) &
-        (df["lat"] <= config["topright"][0]) &
-        (df["lon"] >= config["bottomleft"][1]) &
-        (df["lon"] <= config["topright"][1])
+        (df["lat"] >= config["bottomleft"][0])
+        & (df["lat"] <= config["topright"][0])
+        & (df["lon"] >= config["bottomleft"][1])
+        & (df["lon"] <= config["topright"][1])
     ]
     print("Filtered")
 
@@ -98,20 +98,18 @@ def draw_year_comparison(df, title, config, month):
     years = years_covered(gdf)
 
     # make a vertical strip of plots
-    fig, axs = plt.subplots(len(years), 1, figsize=(10, len(years)*10))
+    fig, axs = plt.subplots(len(years), 1, figsize=(10, len(years) * 10))
     for i, year in enumerate(years):
         ax = axs[i]
 
         # pull out just landings from the year being plotted
-        d = gdf.loc[
-            (gdf["datetime"].dt.year == year) &
-            (gdf["month"] == month)
-        ]
+        d = gdf.loc[(gdf["datetime"].dt.year == year) & (gdf["month"] == month)]
 
         print(f"{title:10s}: {year}: {len(d)} landings")
         draw_one_map(d, ax, f"{calendar.month_name[month]} {year}")
 
     write_fig(fig, f"{title}-landings-by-year.")
+
 
 def main():
     df = get_sonde_summaries_as_dataframe()

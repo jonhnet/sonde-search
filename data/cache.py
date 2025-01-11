@@ -40,6 +40,14 @@ def get_sonde_summaries_as_dataframe():
     return pd.concat(dfs).reset_index(drop=True)
 
 
+def years_covered(df):
+    # Get years that have the bulk of the data points
+    year_counts = df["datetime"].dt.year.value_counts()
+    peak = year_counts.max()
+    years = year_counts.loc[year_counts > peak * .001].index
+    return sorted(years)
+    
+
 if __name__ == "__main__":
     df = get_sonde_summaries_as_dataframe()
     print(df)

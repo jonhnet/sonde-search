@@ -11,7 +11,7 @@ import sys
 cx.set_cache_dir("/tmp/cached-tiles")
 
 sys.path.insert(0, "..")
-from data.cache import get_sonde_summaries_as_dataframe
+from data.cache import get_sonde_summaries_as_dataframe, years_covered
 
 MAPS = {
     "spokane": {
@@ -95,11 +95,7 @@ def draw_calendar(df, title, config):
 # 1-indexed month
 def draw_year_comparison(df, title, config, month):
     gdf = get_filtered_data(df, config)
-
-    # Get years that have at least 20 data points
-    year_counts = gdf["datetime"].dt.year.value_counts()
-    years = year_counts.loc[year_counts > 100].index
-    years = sorted(years)
+    years = years_covered(gdf)
 
     # make a vertical strip of plots
     fig, axs = plt.subplots(len(years), 1, figsize=(10, len(years)*10))

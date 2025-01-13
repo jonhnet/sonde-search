@@ -24,11 +24,17 @@ frameworks.
 
 I've broken the summary data into files per year for easier downloading:
 
-* [2021 Summaries](https://sondesearch.lectrobox.com/vault/sonde-summaries/parquet/sonde-summaries-2021.parquet)
+* [2021
+  Summaries](https://sondesearch.lectrobox.com/vault/sonde-summaries/parquet/sonde-summaries-2021.parquet) [42MB]
 
-* [2022 Summaries](https://sondesearch.lectrobox.com/vault/sonde-summaries/parquet/sonde-summaries-2022.parquet)
+* [2022
+  Summaries](https://sondesearch.lectrobox.com/vault/sonde-summaries/parquet/sonde-summaries-2022.parquet) [60MB]
 
-* [2023 Summaries](https://sondesearch.lectrobox.com/vault/sonde-summaries/parquet/sonde-summaries-2023.parquet)
+* [2023
+  Summaries](https://sondesearch.lectrobox.com/vault/sonde-summaries/parquet/sonde-summaries-2023.parquet) [69MB]
+
+* [2024
+  Summaries](https://sondesearch.lectrobox.com/vault/sonde-summaries/parquet/sonde-summaries-2023.parquet) [73MB]
 
 ## Example Usage
 

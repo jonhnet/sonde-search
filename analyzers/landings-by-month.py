@@ -30,6 +30,10 @@ MAPS = {
         "bottomleft": (18, -162),
         "topright": (23, -152),
     },
+    "madison": {
+        "bottomleft": (40, -93),
+        "topright": (46, -86),
+    },
 }
 
 
@@ -124,7 +128,7 @@ def main():
 
     for title, config in MAPS.items():
         draw_calendar(df, title, config)
-        draw_year_comparison(df, title, config, month=12)
+        #draw_year_comparison(df, title, config, month=12)
 
 
 if __name__ == "__main__":

@@ -43,3 +43,4 @@ The four examples available are:
 * [Spokane, WA](https://sondesearch.lectrobox.com/vault/calendars/spokane-landings-by-month.webp)
 * [Kitchener, Ontario](https://sondesearch.lectrobox.com/vault/calendars/kitchener-landings-by-month.webp)
 * [Hilo, Hawaii](https://sondesearch.lectrobox.com/vault/calendars/hilo-landings-by-month.webp)
+* [Madison, WI](https://sondesearch.lectrobox.com/vault/calendars/madison-landings-by-month.webp)

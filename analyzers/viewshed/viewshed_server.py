@@ -297,12 +297,6 @@ class ViewshedServer:
                 <b>💡 Tip:</b> Click anywhere on the map to set the antenna location
             </div>
 
-            <div class="presets">
-            <button class="preset-btn" onclick="loadPreset('quick')">Quick Preview</button>
-            <button class="preset-btn" onclick="loadPreset('standard')">Standard</button>
-            <button class="preset-btn" onclick="loadPreset('detailed')">High Detail</button>
-        </div>
-
         <form id="viewshedForm" onsubmit="submitForm(event)">
             <div class="form-group" style="grid-column: 1 / -1;">
                 <label>
@@ -334,7 +328,6 @@ class ViewshedServer:
             </div>
 
             <div class="advanced">
-                <div class="section-title">Advanced Options</div>
                 <div class="form-grid">
                     <div class="form-group">
                         <label>

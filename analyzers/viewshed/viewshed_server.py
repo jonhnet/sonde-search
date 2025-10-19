@@ -17,6 +17,7 @@ import json
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import numpy as np
 import os
 import sys
 import threading
@@ -376,6 +377,7 @@ class ViewshedServer:
             </div>
 
             <button type="submit" id="submitBtn">Compute Viewshed</button>
+            <button type="button" id="hillClimbBtn" onclick="startHillClimb()" style="background: #9C27B0; margin-top: 10px;">Hill Climb (Optimize)</button>
             <button type="button" id="favoriteBtn" onclick="addFavorite()" style="background: #2196F3; margin-top: 10px;">Add to Favorites</button>
             <button type="button" id="debugTilesBtn" onclick="toggleCachedTiles()" style="background: #FF9800; margin-top: 10px;">Show Cached Tiles</button>
         </form>
@@ -400,6 +402,7 @@ class ViewshedServer:
         let viewshedLayer = null;
 
         let selectedMarker = null;
+        let searchMarker = null;  // Marker showing current hill climb search location
 
         // Load saved state from localStorage
         function loadSavedState() {
@@ -653,6 +656,16 @@ class ViewshedServer:
             // Show results panel
             resultsPanel.classList.remove('hidden');
 
+            // If this is a hill climb result, update the marker and input fields with the optimized location
+            if (data.result && data.result.optimized_lat && data.result.optimized_lon) {
+                // Update the input fields
+                updateInputFromLatLon(data.result.optimized_lat, data.result.optimized_lon);
+                // Move the red marker to the optimized location
+                if (selectedMarker) {
+                    selectedMarker.setLatLng([data.result.optimized_lat, data.result.optimized_lon]);
+                }
+            }
+
             // Clear previous viewshed data
             if (viewshedLayer) {
                 map.removeLayer(viewshedLayer);
@@ -717,21 +730,50 @@ class ViewshedServer:
                             statusMsg = `Computing viewshed... ${data.progress}`;
                         }
                         showStatus(statusMsg, 'info');
+
+                        // Show current search location for hill climb
+                        if (data.current_lat && data.current_lon && map) {
+                            if (searchMarker) {
+                                searchMarker.setLatLng([data.current_lat, data.current_lon]);
+                            } else {
+                                searchMarker = L.marker([data.current_lat, data.current_lon], {
+                                    icon: L.divIcon({
+                                        className: 'search-marker',
+                                        html: '<div style="background: purple; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 4px rgba(0,0,0,0.5);"></div>',
+                                        iconSize: [12, 12],
+                                        iconAnchor: [6, 6]
+                                    })
+                                }).addTo(map);
+                            }
+                        }
                     } else if (data.status === 'completed') {
                         clearInterval(pollInterval);
+                        // Remove search marker
+                        if (searchMarker) {
+                            map.removeLayer(searchMarker);
+                            searchMarker = null;
+                        }
                         showStatus('Viewshed computation complete!', 'success');
                         showResult(jobId, data);
                         document.getElementById('submitBtn').disabled = false;
+                        document.getElementById('hillClimbBtn').disabled = false;
                     } else if (data.status === 'failed') {
                         clearInterval(pollInterval);
+                        // Remove search marker
+                        if (searchMarker) {
+                            map.removeLayer(searchMarker);
+                            searchMarker = null;
+                        }
                         showStatus(`Error: ${data.error}`, 'error');
                         document.getElementById('submitBtn').disabled = false;
+                        document.getElementById('hillClimbBtn').disabled = false;
                     }
                 })
                 .catch(err => {
                     clearInterval(pollInterval);
                     showStatus(`Error polling job: ${err}`, 'error');
                     document.getElementById('submitBtn').disabled = false;
+                    document.getElementById('hillClimbBtn').disabled = false;
                 });
         }
 
@@ -848,6 +890,51 @@ class ViewshedServer:
             })
             .catch(err => {
                 showStatus(`Error: ${err}`, 'error');
+                document.getElementById('submitBtn').disabled = false;
+            });
+        }
+
+        // Hill climb optimization
+        function startHillClimb() {
+            const parsed = parseLatLon();
+            if (!parsed) {
+                showStatus('Error: Invalid lat/lon format. Enter a starting location first.', 'error');
+                return;
+            }
+
+            const formData = {
+                lat: parsed.lat,
+                lon: parsed.lon,
+                height: parseFloat(document.getElementById('height').value),
+                radius: parseFloat(document.getElementById('radius').value),
+                grid_points: parseInt(document.getElementById('grid_points').value),
+                dem_product: document.getElementById('dem_product').value,
+                hill_climb_steps: 4,  // Number of iterations
+                step_size: 0.005      // ~500m initial step size
+            };
+
+            document.getElementById('hillClimbBtn').disabled = true;
+            document.getElementById('submitBtn').disabled = true;
+            showStatus('Starting hill climb optimization...', 'info');
+
+            fetch('hill_climb', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(formData)
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.job_id) {
+                    pollInterval = setInterval(() => pollJob(data.job_id), 2000);
+                } else {
+                    showStatus('Error: No job ID returned', 'error');
+                    document.getElementById('hillClimbBtn').disabled = false;
+                    document.getElementById('submitBtn').disabled = false;
+                }
+            })
+            .catch(err => {
+                showStatus(`Error: ${err}`, 'error');
+                document.getElementById('hillClimbBtn').disabled = false;
                 document.getElementById('submitBtn').disabled = false;
             });
         }
@@ -1209,6 +1296,232 @@ class ViewshedServer:
                 return {"error": "Job not completed"}
 
             return job.get('geojson', {})
+
+    @cherrypy.expose
+    @cherrypy.tools.json_in()
+    @cherrypy.tools.json_out()
+    def hill_climb(self):
+        """Start a hill climb optimization job from a starting location."""
+        params = cherrypy.request.json
+
+        # Validate parameters
+        try:
+            lat = float(params['lat'])
+            lon = float(params['lon'])
+            height = float(params['height'])
+            radius = float(params['radius'])
+            grid_points = int(params.get('grid_points', 25))
+            dem_product = params.get('dem_product', 'SRTM3')
+            hill_climb_steps = int(params.get('hill_climb_steps', 4))
+            step_size = float(params.get('step_size', 0.005))
+
+            if not (-90 <= lat <= 90):
+                raise ValueError("Latitude out of range")
+            if not (-180 <= lon <= 180):
+                raise ValueError("Longitude out of range")
+            if height <= 0:
+                raise ValueError("Height must be positive")
+            if radius <= 0:
+                raise ValueError("Radius must be positive")
+            if grid_points < 5 or grid_points > 200:
+                raise ValueError("Grid points must be between 5 and 200")
+            if hill_climb_steps < 1 or hill_climb_steps > 100:
+                raise ValueError("Hill climb steps must be between 1 and 100")
+
+        except (KeyError, ValueError, TypeError) as e:
+            cherrypy.response.status = 400
+            return {"error": str(e)}
+
+        # Create job
+        job_id = uuid.uuid4().hex
+
+        with jobs_lock:
+            jobs[job_id] = {
+                'status': 'queued',
+                'params': params,
+                'created': time.time(),
+            }
+
+        # Start computation in background thread
+        thread = threading.Thread(
+            target=self._hill_climb_worker,
+            args=(job_id, lat, lon, height, radius, grid_points, dem_product, hill_climb_steps, step_size)
+        )
+        thread.daemon = True
+        thread.start()
+
+        return {"job_id": job_id}
+
+    def _hill_climb_worker(self, job_id, start_lat, start_lon, height, radius,
+                          grid_points, dem_product, max_steps, initial_step_size):
+        """Background worker to perform hill climb optimization."""
+        try:
+            with jobs_lock:
+                jobs[job_id]['status'] = 'running'
+                jobs[job_id]['progress'] = 'Starting hill climb...'
+
+            # Define progress callback
+            def update_progress(completed, total, message, lat=None, lon=None):
+                with jobs_lock:
+                    jobs[job_id]['progress_completed'] = completed
+                    jobs[job_id]['progress_total'] = total
+                    jobs[job_id]['progress_message'] = message
+                    if lat is not None and lon is not None:
+                        jobs[job_id]['current_lat'] = lat
+                        jobs[job_id]['current_lon'] = lon
+
+            # Hill climb algorithm
+            current_lat, current_lon = start_lat, start_lon
+            step_size = initial_step_size
+
+            # Compute initial viewshed
+            update_progress(0, max_steps, f"Computing initial viewshed...")
+            best_viewshed = compute_viewshed(
+                current_lat, current_lon, height, radius,
+                use_local_dem=True, dem_product=dem_product, grid_points=grid_points
+            )
+
+            if best_viewshed is None:
+                raise Exception("Initial viewshed computation failed")
+
+            # Calculate coverage from visible/blocked point lists
+            visible_count = len(best_viewshed['visible_points'])
+            total_count = len(best_viewshed['visible_points']) + len(best_viewshed['blocked_points'])
+            best_coverage = visible_count / total_count if total_count > 0 else 0.0
+
+            print(f"Hill climb starting from ({current_lat:.4f}, {current_lon:.4f}): {best_coverage*100:.1f}% coverage")
+
+            # Try to improve in each step
+            for step in range(max_steps):
+                improved = False
+
+                # Try 8 directions (N, NE, E, SE, S, SW, W, NW)
+                directions = [
+                    (step_size, 0), (step_size, step_size), (0, step_size), (-step_size, step_size),
+                    (-step_size, 0), (-step_size, -step_size), (0, -step_size), (step_size, -step_size)
+                ]
+
+                for dlat, dlon in directions:
+                    test_lat = current_lat + dlat
+                    test_lon = current_lon + dlon
+
+                    # Compute viewshed for test location
+                    test_viewshed = compute_viewshed(
+                        test_lat, test_lon, height, radius,
+                        use_local_dem=True, dem_product=dem_product, grid_points=grid_points
+                    )
+
+                    if test_viewshed is None:
+                        continue
+
+                    # Calculate coverage from visible/blocked point lists
+                    visible_count = len(test_viewshed['visible_points'])
+                    total_count = len(test_viewshed['visible_points']) + len(test_viewshed['blocked_points'])
+                    test_coverage = visible_count / total_count if total_count > 0 else 0.0
+
+                    # If better, move here
+                    if test_coverage > best_coverage:
+                        current_lat, current_lon = test_lat, test_lon
+                        best_coverage = test_coverage
+                        best_viewshed = test_viewshed
+                        improved = True
+                        print(f"  Step {step+1}: Improved to ({current_lat:.4f}, {current_lon:.4f}): {best_coverage*100:.1f}%")
+                        break
+
+                # Update progress
+                update_progress(step + 1, max_steps,
+                              f"Step {step + 1}/{max_steps}: Hill climbing... {best_coverage*100:.1f}% coverage",
+                              current_lat, current_lon)
+
+                # If no improvement, reduce step size
+                if not improved:
+                    step_size *= 0.5
+                    print(f"  Step {step+1}: No improvement, reducing step size to {step_size:.6f}")
+
+                    # Stop if step size too small
+                    if step_size < 0.0001:  # ~10m
+                        print(f"  Step size too small, stopping early")
+                        break
+
+            print(f"Hill climb complete: ({current_lat:.4f}, {current_lon:.4f}): {best_coverage*100:.1f}% coverage")
+
+            # Convert to GeoJSON from visible/blocked points
+            grid_spacing_km = (radius / (grid_points / 2))
+            circle_radius_m = (grid_spacing_km * 1000) / 2
+
+            features = []
+            # Add visible points
+            for lat, lon in best_viewshed['visible_points']:
+                features.append({
+                    'type': 'Feature',
+                    'geometry': {
+                        'type': 'Point',
+                        'coordinates': [lon, lat]
+                    },
+                    'properties': {
+                        'visible': True,
+                        'radius': circle_radius_m
+                    }
+                })
+
+            # Add blocked points
+            for lat, lon in best_viewshed['blocked_points']:
+                features.append({
+                    'type': 'Feature',
+                    'geometry': {
+                        'type': 'Point',
+                        'coordinates': [lon, lat]
+                    },
+                    'properties': {
+                        'visible': False,
+                        'radius': circle_radius_m
+                    }
+                })
+
+            geojson = {
+                'type': 'FeatureCollection',
+                'features': features
+            }
+
+            # Store results
+            with jobs_lock:
+                jobs[job_id].update({
+                    'status': 'completed',
+                    'progress': 'Complete',
+                    'completed': time.time(),
+                    # Top-level fields expected by the UI
+                    'observer_elevation': float(best_viewshed['observer_elevation']),
+                    'observer_height_agl': float(height),
+                    'visible_count': len(best_viewshed['visible_points']),
+                    'blocked_count': len(best_viewshed['blocked_points']),
+                    'visibility_pct': best_coverage * 100,
+                    'max_range_km': float(best_viewshed['max_range_km']),
+                    # Nested result object for hill climb-specific data
+                    'result': {
+                        'optimized_lat': current_lat,
+                        'optimized_lon': current_lon,
+                        'initial_lat': start_lat,
+                        'initial_lon': start_lon,
+                        'coverage_pct': best_coverage * 100,
+                        'visible_count': len(best_viewshed['visible_points']),
+                        'total_count': len(best_viewshed['visible_points']) + len(best_viewshed['blocked_points']),
+                        'max_range_km': float(best_viewshed['max_range_km']),
+                        'observer_elevation': float(best_viewshed['observer_elevation']),
+                        'observer_height_agl': float(height),
+                    },
+                    'geojson': geojson
+                })
+
+        except Exception as e:
+            print(f"Error in hill climb: {e}")
+            import traceback
+            traceback.print_exc()
+            with jobs_lock:
+                jobs[job_id].update({
+                    'status': 'failed',
+                    'error': str(e),
+                    'completed': time.time()
+                })
 
     @cherrypy.expose
     @cherrypy.tools.json_out()

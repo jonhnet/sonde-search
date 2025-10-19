@@ -436,8 +436,14 @@ class ViewshedServer:
                 initialLon = savedState.mapCenter.lng;
                 initialZoom = savedState.mapZoom;
 
-                // Update form fields with saved antenna location
-                updateInputFromLatLon(savedState.lat, savedState.lon);
+                // Update form fields with saved antenna location (if valid)
+                if (savedState.lat != null && savedState.lon != null &&
+                    !isNaN(savedState.lat) && !isNaN(savedState.lon)) {
+                    updateInputFromLatLon(savedState.lat, savedState.lon);
+                } else {
+                    // Fallback to map center if antenna location is invalid
+                    updateInputFromLatLon(initialLat, initialLon);
+                }
             } else {
                 // Parse defaults from latlng text field
                 const parsed = parseLatLon();

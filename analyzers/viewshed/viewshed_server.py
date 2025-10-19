@@ -433,9 +433,20 @@ class ViewshedServer:
                 // Update form fields with saved antenna location
                 updateInputFromLatLon(savedState.lat, savedState.lon);
             } else {
-                // Use defaults from form
-                initialLat = parseFloat(document.getElementById('lat').value);
-                initialLon = parseFloat(document.getElementById('lon').value);
+                // Parse defaults from latlng text field
+                const parsed = parseLatLon();
+                if (parsed) {
+                    initialLat = parsed.lat;
+                    initialLon = parsed.lon;
+                    // Update hidden fields
+                    document.getElementById('lat').value = parsed.lat;
+                    document.getElementById('lon').value = parsed.lon;
+                } else {
+                    // Fallback to hardcoded defaults if parsing fails
+                    initialLat = 47.6062;
+                    initialLon = -122.3321;
+                    updateInputFromLatLon(initialLat, initialLon);
+                }
                 initialZoom = 8;
             }
 
@@ -448,9 +459,7 @@ class ViewshedServer:
             }).addTo(map);
 
             // Draw initial antenna marker from form values
-            const antennaLat = parseFloat(document.getElementById('lat').value);
-            const antennaLon = parseFloat(document.getElementById('lon').value);
-            setAntennaMarker(antennaLat, antennaLon);
+            setAntennaMarker(initialLat, initialLon);
 
             // Save state when map moves
             map.on('moveend', saveState);

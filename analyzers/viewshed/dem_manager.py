@@ -197,7 +197,6 @@ class DEMManager:
             print(f"  ERROR downloading DEM tiles: {e}")
             raise
 
-<<<<<<< HEAD
     def _download_tiles_in_chunks(self, bounds, product):
         """
         Download tiles for a large area by splitting into smaller chunks.

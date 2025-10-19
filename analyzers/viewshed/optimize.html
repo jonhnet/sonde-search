@@ -325,6 +325,7 @@
                         <span class="stat-value" id="coverage-pct">-</span>
                     </div>
                 </div>
+                <button id="save-favorite-btn" onclick="saveFavoriteResult()" class="button-secondary" style="margin-top: 15px;">Save as Favorite</button>
             </div>
         </div>
 
@@ -355,6 +356,8 @@
         let currentJobId = null;
         let pollInterval = null;
         let resultsLayer = null;
+        let favoritesLayer = null;
+        let currentBestLocation = null;
 
         // Create feature groups for drawn items
         const drawnItems = new L.FeatureGroup();
@@ -522,6 +525,9 @@
             const [lat, lon] = job.best_location;
             const coverage = job.best_coverage_pct;
 
+            // Save for favorites
+            currentBestLocation = { lat, lon, coverage };
+
             // Update stats
             document.getElementById('best-location').textContent = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
             document.getElementById('coverage-pct').textContent = `${coverage.toFixed(1)}%`;
@@ -582,6 +588,95 @@
             statusDiv.textContent = message;
             statusDiv.className = type;
         }
+
+        // Favorites management
+        function loadFavorites() {
+            fetch('favorites')
+                .then(r => r.json())
+                .then(data => {
+                    renderFavorites(data.favorites);
+                })
+                .catch(err => {
+                    console.error('Error loading favorites:', err);
+                });
+        }
+
+        function renderFavorites(favorites) {
+            if (favoritesLayer) {
+                map.removeLayer(favoritesLayer);
+            }
+
+            const markers = favorites.map(fav => {
+                const marker = L.marker([fav.lat, fav.lon], {
+                    icon: L.icon({
+                        iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMTQgNmwtMy02TDggNmwtNiAyIDQgMy41LTEgNi41IDYtMyA2IDMtMS02LjUgNC0zLjV6IiBmaWxsPSIjMjE5NkYzIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMC41Ii8+PC9zdmc+',
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 24],
+                        popupAnchor: [0, -24]
+                    })
+                });
+
+                marker.bindPopup(
+                    `<b>${fav.name}</b><br>` +
+                    `${fav.lat.toFixed(4)}, ${fav.lon.toFixed(4)}<br>` +
+                    `<button onclick="deleteFavorite('${fav.id}')" style="margin-top: 5px; padding: 5px 10px; cursor: pointer; background: #f44336; color: white; border: none; border-radius: 3px;">Delete</button>`
+                );
+
+                return marker;
+            });
+
+            favoritesLayer = L.layerGroup(markers).addTo(map);
+        }
+
+        function saveFavoriteResult() {
+            if (!currentBestLocation) {
+                showStatus('Error: No optimization result to save', 'error');
+                return;
+            }
+
+            const { lat, lon, coverage } = currentBestLocation;
+            const name = prompt('Enter a name for this favorite location:', `${lat.toFixed(4)}, ${lon.toFixed(4)} (${coverage.toFixed(1)}% coverage)`);
+            if (!name) return;
+
+            fetch('add_favorite', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({lat: lat, lon: lon, name: name})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showStatus('Favorite added successfully!', 'success');
+                    loadFavorites();
+                } else {
+                    showStatus(`Error: ${data.error}`, 'error');
+                }
+            })
+            .catch(err => {
+                showStatus(`Error adding favorite: ${err}`, 'error');
+            });
+        }
+
+        function deleteFavorite(favoriteId) {
+            if (!confirm('Are you sure you want to delete this favorite?')) return;
+
+            fetch(`delete_favorite?favorite_id=${favoriteId}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        showStatus('Favorite deleted', 'success');
+                        loadFavorites();
+                    } else {
+                        showStatus(`Error: ${data.error}`, 'error');
+                    }
+                })
+                .catch(err => {
+                    showStatus(`Error deleting favorite: ${err}`, 'error');
+                });
+        }
+
+        // Load favorites on page load
+        loadFavorites();
 
         // Restore previous state from localStorage
         const savedLat = localStorage.getItem('lastOptimizeLat');

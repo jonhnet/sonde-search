@@ -122,7 +122,11 @@ class DEMManager:
 
     def _download_single_product(self, min_lat, min_lon, max_lat, max_lon, product, progress_callback=None):
         """
-        Download a single DEM product for a bounding box.
+        Download raw SRTM tiles for a bounding box and return VRT path.
+
+        Downloads 1-degree SRTM tiles which are cached by the elevation library.
+        Returns the VRT (Virtual Raster) path which acts as a mosaic of all tiles.
+        No clipping or copying - just ensures raw tiles are cached.
 
         Args:
             min_lat, min_lon: Southwest corner
@@ -131,72 +135,52 @@ class DEMManager:
             progress_callback: Optional function(completed, total, message) to report progress
 
         Returns:
-            Path to the downloaded/clipped DEM file
+            Path to the VRT file (virtual mosaic of raw tiles)
         """
         # Add small padding to ensure coverage
         padding = 0.01
         bounds = (min_lon - padding, min_lat - padding,
                  max_lon + padding, max_lat + padding)
 
-        output_file = self.cache_dir / f'dem_{product}_{min_lat}_{min_lon}_{max_lat}_{max_lon}.tif'
-
-        # Check if already downloaded
-        if output_file.exists():
-            print(f"  Using cached {product} DEM: {output_file.name}")
-            return output_file
-
         print(f"  Downloading DEM tiles for bounds: {bounds}")
         print(f"    Product: {product} ({'~30m' if product == 'SRTM1' else '~90m'} resolution)")
 
+        import os
+        cache_root = os.path.expanduser('~/.cache/elevation')
+        vrt_path = os.path.join(cache_root, product, f'{product}.vrt')
+
+        # Check which tiles we need
+        tiles_needed = self._get_tiles_for_bounds(bounds)
+        tiles_missing = self._check_missing_tiles(tiles_needed, product, cache_root)
+
+        if not tiles_missing:
+            print(f"  All tiles already cached, using VRT: {vrt_path}")
+            # Rebuild VRT to ensure it includes all tiles
+            self._rebuild_vrt(cache_root, product)
+            return vrt_path
+
+        print(f"  Need to download {len(tiles_missing)} tiles")
+
         try:
-            # Download and clip to bounds
-            elevation.clip(bounds=bounds, output=str(output_file), product=product)
-            print(f"  Download complete: {output_file.name}")
-            return output_file
+            # Use elevation.clip to download tiles - the VRT is automatically created
+            # We create a temporary output just to trigger the download
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix='.tif', delete=True) as tmp:
+                elevation.clip(bounds=bounds, output=tmp.name, product=product)
+            # File is automatically deleted, but tiles are now cached
+            print(f"  Tiles downloaded, using VRT: {vrt_path}")
+            return vrt_path
 
         except RuntimeError as e:
             if "Too many tiles" in str(e):
-                # elevation library has a tile limit, so we need to split the area
-                # into smaller chunks and download them separately
+                # elevation library has a tile limit, so download in chunks
                 print(f"  Too many tiles for single download, splitting into smaller chunks...")
                 try:
-                    # Split the bounding box into smaller chunks
-                    # We'll use a 3x3 grid of sub-boxes to stay well under the limit
                     self._download_tiles_in_chunks(bounds, product, progress_callback)
-
-                    # Now we need to clip from the cache without trying to seed again
-                    # Call elevation.clean() to rebuild the VRT from cached tiles
+                    # Rebuild the VRT from cached tiles
                     elevation.clean()
-
-                    # Now clip with max_download_tiles=0 to prevent any new downloads
-                    # This forces it to use only what's in the cache
-                    import subprocess
-                    import os
-
-                    # Get the cache directory for this product
-                    # The elevation library uses a different cache structure
-                    import os
-                    cache_root = os.path.expanduser('~/.cache/elevation')
-                    vrt_path = os.path.join(cache_root, product, f'{product}.vrt')
-
-                    # Use gdal_translate directly to clip from the VRT
-                    min_lon, min_lat, max_lon, max_lat = bounds
-                    cmd = [
-                        'gdal_translate',
-                        '-co', 'TILED=YES',
-                        '-co', 'COMPRESS=DEFLATE',
-                        '-co', 'ZLEVEL=9',
-                        '-co', 'PREDICTOR=2',
-                        '-projwin', str(min_lon), str(max_lat), str(max_lon), str(min_lat),
-                        vrt_path,
-                        str(output_file)
-                    ]
-                    result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-                    if result.stderr:
-                        print(f"  gdal_translate stderr: {result.stderr}")
-
-                    print(f"  Download complete: {output_file.name}")
-                    return output_file
+                    print(f"  All tiles downloaded, using VRT: {vrt_path}")
+                    return vrt_path
                 except Exception as e2:
                     print(f"  ERROR downloading DEM tiles with chunked method: {e2}")
                     raise
@@ -252,14 +236,11 @@ class DEMManager:
                     product_name = "SRTM1 (30m)" if product == 'SRTM1' else "SRTM3 (90m)"
                     progress_callback(chunk_num - 1, total_chunks, f"Downloading {product_name} tiles ({chunk_num}/{total_chunks})...")
 
-                # Try to download this chunk
+                # Download tiles for this chunk (tiles cached, tempfile auto-deleted)
                 try:
-                    # Use a temporary file for the chunk
-                    chunk_file = self.cache_dir / f'temp_chunk_{i}_{j}.tif'
-                    elevation.clip(bounds=chunk_bounds, output=str(chunk_file), product=product)
-                    # Remove the temporary file - we just needed to populate the cache
-                    if chunk_file.exists():
-                        chunk_file.unlink()
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(suffix='.tif', delete=True) as tmp:
+                        elevation.clip(bounds=chunk_bounds, output=tmp.name, product=product)
                 except RuntimeError as e:
                     if "Too many tiles" in str(e):
                         # Even the chunk is too big - recursively split it
@@ -269,6 +250,73 @@ class DEMManager:
                         raise
 
         print(f"  All {total_chunks} chunks downloaded successfully")
+
+    def _get_tiles_for_bounds(self, bounds):
+        """
+        Get list of 1-degree SRTM tiles needed for bounding box.
+
+        Args:
+            bounds: Tuple of (min_lon, min_lat, max_lon, max_lat)
+
+        Returns:
+            List of (lat, lon) tuples for tile southwest corners
+        """
+        min_lon, min_lat, max_lon, max_lat = bounds
+
+        # SRTM tiles are 1-degree squares named by their SW corner
+        tiles = []
+        for lat in range(int(np.floor(min_lat)), int(np.ceil(max_lat))):
+            for lon in range(int(np.floor(min_lon)), int(np.ceil(max_lon))):
+                tiles.append((lat, lon))
+
+        return tiles
+
+    def _check_missing_tiles(self, tiles, product, cache_root):
+        """
+        Check which tiles are missing from the cache.
+
+        Args:
+            tiles: List of (lat, lon) tuples for tile southwest corners
+            product: DEM product ('SRTM1' or 'SRTM3')
+            cache_root: Cache directory root
+
+        Returns:
+            List of missing (lat, lon) tuples
+        """
+        import os
+
+        missing = []
+        cache_dir = os.path.join(cache_root, product, 'cache')
+
+        for lat, lon in tiles:
+            # SRTM tile naming: N47W122 or S12E034
+            # Tiles are stored in subdirectories by latitude (e.g., cache/N48/N48W122.tif)
+            lat_str = f"{'N' if lat >= 0 else 'S'}{abs(lat):02d}"
+            lon_str = f"{'E' if lon >= 0 else 'W'}{abs(lon):03d}"
+            tile_name = f"{lat_str}{lon_str}.tif"
+            tile_path = os.path.join(cache_dir, lat_str, tile_name)
+
+            if not os.path.exists(tile_path):
+                missing.append((lat, lon))
+
+        return missing
+
+    def _rebuild_vrt(self, cache_root, product):
+        """
+        Rebuild the VRT file from cached tiles.
+
+        Args:
+            cache_root: Cache directory root
+            product: DEM product ('SRTM1' or 'SRTM3')
+        """
+        import os
+
+        # Call elevation.clean() to rebuild VRT from all cached tiles
+        # This is a no-op if tiles haven't changed, but ensures VRT is up to date
+        try:
+            elevation.clean()
+        except Exception as e:
+            print(f"  Warning: Could not rebuild VRT: {e}")
 
     def get_elevation(self, lat, lon, dem_file=None, dem_file_fallback=None):
         """

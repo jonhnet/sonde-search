@@ -383,9 +383,15 @@ class ViewshedServer:
         function saveState() {
             const center = map.getCenter();
             const zoom = map.getZoom();
+
+            // Parse current lat/lon from the input field
+            const parsed = parseLatLon();
+            const lat = parsed ? parsed.lat : center.lat;
+            const lon = parsed ? parsed.lon : center.lng;
+
             const state = {
-                lat: parseFloat(document.getElementById('lat').value),
-                lon: parseFloat(document.getElementById('lon').value),
+                lat: lat,
+                lon: lon,
                 mapCenter: { lat: center.lat, lng: center.lng },
                 mapZoom: zoom
             };

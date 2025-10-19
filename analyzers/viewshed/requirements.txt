@@ -1,0 +1,17 @@
+AltAzRange
+boto3
+cherrypy
+contextily
+dateparser
+elevation
+fastparquet
+folium
+geocoder
+geographiclib
+geopandas
+pandas
+pyarrow
+pyproj
+simplekml
+rasterio
+sondehub

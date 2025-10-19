@@ -52,6 +52,13 @@ class DEMManager:
         # Keep track of loaded raster datasets to avoid reopening
         self._raster_cache = {}
 
+        # Track DEM resolution statistics (for SRTM_BEST mode)
+        self.stats = {
+            'srtm1_queries': 0,  # Successful SRTM1 queries
+            'srtm3_fallback_queries': 0,  # Had to fall back to SRTM3
+            'total_queries': 0
+        }
+
         # Override elevation library cache directory to match our cache_dir
         # This ensures the elevation library's raw tile cache goes to the same location
         elevation.datasource.CACHE_DIR = str(self.cache_dir)
@@ -66,7 +73,52 @@ class DEMManager:
         Args:
             min_lat, min_lon: Southwest corner
             max_lat, max_lon: Northeast corner
-            product: DEM product ('SRTM1' for 30m, 'SRTM3' for 90m)
+            product: DEM product ('SRTM1' for 30m, 'SRTM3' for 90m, 'SRTM_BEST' for hybrid)
+
+        Returns:
+            Path to the downloaded/clipped DEM file (or tuple of paths for SRTM_BEST)
+        """
+        # Handle SRTM_BEST by downloading both and returning both paths
+        if product == 'SRTM_BEST':
+            print(f"  Using SRTM_BEST: downloading both SRTM1 and SRTM3")
+            srtm1_file = None
+            srtm3_file = None
+
+            # Try SRTM1 first (may fail for some areas)
+            try:
+                srtm1_file = self._download_single_product(
+                    min_lat, min_lon, max_lat, max_lon, 'SRTM1'
+                )
+                print(f"  SRTM1 download successful")
+            except Exception as e:
+                print(f"  SRTM1 download failed (will use SRTM3 only): {e}")
+
+            # Always download SRTM3 as fallback
+            try:
+                srtm3_file = self._download_single_product(
+                    min_lat, min_lon, max_lat, max_lon, 'SRTM3'
+                )
+                print(f"  SRTM3 download successful")
+            except Exception as e:
+                print(f"  ERROR: SRTM3 download failed: {e}")
+                if srtm1_file:
+                    print(f"  Using SRTM1 only")
+                    return (srtm1_file, None)
+                raise
+
+            return (srtm1_file, srtm3_file)
+
+        # Single product download
+        return self._download_single_product(min_lat, min_lon, max_lat, max_lon, product)
+
+    def _download_single_product(self, min_lat, min_lon, max_lat, max_lon, product):
+        """
+        Download a single DEM product for a bounding box.
+
+        Args:
+            min_lat, min_lon: Southwest corner
+            max_lat, max_lon: Northeast corner
+            product: DEM product ('SRTM1' or 'SRTM3')
 
         Returns:
             Path to the downloaded/clipped DEM file
@@ -76,11 +128,11 @@ class DEMManager:
         bounds = (min_lon - padding, min_lat - padding,
                  max_lon + padding, max_lat + padding)
 
-        output_file = self.cache_dir / f'dem_{min_lat}_{min_lon}_{max_lat}_{max_lon}.tif'
+        output_file = self.cache_dir / f'dem_{product}_{min_lat}_{min_lon}_{max_lat}_{max_lon}.tif'
 
         # Check if already downloaded
         if output_file.exists():
-            print(f"  Using cached DEM: {output_file.name}")
+            print(f"  Using cached {product} DEM: {output_file.name}")
             return output_file
 
         print(f"  Downloading DEM tiles for bounds: {bounds}")
@@ -145,6 +197,7 @@ class DEMManager:
             print(f"  ERROR downloading DEM tiles: {e}")
             raise
 
+<<<<<<< HEAD
     def _download_tiles_in_chunks(self, bounds, product):
         """
         Download tiles for a large area by splitting into smaller chunks.
@@ -204,7 +257,7 @@ class DEMManager:
 
         print(f"  All {total_chunks} chunks downloaded successfully")
 
-    def get_elevation(self, lat, lon, dem_file=None):
+    def get_elevation(self, lat, lon, dem_file=None, dem_file_fallback=None):
         """
         Get elevation at a specific lat/lon coordinate.
 
@@ -213,18 +266,50 @@ class DEMManager:
             lon: Longitude in decimal degrees
             dem_file: Optional path to specific DEM file. If None, will try to
                      download tiles automatically for the point.
+            dem_file_fallback: Optional fallback DEM file (for SRTM_BEST mode)
 
         Returns:
             Elevation in meters, or None if unavailable
         """
-        try:
-            # If no DEM file specified, download a small area around the point
-            if dem_file is None:
-                # Download a 0.1 degree tile around the point
-                dem_file = self.download_tiles_for_bounds(
-                    lat - 0.05, lon - 0.05, lat + 0.05, lon + 0.05
-                )
+        # Track this query
+        self.stats['total_queries'] += 1
 
+        # Try primary DEM first
+        elev = None
+        used_fallback = False
+
+        if dem_file is not None:
+            elev = self._query_single_dem(lat, lon, dem_file)
+
+        # If primary DEM returned NoData/None and we have a fallback, try it
+        if (elev is None or elev == 0.0) and dem_file_fallback is not None:
+            fallback_elev = self._query_single_dem(lat, lon, dem_file_fallback)
+            if fallback_elev is not None and fallback_elev != 0.0:
+                elev = fallback_elev
+                used_fallback = True
+
+        # Update statistics
+        if dem_file_fallback is not None:  # Only track if in SRTM_BEST mode
+            if used_fallback:
+                self.stats['srtm3_fallback_queries'] += 1
+            elif elev is not None and elev != 0.0:
+                self.stats['srtm1_queries'] += 1
+
+        return elev
+
+    def _query_single_dem(self, lat, lon, dem_file):
+        """
+        Query a single DEM file for elevation.
+
+        Args:
+            lat: Latitude
+            lon: Longitude
+            dem_file: Path to DEM file
+
+        Returns:
+            Elevation in meters, 0.0 for NoData, or None if unavailable
+        """
+        try:
             # Convert to Path object if string
             dem_file = Path(dem_file)
 
@@ -251,7 +336,7 @@ class DEMManager:
             return None
 
         except Exception as e:
-            print(f"Warning: Failed to get elevation for {lat},{lon}: {e}")
+            # Silently return None on error (expected for out-of-bounds queries)
             return None
 
     def get_elevations_batch(self, lat_lon_pairs, dem_file):

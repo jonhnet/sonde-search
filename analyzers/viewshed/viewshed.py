@@ -59,7 +59,7 @@ def to_wgs84(x, y):
     return mercator_to_wgs84.transform(x, y)
 
 
-def get_elevation(lat, lon, cache=None, dem_manager=None, dem_file=None):
+def get_elevation(lat, lon, cache=None, dem_manager=None, dem_file=None, dem_file_fallback=None):
     """
     Fetch ground elevation at a given lat/lon.
 
@@ -71,6 +71,7 @@ def get_elevation(lat, lon, cache=None, dem_manager=None, dem_file=None):
         cache: Optional dict to cache results
         dem_manager: Optional DEMManager instance for local DEM tiles
         dem_file: Optional path to DEM file (used with dem_manager)
+        dem_file_fallback: Optional fallback DEM file (for SRTM_BEST mode)
 
     Returns:
         Elevation in meters, or None if unavailable
@@ -85,7 +86,7 @@ def get_elevation(lat, lon, cache=None, dem_manager=None, dem_file=None):
     # Use local DEM (required - no API fallback)
     if dem_manager is not None:
         try:
-            elev = dem_manager.get_elevation(lat, lon, dem_file)
+            elev = dem_manager.get_elevation(lat, lon, dem_file, dem_file_fallback)
         except Exception as e:
             print(f"Warning: DEM lookup failed for {lat},{lon}: {e}")
             elev = None
@@ -118,7 +119,7 @@ def compute_point_at_bearing_distance(lat, lon, bearing_deg, distance_m):
 def is_visible(observer_lat, observer_lon, observer_elevation_agl,
                target_lat, target_lon, target_elevation_msl,
                observer_elevation_msl, num_samples=20,
-               dem_manager=None, dem_file=None, debug=False):
+               dem_manager=None, dem_file=None, dem_file_fallback=None, debug=False):
     """
     Determine if a target location is visible from an observer location.
 
@@ -173,7 +174,8 @@ def is_visible(observer_lat, observer_lon, observer_elevation_agl,
 
         # Get elevation at sample point
         sample_elevation = get_elevation(sample_lat, sample_lon,
-                                        dem_manager=dem_manager, dem_file=dem_file)
+                                        dem_manager=dem_manager, dem_file=dem_file,
+                                        dem_file_fallback=dem_file_fallback)
         if sample_elevation is None:
             # No elevation data (likely water or out of bounds)
             # Treat as sea level (0m) for visibility purposes
@@ -264,13 +266,20 @@ def compute_viewshed(observer_lat, observer_lon, observer_height_agl,
         # Download DEM tiles for the area
         dem_file = dem_manager.download_tiles_for_bounds(
             min_lat, min_lon, max_lat, max_lon, product=dem_product)
+
+        # Handle SRTM_BEST mode (returns tuple of two DEM files)
+        dem_file_fallback = None
+        if isinstance(dem_file, tuple):
+            dem_file, dem_file_fallback = dem_file
     else:
         print("  Using USGS National Map API (slower, US-only)")
+        dem_file_fallback = None
 
     # Get observer elevation
     print("  Fetching observer elevation...")
     observer_elevation_msl = get_elevation(observer_lat, observer_lon,
-                                          dem_manager=dem_manager, dem_file=dem_file)
+                                          dem_manager=dem_manager, dem_file=dem_file,
+                                          dem_file_fallback=dem_file_fallback)
     if observer_elevation_msl is None:
         print("  ERROR: Could not determine observer elevation")
         if dem_manager:
@@ -326,7 +335,8 @@ def compute_viewshed(observer_lat, observer_lon, observer_height_agl,
 
             # Get target elevation
             target_elevation = get_elevation(target_lat, target_lon, cache=elevation_cache,
-                                            dem_manager=dem_manager, dem_file=dem_file)
+                                            dem_manager=dem_manager, dem_file=dem_file,
+                                            dem_file_fallback=dem_file_fallback)
             if target_elevation is None:
                 # No elevation data (likely water) - assume sea level
                 target_elevation = 0.0
@@ -334,7 +344,7 @@ def compute_viewshed(observer_lat, observer_lon, observer_height_agl,
             # Check visibility
             if is_visible(observer_lat, observer_lon, observer_height_agl,
                          target_lat, target_lon, target_elevation, observer_elevation_msl,
-                         dem_manager=dem_manager, dem_file=dem_file):
+                         dem_manager=dem_manager, dem_file=dem_file, dem_file_fallback=dem_file_fallback):
                 visible_points.append((target_lat, target_lon))
                 max_visible_range_km = max(max_visible_range_km, distance_km)
             else:
@@ -347,17 +357,33 @@ def compute_viewshed(observer_lat, observer_lon, observer_height_agl,
     print(f"\n  Complete! {len(visible_points)} visible, {len(blocked_points)} blocked")
     print(f"  Maximum visible range: {max_visible_range_km:.1f}km")
 
+    # Get DEM statistics if using SRTM_BEST
+    dem_stats = None
+    if dem_manager and dem_product == 'SRTM_BEST':
+        dem_stats = dem_manager.stats.copy()
+        srtm1_pct = (dem_stats['srtm1_queries'] / dem_stats['total_queries'] * 100) if dem_stats['total_queries'] > 0 else 0
+        srtm3_pct = (dem_stats['srtm3_fallback_queries'] / dem_stats['total_queries'] * 100) if dem_stats['total_queries'] > 0 else 0
+        print(f"\n  DEM Resolution Statistics:")
+        print(f"    SRTM1 (30m): {dem_stats['srtm1_queries']} queries ({srtm1_pct:.1f}%)")
+        print(f"    SRTM3 (90m fallback): {dem_stats['srtm3_fallback_queries']} queries ({srtm3_pct:.1f}%)")
+        print(f"    Total: {dem_stats['total_queries']} queries")
+
     # Cleanup DEM manager
     if dem_manager:
         dem_manager.cleanup()
 
-    return {
+    result = {
         'visible_points': visible_points,
         'blocked_points': blocked_points,
         'observer_elevation': observer_elevation_msl,
         'observer_height_agl': observer_height_agl,
         'max_range_km': max_visible_range_km,
     }
+
+    if dem_stats:
+        result['dem_stats'] = dem_stats
+
+    return result
 
 
 def plot_viewshed(observer_lat, observer_lon, viewshed_data, output_file='viewshed.png'):
@@ -425,7 +451,7 @@ def plot_viewshed(observer_lat, observer_lon, viewshed_data, output_file='viewsh
 
 
 def compute_coverage(observer_lat, observer_lon, observer_height_agl,
-                     target_points, dem_manager=None, dem_file=None):
+                     target_points, dem_manager=None, dem_file=None, dem_file_fallback=None):
     """
     Compute what fraction of target points are visible from an observer location.
 
@@ -439,6 +465,7 @@ def compute_coverage(observer_lat, observer_lon, observer_height_agl,
         target_points: List of (lat, lon) tuples to test visibility to
         dem_manager: Optional DEMManager instance
         dem_file: Optional DEM file path
+        dem_file_fallback: Optional fallback DEM file path
 
     Returns:
         Dictionary with:
@@ -450,7 +477,8 @@ def compute_coverage(observer_lat, observer_lon, observer_height_agl,
     """
     # Get observer elevation
     observer_elevation_msl = get_elevation(observer_lat, observer_lon,
-                                          dem_manager=dem_manager, dem_file=dem_file)
+                                          dem_manager=dem_manager, dem_file=dem_file,
+                                          dem_file_fallback=dem_file_fallback)
     if observer_elevation_msl is None:
         # Can't determine elevation - return zero coverage
         return {
@@ -467,14 +495,15 @@ def compute_coverage(observer_lat, observer_lon, observer_height_agl,
     for idx, (target_lat, target_lon) in enumerate(target_points):
         # Get target elevation
         target_elevation = get_elevation(target_lat, target_lon, cache=elevation_cache,
-                                        dem_manager=dem_manager, dem_file=dem_file)
+                                        dem_manager=dem_manager, dem_file=dem_file,
+                                        dem_file_fallback=dem_file_fallback)
         if target_elevation is None:
             target_elevation = 0.0  # Assume sea level for water/missing data
 
         # Check visibility
         if is_visible(observer_lat, observer_lon, observer_height_agl,
                      target_lat, target_lon, target_elevation, observer_elevation_msl,
-                     dem_manager=dem_manager, dem_file=dem_file):
+                     dem_manager=dem_manager, dem_file=dem_file, dem_file_fallback=dem_file_fallback):
             visible_indices.append(idx)
 
     visible_count = len(visible_indices)

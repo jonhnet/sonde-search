@@ -351,7 +351,8 @@ class ViewshedServer:
                         </label>
                         <select id="dem_product">
                             <option value="SRTM3">SRTM3 (90m, faster)</option>
-                            <option value="SRTM1">SRTM1 (30m, better)</option>
+                            <option value="SRTM1">SRTM1 (30m, US only)</option>
+                            <option value="SRTM_BEST" selected>SRTM Best (adaptive)</option>
                         </select>
                     </div>
                 </div>
@@ -538,12 +539,12 @@ class ViewshedServer:
                 standard: {
                     radius: 50,
                     grid_points: 25,
-                    dem_product: 'SRTM3'
+                    dem_product: 'SRTM_BEST'
                 },
                 detailed: {
                     radius: 100,
                     grid_points: 50,
-                    dem_product: 'SRTM1'
+                    dem_product: 'SRTM_BEST'
                 }
             };
 
@@ -638,7 +639,7 @@ class ViewshedServer:
             // Load the viewshed data
             loadViewshedData(jobId);
 
-            stats.innerHTML = `
+            let statsHTML = `
                 <div class="stat-item">
                     <div class="stat-value">${data.observer_elevation.toFixed(1)}m</div>
                     <div class="stat-label">Ground Elevation</div>
@@ -660,6 +661,22 @@ class ViewshedServer:
                     <div class="stat-label">Max Range</div>
                 </div>
             `;
+
+            // Add DEM resolution statistics if available
+            if (data.dem_stats) {
+                const srtm1_pct = (data.dem_stats.srtm1_queries / data.dem_stats.total_queries * 100).toFixed(1);
+                const srtm3_pct = (data.dem_stats.srtm3_fallback_queries / data.dem_stats.total_queries * 100).toFixed(1);
+                statsHTML += `
+                    <div class="stat-item" style="grid-column: 1 / -1; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e0e0e0;">
+                        <div class="stat-label" style="font-weight: 600; margin-bottom: 8px;">DEM Resolution</div>
+                        <div style="font-size: 13px; color: #666;">
+                            SRTM1 (30m): ${srtm1_pct}% • SRTM3 (90m): ${srtm3_pct}%
+                        </div>
+                    </div>
+                `;
+            }
+
+            stats.innerHTML = statsHTML;
         }
 
         function pollJob(jobId) {
@@ -962,6 +979,9 @@ class ViewshedServer:
                 jobs[job_id]['visibility_pct'] = visibility_pct
                 jobs[job_id]['max_range_km'] = viewshed['max_range_km']
                 jobs[job_id]['completed'] = time.time()
+                # Include DEM statistics if available
+                if 'dem_stats' in viewshed:
+                    jobs[job_id]['dem_stats'] = viewshed['dem_stats']
 
         except Exception as e:
             print(f"Error in viewshed computation: {e}")

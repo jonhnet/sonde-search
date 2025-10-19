@@ -66,7 +66,7 @@ class DEMManager:
         print(f"DEM cache directory: {self.cache_dir}")
 
     def download_tiles_for_bounds(self, min_lat, min_lon, max_lat, max_lon,
-                                   product='SRTM3'):
+                                   product='SRTM3', progress_callback=None):
         """
         Download DEM tiles covering a bounding box.
 
@@ -74,6 +74,7 @@ class DEMManager:
             min_lat, min_lon: Southwest corner
             max_lat, max_lon: Northeast corner
             product: DEM product ('SRTM1' for 30m, 'SRTM3' for 90m, 'SRTM_BEST' for hybrid)
+            progress_callback: Optional function(completed, total, message) to report progress
 
         Returns:
             Path to the downloaded/clipped DEM file (or tuple of paths for SRTM_BEST)
@@ -81,22 +82,27 @@ class DEMManager:
         # Handle SRTM_BEST by downloading both and returning both paths
         if product == 'SRTM_BEST':
             print(f"  Using SRTM_BEST: downloading both SRTM1 and SRTM3")
+            if progress_callback:
+                progress_callback(0, 2, "Downloading SRTM1 elevation data (30m resolution)...")
+
             srtm1_file = None
             srtm3_file = None
 
             # Try SRTM1 first (may fail for some areas)
             try:
                 srtm1_file = self._download_single_product(
-                    min_lat, min_lon, max_lat, max_lon, 'SRTM1'
+                    min_lat, min_lon, max_lat, max_lon, 'SRTM1', progress_callback
                 )
                 print(f"  SRTM1 download successful")
             except Exception as e:
                 print(f"  SRTM1 download failed (will use SRTM3 only): {e}")
 
             # Always download SRTM3 as fallback
+            if progress_callback:
+                progress_callback(1, 2, "Downloading SRTM3 elevation data (90m resolution)...")
             try:
                 srtm3_file = self._download_single_product(
-                    min_lat, min_lon, max_lat, max_lon, 'SRTM3'
+                    min_lat, min_lon, max_lat, max_lon, 'SRTM3', progress_callback
                 )
                 print(f"  SRTM3 download successful")
             except Exception as e:
@@ -109,9 +115,12 @@ class DEMManager:
             return (srtm1_file, srtm3_file)
 
         # Single product download
-        return self._download_single_product(min_lat, min_lon, max_lat, max_lon, product)
+        if progress_callback:
+            product_name = "SRTM1 (30m)" if product == 'SRTM1' else "SRTM3 (90m)"
+            progress_callback(0, 1, f"Downloading {product_name} elevation data...")
+        return self._download_single_product(min_lat, min_lon, max_lat, max_lon, product, progress_callback)
 
-    def _download_single_product(self, min_lat, min_lon, max_lat, max_lon, product):
+    def _download_single_product(self, min_lat, min_lon, max_lat, max_lon, product, progress_callback=None):
         """
         Download a single DEM product for a bounding box.
 
@@ -119,6 +128,7 @@ class DEMManager:
             min_lat, min_lon: Southwest corner
             max_lat, max_lon: Northeast corner
             product: DEM product ('SRTM1' or 'SRTM3')
+            progress_callback: Optional function(completed, total, message) to report progress
 
         Returns:
             Path to the downloaded/clipped DEM file
@@ -152,7 +162,7 @@ class DEMManager:
                 try:
                     # Split the bounding box into smaller chunks
                     # We'll use a 3x3 grid of sub-boxes to stay well under the limit
-                    self._download_tiles_in_chunks(bounds, product)
+                    self._download_tiles_in_chunks(bounds, product, progress_callback)
 
                     # Now we need to clip from the cache without trying to seed again
                     # Call elevation.clean() to rebuild the VRT from cached tiles
@@ -197,13 +207,14 @@ class DEMManager:
             print(f"  ERROR downloading DEM tiles: {e}")
             raise
 
-    def _download_tiles_in_chunks(self, bounds, product):
+    def _download_tiles_in_chunks(self, bounds, product, progress_callback=None):
         """
         Download tiles for a large area by splitting into smaller chunks.
 
         Args:
             bounds: Tuple of (min_lon, min_lat, max_lon, max_lat)
             product: DEM product ('SRTM1' or 'SRTM3')
+            progress_callback: Optional function(completed, total, message) to report progress
         """
         min_lon, min_lat, max_lon, max_lat = bounds
 
@@ -237,6 +248,9 @@ class DEMManager:
                 chunk_bounds = (chunk_min_lon, chunk_min_lat, chunk_max_lon, chunk_max_lat)
 
                 print(f"  Downloading chunk {chunk_num}/{total_chunks}...")
+                if progress_callback:
+                    product_name = "SRTM1 (30m)" if product == 'SRTM1' else "SRTM3 (90m)"
+                    progress_callback(chunk_num - 1, total_chunks, f"Downloading {product_name} tiles ({chunk_num}/{total_chunks})...")
 
                 # Try to download this chunk
                 try:
@@ -250,7 +264,7 @@ class DEMManager:
                     if "Too many tiles" in str(e):
                         # Even the chunk is too big - recursively split it
                         print(f"  Chunk still too large, splitting further...")
-                        self._download_tiles_in_chunks(chunk_bounds, product)
+                        self._download_tiles_in_chunks(chunk_bounds, product, progress_callback)
                     else:
                         raise
 

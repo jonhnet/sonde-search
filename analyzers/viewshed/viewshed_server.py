@@ -677,7 +677,10 @@ class ViewshedServer:
                 .then(data => {
                     if (data.status === 'running') {
                         let statusMsg = 'Computing viewshed...';
-                        if (data.progress_completed && data.progress_total) {
+                        if (data.progress_message) {
+                            // Use custom progress message if provided
+                            statusMsg = data.progress_message;
+                        } else if (data.progress_completed && data.progress_total) {
                             const pct = Math.round(100 * data.progress_completed / data.progress_total);
                             statusMsg = `Computing viewshed... ${pct}% (${data.progress_completed}/${data.progress_total} points)`;
                         } else if (data.progress) {

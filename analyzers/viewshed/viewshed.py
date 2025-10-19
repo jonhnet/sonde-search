@@ -265,7 +265,8 @@ def compute_viewshed(observer_lat, observer_lon, observer_height_agl,
 
         # Download DEM tiles for the area
         dem_file = dem_manager.download_tiles_for_bounds(
-            min_lat, min_lon, max_lat, max_lon, product=dem_product)
+            min_lat, min_lon, max_lat, max_lon, product=dem_product,
+            progress_callback=progress_callback)
 
         # Handle SRTM_BEST mode (returns tuple of two DEM files)
         dem_file_fallback = None
@@ -582,7 +583,7 @@ def optimize_coverage(target_bounds, search_bounds, observer_height_agl,
     dem_file = dem_manager.download_tiles_for_bounds(
         all_min_lat - lat_padding, all_min_lon - lon_padding,
         all_max_lat + lat_padding, all_max_lon + lon_padding,
-        product=dem_product)
+        product=dem_product, progress_callback=progress_callback)
 
     # Create fixed target grid
     print("  Creating target point grid...")

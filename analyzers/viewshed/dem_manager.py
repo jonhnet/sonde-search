@@ -146,7 +146,7 @@ class DEMManager:
         print(f"    Product: {product} ({'~30m' if product == 'SRTM1' else '~90m'} resolution)")
 
         import os
-        cache_root = elevation.datasource.CACHE_DIR
+        cache_root = str(self.cache_dir)
         vrt_path = os.path.join(cache_root, product, f'{product}.vrt')
 
         # Check which tiles we need
@@ -166,7 +166,7 @@ class DEMManager:
             # We create a temporary output just to trigger the download
             import tempfile
             with tempfile.NamedTemporaryFile(suffix='.tif', delete=True) as tmp:
-                elevation.clip(bounds=bounds, output=tmp.name, product=product)
+                elevation.clip(bounds=bounds, output=tmp.name, product=product, cache_dir=str(self.cache_dir))
             # File is automatically deleted, but tiles are now cached
             print(f"  Tiles downloaded, using VRT: {vrt_path}")
             return vrt_path
@@ -178,7 +178,7 @@ class DEMManager:
                 try:
                     self._download_tiles_in_chunks(bounds, product, progress_callback)
                     # Rebuild the VRT from cached tiles
-                    elevation.clean()
+                    elevation.clean(cache_dir=str(self.cache_dir), product=product)
                     print(f"  All tiles downloaded, using VRT: {vrt_path}")
                     return vrt_path
                 except Exception as e2:
@@ -207,7 +207,7 @@ class DEMManager:
 
         # Get list of 1-degree tiles needed
         tiles_needed = self._get_tiles_for_bounds(bounds)
-        tiles_missing = self._check_missing_tiles(tiles_needed, product, elevation.datasource.CACHE_DIR)
+        tiles_missing = self._check_missing_tiles(tiles_needed, product, str(self.cache_dir))
 
         total_tiles = len(tiles_missing)
         print(f"  Processing {total_tiles} tiles individually (1-degree tiles matching source data)...")
@@ -240,7 +240,7 @@ class DEMManager:
 
                 # Run elevation.clip to download and process this single tile
                 # Single 1-degree tile will never hit the "too many tiles" limit
-                elevation.clip(bounds=tile_bounds, output=cache_path, product=product)
+                elevation.clip(bounds=tile_bounds, output=cache_path, product=product, cache_dir=str(self.cache_dir))
                 print(f"  Tile {tile_num}/{total_tiles} processed and cached")
 
             except Exception as e:
@@ -267,7 +267,7 @@ class DEMManager:
         filename = f"{int(min_lon)}_{int(min_lat)}_to_{int(max_lon)}_{int(max_lat)}.tif"
 
         # Store in elevation cache under processed_chunks subdirectory
-        cache_root = elevation.datasource.CACHE_DIR
+        cache_root = str(self.cache_dir)
         cache_dir = os.path.join(cache_root, product, 'processed_chunks')
 
         return os.path.join(cache_dir, filename)
@@ -367,7 +367,7 @@ class DEMManager:
         # Call elevation.clean() to rebuild VRT from all cached tiles
         # This is a no-op if tiles haven't changed, but ensures VRT is up to date
         try:
-            elevation.clean()
+            elevation.clean(cache_dir=cache_root, product=product)
         except Exception as e:
             print(f"  Warning: Could not rebuild VRT: {e}")
 

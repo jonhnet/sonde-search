@@ -522,7 +522,7 @@ class ViewshedServer:
 
         function loadViewshedData(jobId) {
             // Fetch GeoJSON data and display on map
-            fetch(`/geojson/${jobId}`)
+            fetch(`geojson/${jobId}`)
                 .then(r => r.json())
                 .then(geojson => {
                     // Get grid spacing from GeoJSON metadata
@@ -620,7 +620,7 @@ class ViewshedServer:
         }
 
         function pollJob(jobId) {
-            fetch(`/status/${jobId}`)
+            fetch(`status/${jobId}`)
                 .then(r => r.json())
                 .then(data => {
                     if (data.status === 'running') {
@@ -658,7 +658,7 @@ class ViewshedServer:
             document.getElementById('submitBtn').disabled = true;
             showStatus('Starting viewshed computation...', 'info');
 
-            fetch('/compute', {
+            fetch('compute', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(formData)

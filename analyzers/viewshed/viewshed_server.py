@@ -62,6 +62,7 @@ class ViewshedServer:
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="/static/sidebar.css" />
     <style>
         * {
             box-sizing: border-box;
@@ -368,6 +369,7 @@ class ViewshedServer:
         </div>
 
         <div class="map-container">
+            <button class="toggle-sidebar" id="toggle-sidebar" onclick="toggleSidebar()">☰</button>
             <div id="map"></div>
         </div>
     </div>
@@ -785,6 +787,7 @@ class ViewshedServer:
             });
         }
     </script>
+    <script src="/static/sidebar.js"></script>
 </body>
 </html>
         """
@@ -1091,7 +1094,16 @@ def main():
         'engine.autoreload.on': False,
     })
 
-    cherrypy.quickstart(ViewshedServer())
+    # Configure static file serving
+    static_dir = os.path.join(os.path.dirname(__file__), 'static')
+    config = {
+        '/static': {
+            'tools.staticdir.on': True,
+            'tools.staticdir.dir': static_dir
+        }
+    }
+
+    cherrypy.quickstart(ViewshedServer(), '/', config)
 
 
 if __name__ == '__main__':

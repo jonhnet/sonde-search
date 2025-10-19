@@ -241,7 +241,9 @@ def compute_viewshed(observer_lat, observer_lon, observer_height_agl,
     dem_file = None
     if use_local_dem:
         print(f"  Using local DEM tiles ({dem_product})")
-        dem_manager = DEMManager()
+        # Use environment variable for cache dir if set, otherwise use default
+        cache_dir = os.environ.get('ELEVATION_CACHE_DIR', '~/.cache/srtm')
+        dem_manager = DEMManager(cache_dir=cache_dir)
 
         # Calculate bounding box for the analysis area
         # Add padding to ensure coverage

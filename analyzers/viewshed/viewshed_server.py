@@ -667,7 +667,14 @@ class ViewshedServer:
                 .then(r => r.json())
                 .then(data => {
                     if (data.status === 'running') {
-                        showStatus(`Computing viewshed... ${data.progress || ''}`, 'info');
+                        let statusMsg = 'Computing viewshed...';
+                        if (data.progress_completed && data.progress_total) {
+                            const pct = Math.round(100 * data.progress_completed / data.progress_total);
+                            statusMsg = `Computing viewshed... ${pct}% (${data.progress_completed}/${data.progress_total} points)`;
+                        } else if (data.progress) {
+                            statusMsg = `Computing viewshed... ${data.progress}`;
+                        }
+                        showStatus(statusMsg, 'info');
                     } else if (data.status === 'completed') {
                         clearInterval(pollInterval);
                         showStatus('Viewshed computation complete!', 'success');
@@ -867,10 +874,18 @@ class ViewshedServer:
                 jobs[job_id]['status'] = 'running'
                 jobs[job_id]['progress'] = 'Initializing...'
 
+            # Define progress callback
+            def update_progress(completed, total, message):
+                with jobs_lock:
+                    jobs[job_id]['progress_completed'] = completed
+                    jobs[job_id]['progress_total'] = total
+                    jobs[job_id]['progress_message'] = message
+
             # Compute viewshed
             viewshed = compute_viewshed(
                 lat, lon, height, radius,
-                use_local_dem=True, dem_product=dem_product, grid_points=grid_points
+                use_local_dem=True, dem_product=dem_product, grid_points=grid_points,
+                progress_callback=update_progress
             )
 
             if viewshed is None:

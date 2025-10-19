@@ -208,7 +208,8 @@ def is_visible(observer_lat, observer_lon, observer_elevation_agl,
 
 def compute_viewshed(observer_lat, observer_lon, observer_height_agl,
                      radius_km, resolution_km=1.0, num_radials=36,
-                     use_local_dem=True, dem_product='SRTM3', grid_points=25):
+                     use_local_dem=True, dem_product='SRTM3', grid_points=25,
+                     progress_callback=None):
     """
     Compute viewshed from an observer location.
 
@@ -223,6 +224,7 @@ def compute_viewshed(observer_lat, observer_lon, observer_height_agl,
         grid_points: Number of grid points in each direction (creates grid_points x grid_points grid)
         use_local_dem: If True, download and use local DEM tiles (much faster)
         dem_product: 'SRTM1' (30m res) or 'SRTM3' (90m res)
+        progress_callback: Optional function(completed, total, message) to report progress
 
     Returns:
         Dictionary with:
@@ -308,6 +310,8 @@ def compute_viewshed(observer_lat, observer_lon, observer_height_agl,
             # Show progress
             if point_count % 100 == 0:
                 print(f"    Progress: {point_count}/{total_points} points", end='\r')
+                if progress_callback:
+                    progress_callback(point_count, total_points, f"Testing point {point_count}/{total_points}")
 
             # Calculate distance from observer to determine if within radius
             from geographiclib.geodesic import Geodesic

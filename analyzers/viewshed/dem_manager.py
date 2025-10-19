@@ -94,18 +94,49 @@ class DEMManager:
 
         except RuntimeError as e:
             if "Too many tiles" in str(e):
-                # elevation library limits to 9 tiles, so we need to download using seed
-                # which downloads tiles individually
-                print(f"  Too many tiles for single download, using tile-by-tile method...")
+                # elevation library has a tile limit, so we need to split the area
+                # into smaller chunks and download them separately
+                print(f"  Too many tiles for single download, splitting into smaller chunks...")
                 try:
-                    # Seed downloads tiles one by one to the cache
-                    elevation.seed(bounds=bounds, product=product, max_download_tiles=100)
-                    # Now clip from the seeded cache
-                    elevation.clip(bounds=bounds, output=str(output_file), product=product)
+                    # Split the bounding box into smaller chunks
+                    # We'll use a 3x3 grid of sub-boxes to stay well under the limit
+                    self._download_tiles_in_chunks(bounds, product)
+
+                    # Now we need to clip from the cache without trying to seed again
+                    # Call elevation.clean() to rebuild the VRT from cached tiles
+                    elevation.clean()
+
+                    # Now clip with max_download_tiles=0 to prevent any new downloads
+                    # This forces it to use only what's in the cache
+                    import subprocess
+                    import os
+
+                    # Get the cache directory for this product
+                    # The elevation library uses a different cache structure
+                    import os
+                    cache_root = os.path.expanduser('~/.cache/elevation')
+                    vrt_path = os.path.join(cache_root, product, f'{product}.vrt')
+
+                    # Use gdal_translate directly to clip from the VRT
+                    min_lon, min_lat, max_lon, max_lat = bounds
+                    cmd = [
+                        'gdal_translate',
+                        '-co', 'TILED=YES',
+                        '-co', 'COMPRESS=DEFLATE',
+                        '-co', 'ZLEVEL=9',
+                        '-co', 'PREDICTOR=2',
+                        '-projwin', str(min_lon), str(max_lat), str(max_lon), str(min_lat),
+                        vrt_path,
+                        str(output_file)
+                    ]
+                    result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+                    if result.stderr:
+                        print(f"  gdal_translate stderr: {result.stderr}")
+
                     print(f"  Download complete: {output_file.name}")
                     return output_file
                 except Exception as e2:
-                    print(f"  ERROR downloading DEM tiles with seed method: {e2}")
+                    print(f"  ERROR downloading DEM tiles with chunked method: {e2}")
                     raise
             else:
                 print(f"  ERROR downloading DEM tiles: {e}")
@@ -113,6 +144,65 @@ class DEMManager:
         except Exception as e:
             print(f"  ERROR downloading DEM tiles: {e}")
             raise
+
+    def _download_tiles_in_chunks(self, bounds, product):
+        """
+        Download tiles for a large area by splitting into smaller chunks.
+
+        Args:
+            bounds: Tuple of (min_lon, min_lat, max_lon, max_lat)
+            product: DEM product ('SRTM1' or 'SRTM3')
+        """
+        min_lon, min_lat, max_lon, max_lat = bounds
+
+        # Calculate chunk size - split into a grid that keeps each chunk small
+        # SRTM tiles are 1 degree squares, and the limit is around 20 tiles
+        # So we'll aim for chunks of about 2x2 degrees (4 tiles max)
+        chunk_size = 2.0  # degrees
+
+        # Calculate number of chunks needed in each direction
+        lon_range = max_lon - min_lon
+        lat_range = max_lat - min_lat
+
+        num_lon_chunks = int(np.ceil(lon_range / chunk_size))
+        num_lat_chunks = int(np.ceil(lat_range / chunk_size))
+
+        total_chunks = num_lon_chunks * num_lat_chunks
+        print(f"  Splitting into {num_lon_chunks}x{num_lat_chunks} = {total_chunks} chunks...")
+
+        # Download each chunk
+        chunk_num = 0
+        for i in range(num_lon_chunks):
+            for j in range(num_lat_chunks):
+                chunk_num += 1
+
+                # Calculate chunk bounds
+                chunk_min_lon = min_lon + i * chunk_size
+                chunk_max_lon = min(chunk_min_lon + chunk_size, max_lon)
+                chunk_min_lat = min_lat + j * chunk_size
+                chunk_max_lat = min(chunk_min_lat + chunk_size, max_lat)
+
+                chunk_bounds = (chunk_min_lon, chunk_min_lat, chunk_max_lon, chunk_max_lat)
+
+                print(f"  Downloading chunk {chunk_num}/{total_chunks}...")
+
+                # Try to download this chunk
+                try:
+                    # Use a temporary file for the chunk
+                    chunk_file = self.cache_dir / f'temp_chunk_{i}_{j}.tif'
+                    elevation.clip(bounds=chunk_bounds, output=str(chunk_file), product=product)
+                    # Remove the temporary file - we just needed to populate the cache
+                    if chunk_file.exists():
+                        chunk_file.unlink()
+                except RuntimeError as e:
+                    if "Too many tiles" in str(e):
+                        # Even the chunk is too big - recursively split it
+                        print(f"  Chunk still too large, splitting further...")
+                        self._download_tiles_in_chunks(chunk_bounds, product)
+                    else:
+                        raise
+
+        print(f"  All {total_chunks} chunks downloaded successfully")
 
     def get_elevation(self, lat, lon, dem_file=None):
         """

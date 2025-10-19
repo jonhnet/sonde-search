@@ -146,7 +146,7 @@ class DEMManager:
         print(f"    Product: {product} ({'~30m' if product == 'SRTM1' else '~90m'} resolution)")
 
         import os
-        cache_root = os.path.expanduser('~/.cache/elevation')
+        cache_root = elevation.datasource.CACHE_DIR
         vrt_path = os.path.join(cache_root, product, f'{product}.vrt')
 
         # Check which tiles we need
@@ -207,7 +207,7 @@ class DEMManager:
 
         # Get list of 1-degree tiles needed
         tiles_needed = self._get_tiles_for_bounds(bounds)
-        tiles_missing = self._check_missing_tiles(tiles_needed, product, os.path.expanduser('~/.cache/elevation'))
+        tiles_missing = self._check_missing_tiles(tiles_needed, product, elevation.datasource.CACHE_DIR)
 
         total_tiles = len(tiles_missing)
         print(f"  Processing {total_tiles} tiles individually (1-degree tiles matching source data)...")
@@ -267,7 +267,7 @@ class DEMManager:
         filename = f"{int(min_lon)}_{int(min_lat)}_to_{int(max_lon)}_{int(max_lat)}.tif"
 
         # Store in elevation cache under processed_chunks subdirectory
-        cache_root = os.path.expanduser('~/.cache/elevation')
+        cache_root = elevation.datasource.CACHE_DIR
         cache_dir = os.path.join(cache_root, product, 'processed_chunks')
 
         return os.path.join(cache_dir, filename)

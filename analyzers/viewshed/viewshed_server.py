@@ -290,22 +290,17 @@ class ViewshedServer:
         </div>
 
         <form id="viewshedForm" onsubmit="submitForm(event)">
-            <div class="form-grid">
-                <div class="form-group">
-                    <label>
-                        Latitude
-                        <div class="label-help">Decimal degrees (-90 to 90)</div>
-                    </label>
-                    <input type="number" id="lat" step="0.0001" min="-90" max="90" value="47.6062" required>
-                </div>
+            <div class="form-group" style="grid-column: 1 / -1;">
+                <label>
+                    Location (Lat, Lon)
+                    <div class="label-help">Paste from Google Maps or enter as "lat, lon"</div>
+                </label>
+                <input type="text" id="latlng" placeholder="47.6062, -122.3321" value="47.6062, -122.3321" required>
+                <input type="hidden" id="lat" value="47.6062">
+                <input type="hidden" id="lon" value="-122.3321">
+            </div>
 
-                <div class="form-group">
-                    <label>
-                        Longitude
-                        <div class="label-help">Decimal degrees (-180 to 180)</div>
-                    </label>
-                    <input type="number" id="lon" step="0.0001" min="-180" max="180" value="-122.3321" required>
-                </div>
+            <div class="form-grid">
 
                 <div class="form-group">
                     <label>
@@ -418,8 +413,7 @@ class ViewshedServer:
                 // Handle marker drag
                 selectedMarker.on('dragend', function(e) {
                     const pos = e.target.getLatLng();
-                    document.getElementById('lat').value = pos.lat.toFixed(4);
-                    document.getElementById('lon').value = pos.lng.toFixed(4);
+                    updateInputFromLatLon(pos.lat, pos.lng);
                     saveState();
                 });
             }
@@ -437,8 +431,7 @@ class ViewshedServer:
                 initialZoom = savedState.mapZoom;
 
                 // Update form fields with saved antenna location
-                document.getElementById('lat').value = savedState.lat.toFixed(4);
-                document.getElementById('lon').value = savedState.lon.toFixed(4);
+                updateInputFromLatLon(savedState.lat, savedState.lon);
             } else {
                 // Use defaults from form
                 initialLat = parseFloat(document.getElementById('lat').value);
@@ -469,8 +462,7 @@ class ViewshedServer:
                 const lon = e.latlng.lng;
 
                 // Update form fields
-                document.getElementById('lat').value = lat.toFixed(4);
-                document.getElementById('lon').value = lon.toFixed(4);
+                updateInputFromLatLon(lat, lon);
 
                 // Update marker
                 setAntennaMarker(lat, lon);
@@ -480,9 +472,8 @@ class ViewshedServer:
                 saveState();
             });
 
-            // Save state when form fields change
-            document.getElementById('lat').addEventListener('change', saveState);
-            document.getElementById('lon').addEventListener('change', saveState);
+            // Save state when latlng input changes
+            document.getElementById('latlng').addEventListener('change', updateLatLonFromInput);
         });
 
         function loadPreset(preset) {
@@ -643,12 +634,94 @@ class ViewshedServer:
                 });
         }
 
+        // Parse lat/lon from text input (supports Google Maps format and simple "lat, lon")
+        function parseLatLon() {
+            const input = document.getElementById('latlng').value.trim();
+
+            // Try to parse various formats:
+            // "47.6062, -122.3321"
+            // "47.6062,-122.3321"
+            // "-122.3321, 47.6062" (Google Maps copy format - lon, lat)
+
+            // Remove any parentheses or extra whitespace
+            const cleaned = input.replace(/[()]/g, '').trim();
+
+            // Split by comma
+            const parts = cleaned.split(',').map(p => p.trim());
+
+            if (parts.length !== 2) {
+                return null;
+            }
+
+            const num1 = parseFloat(parts[0]);
+            const num2 = parseFloat(parts[1]);
+
+            if (isNaN(num1) || isNaN(num2)) {
+                return null;
+            }
+
+            // Detect which is lat and which is lon
+            // Latitude is always -90 to 90, longitude is -180 to 180
+            // If first number is in lat range and second is outside, assume lat, lon
+            // If first number is outside lat range, assume it's lon, lat (Google Maps format)
+            let lat, lon;
+
+            if (Math.abs(num1) <= 90 && Math.abs(num2) <= 180) {
+                // Could be either format, assume lat, lon (most common)
+                lat = num1;
+                lon = num2;
+            } else if (Math.abs(num2) <= 90 && Math.abs(num1) <= 180) {
+                // First number is out of lat range, must be lon, lat
+                lon = num1;
+                lat = num2;
+            } else {
+                return null;
+            }
+
+            // Validate ranges
+            if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+                return null;
+            }
+
+            return { lat, lon };
+        }
+
+        // Update hidden lat/lon fields when latlng input changes
+        function updateLatLonFromInput() {
+            const parsed = parseLatLon();
+            if (parsed) {
+                document.getElementById('lat').value = parsed.lat;
+                document.getElementById('lon').value = parsed.lon;
+
+                // Update marker if it exists
+                if (selectedMarker) {
+                    setAntennaMarker(parsed.lat, parsed.lon);
+                }
+
+                saveState();
+            }
+        }
+
+        // Update the latlng text field from lat/lon values
+        function updateInputFromLatLon(lat, lon) {
+            document.getElementById('latlng').value = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+            document.getElementById('lat').value = lat;
+            document.getElementById('lon').value = lon;
+        }
+
         function submitForm(event) {
             event.preventDefault();
 
+            // Parse lat/lon from input
+            const parsed = parseLatLon();
+            if (!parsed) {
+                showStatus('Error: Invalid lat/lon format. Use "lat, lon" format.', 'error');
+                return;
+            }
+
             const formData = {
-                lat: parseFloat(document.getElementById('lat').value),
-                lon: parseFloat(document.getElementById('lon').value),
+                lat: parsed.lat,
+                lon: parsed.lon,
                 height: parseFloat(document.getElementById('height').value),
                 radius: parseFloat(document.getElementById('radius').value),
                 grid_points: parseInt(document.getElementById('grid_points').value),

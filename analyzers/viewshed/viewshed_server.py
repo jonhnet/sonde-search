@@ -26,7 +26,7 @@ from pathlib import Path
 
 # Import viewshed computation modules
 sys.path.insert(0, os.path.dirname(__file__))
-from viewshed import compute_viewshed, plot_viewshed
+from viewshed import compute_viewshed, plot_viewshed, optimize_coverage
 from dem_manager import DEMManager
 
 # Configuration
@@ -42,6 +42,13 @@ jobs_lock = threading.Lock()
 
 class ViewshedServer:
     """CherryPy web service for viewshed analysis."""
+
+    @cherrypy.expose
+    def optimize_ui(self):
+        """Serve the optimization UI."""
+        html_path = Path(__file__).parent / 'optimize.html'
+        with open(html_path, 'r') as f:
+            return f.read()
 
     @cherrypy.expose
     def index(self):
@@ -278,6 +285,12 @@ class ViewshedServer:
         <div class="sidebar">
             <h1>Viewshed Analysis</h1>
             <p class="subtitle">Antenna Line-of-Sight Planning for Sonde Receivers</p>
+
+            <div style="margin-bottom: 20px;">
+                <a href="optimize_ui" style="display: inline-block; background: #2196F3; color: white; text-decoration: none; padding: 10px 20px; border-radius: 4px; font-weight: 600; font-size: 14px;">
+                    🎯 Coverage Optimization Tool →
+                </a>
+            </div>
 
             <div style="background: #e3f2fd; border: 1px solid #2196F3; color: #1976D2; padding: 10px; border-radius: 4px; margin-bottom: 20px; font-size: 13px;">
                 <b>💡 Tip:</b> Click anywhere on the map to set the antenna location
@@ -952,6 +965,114 @@ class ViewshedServer:
                 return {"error": "Job not completed"}
 
             return job.get('geojson', {})
+
+    @cherrypy.expose
+    @cherrypy.tools.json_in()
+    @cherrypy.tools.json_out()
+    def optimize(self):
+        """
+        Optimize receiver placement for target area coverage.
+
+        POST body:
+        {
+            "target_bounds": {"min_lat": ..., "max_lat": ..., "min_lon": ..., "max_lon": ...},
+            "search_bounds": {"min_lat": ..., "max_lat": ..., "min_lon": ..., "max_lon": ...},
+            "height": 10,
+            "target_grid_size": 20,
+            "search_grid_size": 10,
+            "top_k": 5,
+            "hill_climb_steps": 10,
+            "dem_product": "SRTM3"
+        }
+        """
+        try:
+            params = cherrypy.request.json
+
+            # Validate required parameters
+            required = ['target_bounds', 'search_bounds', 'height']
+            for field in required:
+                if field not in params:
+                    cherrypy.response.status = 400
+                    return {"error": f"Missing required field: {field}"}
+
+            # Validate bounds structure
+            for bounds_name in ['target_bounds', 'search_bounds']:
+                bounds = params[bounds_name]
+                required_keys = ['min_lat', 'max_lat', 'min_lon', 'max_lon']
+                for key in required_keys:
+                    if key not in bounds:
+                        cherrypy.response.status = 400
+                        return {"error": f"Missing {key} in {bounds_name}"}
+
+            # Create job
+            job_id = str(uuid.uuid4())
+            with jobs_lock:
+                jobs[job_id] = {
+                    'id': job_id,
+                    'status': 'running',
+                    'type': 'optimization',
+                    'params': params
+                }
+
+            # Start background thread
+            thread = threading.Thread(target=self._run_optimization, args=(job_id,))
+            thread.daemon = True
+            thread.start()
+
+            return {"job_id": job_id}
+
+        except Exception as e:
+            cherrypy.response.status = 500
+            return {"error": str(e)}
+
+    def _run_optimization(self, job_id):
+        """Background worker for coverage optimization."""
+        try:
+            with jobs_lock:
+                params = jobs[job_id]['params']
+
+            # Extract parameters
+            target_bounds = params['target_bounds']
+            search_bounds = params['search_bounds']
+            height = float(params['height'])
+            target_grid_size = int(params.get('target_grid_size', 20))
+            search_grid_size = int(params.get('search_grid_size', 10))
+            top_k = int(params.get('top_k', 5))
+            hill_climb_steps = int(params.get('hill_climb_steps', 10))
+            dem_product = params.get('dem_product', 'SRTM3')
+
+            # Progress callback to update job status
+            def update_progress(completed, total, message):
+                with jobs_lock:
+                    jobs[job_id]['progress_completed'] = completed
+                    jobs[job_id]['progress_total'] = total
+                    jobs[job_id]['progress_message'] = message
+
+            # Run optimization
+            result = optimize_coverage(
+                target_bounds=target_bounds,
+                search_bounds=search_bounds,
+                observer_height_agl=height,
+                target_grid_size=target_grid_size,
+                search_grid_size=search_grid_size,
+                top_k=top_k,
+                hill_climb_steps=hill_climb_steps,
+                dem_product=dem_product,
+                progress_callback=update_progress
+            )
+
+            # Store results
+            with jobs_lock:
+                jobs[job_id]['status'] = 'completed'
+                jobs[job_id]['best_location'] = result['best_location']
+                jobs[job_id]['best_coverage_pct'] = result['best_coverage_pct']
+                jobs[job_id]['all_candidates'] = result['all_candidates']
+                jobs[job_id]['target_points'] = result['target_points']
+
+        except Exception as e:
+            with jobs_lock:
+                jobs[job_id]['status'] = 'failed'
+                jobs[job_id]['error'] = str(e)
 
 
 def main():

@@ -418,6 +418,263 @@ def plot_viewshed(observer_lat, observer_lon, viewshed_data, output_file='viewsh
     return output_file
 
 
+def compute_coverage(observer_lat, observer_lon, observer_height_agl,
+                     target_points, dem_manager=None, dem_file=None):
+    """
+    Compute what fraction of target points are visible from an observer location.
+
+    This is different from compute_viewshed - instead of computing a radial grid
+    around the observer, this tests visibility to a fixed set of target points.
+    Useful for coverage optimization.
+
+    Args:
+        observer_lat, observer_lon: Observer location
+        observer_height_agl: Observer antenna height above ground (meters)
+        target_points: List of (lat, lon) tuples to test visibility to
+        dem_manager: Optional DEMManager instance
+        dem_file: Optional DEM file path
+
+    Returns:
+        Dictionary with:
+            - 'visible_count': Number of target points visible
+            - 'total_count': Total number of target points
+            - 'coverage_pct': Percentage of target points visible
+            - 'visible_indices': List of indices of visible points
+            - 'observer_elevation': Observer ground elevation MSL
+    """
+    # Get observer elevation
+    observer_elevation_msl = get_elevation(observer_lat, observer_lon,
+                                          dem_manager=dem_manager, dem_file=dem_file)
+    if observer_elevation_msl is None:
+        # Can't determine elevation - return zero coverage
+        return {
+            'visible_count': 0,
+            'total_count': len(target_points),
+            'coverage_pct': 0.0,
+            'visible_indices': [],
+            'observer_elevation': None
+        }
+
+    visible_indices = []
+    elevation_cache = {}
+
+    for idx, (target_lat, target_lon) in enumerate(target_points):
+        # Get target elevation
+        target_elevation = get_elevation(target_lat, target_lon, cache=elevation_cache,
+                                        dem_manager=dem_manager, dem_file=dem_file)
+        if target_elevation is None:
+            target_elevation = 0.0  # Assume sea level for water/missing data
+
+        # Check visibility
+        if is_visible(observer_lat, observer_lon, observer_height_agl,
+                     target_lat, target_lon, target_elevation, observer_elevation_msl,
+                     dem_manager=dem_manager, dem_file=dem_file):
+            visible_indices.append(idx)
+
+    visible_count = len(visible_indices)
+    total_count = len(target_points)
+    coverage_pct = 100.0 * visible_count / total_count if total_count > 0 else 0.0
+
+    return {
+        'visible_count': visible_count,
+        'total_count': total_count,
+        'coverage_pct': coverage_pct,
+        'visible_indices': visible_indices,
+        'observer_elevation': observer_elevation_msl
+    }
+
+
+def optimize_coverage(target_bounds, search_bounds, observer_height_agl,
+                     target_grid_size=20, search_grid_size=10,
+                     top_k=5, hill_climb_steps=10,
+                     dem_product='SRTM3', progress_callback=None):
+    """
+    Find optimal observer locations to maximize coverage of a target area.
+
+    Strategy:
+    1. Create fixed grid of points in target area
+    2. Do coarse grid search over search area
+    3. Hill climb from top k candidates
+
+    Args:
+        target_bounds: Dict with 'min_lat', 'max_lat', 'min_lon', 'max_lon' for target area
+        search_bounds: Dict with 'min_lat', 'max_lat', 'min_lon', 'max_lon' for search area
+        observer_height_agl: Observer antenna height above ground (meters)
+        target_grid_size: Number of target points in each direction (creates NxN grid)
+        search_grid_size: Number of search points in each direction for coarse search
+        top_k: Number of top candidates to hill climb from
+        hill_climb_steps: Number of hill climbing iterations per candidate
+        dem_product: 'SRTM1' or 'SRTM3'
+        progress_callback: Optional function(completed, total, message) to report progress
+
+    Returns:
+        Dictionary with:
+            - 'best_location': (lat, lon) of best observer location
+            - 'best_coverage_pct': Coverage percentage at best location
+            - 'all_candidates': List of all evaluated locations with scores
+            - 'target_points': List of target points used
+    """
+    print(f"Optimizing coverage for target area...")
+    print(f"  Target grid: {target_grid_size}x{target_grid_size} points")
+    print(f"  Search grid: {search_grid_size}x{search_grid_size} initial candidates")
+    print(f"  Hill climbing from top {top_k} candidates")
+
+    # Calculate total estimated steps
+    coarse_search_steps = search_grid_size * search_grid_size
+    # Hill climbing: estimate 8 neighbors per step, but may converge early
+    hill_climb_steps_estimate = top_k * hill_climb_steps * 8
+    total_steps_estimate = coarse_search_steps + hill_climb_steps_estimate
+    completed_steps = 0
+
+    def report_progress(message):
+        nonlocal completed_steps
+        if progress_callback:
+            progress_callback(completed_steps, total_steps_estimate, message)
+
+    # Setup DEM manager
+    dem_manager = DEMManager()
+
+    # Download DEM tiles for entire area (target + search)
+    all_min_lat = min(target_bounds['min_lat'], search_bounds['min_lat'])
+    all_max_lat = max(target_bounds['max_lat'], search_bounds['max_lat'])
+    all_min_lon = min(target_bounds['min_lon'], search_bounds['min_lon'])
+    all_max_lon = max(target_bounds['max_lon'], search_bounds['max_lon'])
+
+    # Add padding
+    lat_padding = (all_max_lat - all_min_lat) * 0.1
+    lon_padding = (all_max_lon - all_min_lon) * 0.1
+
+    dem_file = dem_manager.download_tiles_for_bounds(
+        all_min_lat - lat_padding, all_min_lon - lon_padding,
+        all_max_lat + lat_padding, all_max_lon + lon_padding,
+        product=dem_product)
+
+    # Create fixed target grid
+    print("  Creating target point grid...")
+    target_lats = np.linspace(target_bounds['min_lat'], target_bounds['max_lat'], target_grid_size)
+    target_lons = np.linspace(target_bounds['min_lon'], target_bounds['max_lon'], target_grid_size)
+    target_points = [(lat, lon) for lat in target_lats for lon in target_lons]
+    print(f"  Target points: {len(target_points)}")
+
+    # Coarse grid search
+    print("  Running coarse grid search...")
+    search_lats = np.linspace(search_bounds['min_lat'], search_bounds['max_lat'], search_grid_size)
+    search_lons = np.linspace(search_bounds['min_lon'], search_bounds['max_lon'], search_grid_size)
+
+    candidates = []  # List of (lat, lon, coverage_pct)
+    total_search = search_grid_size * search_grid_size
+    count = 0
+
+    report_progress("Starting coarse grid search...")
+
+    for lat in search_lats:
+        for lon in search_lons:
+            count += 1
+            if count % 10 == 0:
+                print(f"    Progress: {count}/{total_search} candidates", end='\r')
+
+            result = compute_coverage(lat, lon, observer_height_agl, target_points,
+                                     dem_manager=dem_manager, dem_file=dem_file)
+            candidates.append((lat, lon, result['coverage_pct']))
+
+            completed_steps += 1
+            report_progress(f"Coarse search: {count}/{total_search} candidates")
+
+    print(f"\n  Coarse search complete. Best so far: {max(c[2] for c in candidates):.1f}%")
+
+    # Sort and take top k
+    candidates.sort(key=lambda x: x[2], reverse=True)
+    top_candidates = candidates[:top_k]
+
+    print(f"  Top {top_k} candidates:")
+    for i, (lat, lon, cov) in enumerate(top_candidates):
+        print(f"    {i+1}. ({lat:.4f}, {lon:.4f}): {cov:.1f}%")
+
+    # Hill climbing from each top candidate
+    print(f"  Hill climbing ({hill_climb_steps} steps per candidate)...")
+
+    # Estimate step size based on search area
+    lat_step = (search_bounds['max_lat'] - search_bounds['min_lat']) / (search_grid_size * 2)
+    lon_step = (search_bounds['max_lon'] - search_bounds['min_lon']) / (search_grid_size * 2)
+
+    best_overall = None
+    best_coverage = 0
+
+    for candidate_idx, (start_lat, start_lon, start_cov) in enumerate(top_candidates):
+        print(f"    Climbing from candidate {candidate_idx+1}...")
+        current_lat, current_lon = start_lat, start_lon
+        current_cov = start_cov
+
+        report_progress(f"Hill climbing: candidate {candidate_idx+1}/{top_k}")
+
+        for step in range(hill_climb_steps):
+            # Try all 8 neighbors plus staying put (reduce step size each iteration)
+            step_scale = 1.0 / (1 + step * 0.2)  # Gradually reduce step size
+            current_lat_step = lat_step * step_scale
+            current_lon_step = lon_step * step_scale
+
+            neighbors = [
+                (current_lat + current_lat_step, current_lon),  # N
+                (current_lat - current_lat_step, current_lon),  # S
+                (current_lat, current_lon + current_lon_step),  # E
+                (current_lat, current_lon - current_lon_step),  # W
+                (current_lat + current_lat_step, current_lon + current_lon_step),  # NE
+                (current_lat + current_lat_step, current_lon - current_lon_step),  # NW
+                (current_lat - current_lat_step, current_lon + current_lon_step),  # SE
+                (current_lat - current_lat_step, current_lon - current_lon_step),  # SW
+            ]
+
+            # Filter to stay within search bounds
+            neighbors = [(lat, lon) for lat, lon in neighbors
+                        if search_bounds['min_lat'] <= lat <= search_bounds['max_lat']
+                        and search_bounds['min_lon'] <= lon <= search_bounds['max_lon']]
+
+            # Evaluate neighbors
+            best_neighbor = None
+            best_neighbor_cov = current_cov
+
+            for lat, lon in neighbors:
+                result = compute_coverage(lat, lon, observer_height_agl, target_points,
+                                         dem_manager=dem_manager, dem_file=dem_file)
+                if result['coverage_pct'] > best_neighbor_cov:
+                    best_neighbor = (lat, lon)
+                    best_neighbor_cov = result['coverage_pct']
+
+                completed_steps += 1
+                report_progress(f"Hill climbing: candidate {candidate_idx+1}/{top_k}, step {step+1}/{hill_climb_steps}")
+
+            # Move to best neighbor if better, otherwise stop
+            if best_neighbor is not None:
+                current_lat, current_lon = best_neighbor
+                current_cov = best_neighbor_cov
+            else:
+                # No improvement found, stop climbing - add remaining steps to completed count
+                remaining = (hill_climb_steps - step - 1) * 8
+                completed_steps += remaining
+                break
+
+        print(f"      Final: ({current_lat:.4f}, {current_lon:.4f}): {current_cov:.1f}%")
+
+        # Track overall best
+        if current_cov > best_coverage:
+            best_overall = (current_lat, current_lon)
+            best_coverage = current_cov
+
+    # Cleanup
+    dem_manager.cleanup()
+
+    print(f"\n  Optimization complete!")
+    print(f"  Best location: ({best_overall[0]:.4f}, {best_overall[1]:.4f})")
+    print(f"  Coverage: {best_coverage:.1f}%")
+
+    return {
+        'best_location': best_overall,
+        'best_coverage_pct': best_coverage,
+        'all_candidates': candidates,
+        'target_points': target_points
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Compute and visualize viewshed for antenna placement planning',

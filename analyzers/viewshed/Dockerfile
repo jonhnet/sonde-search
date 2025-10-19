@@ -7,6 +7,8 @@ RUN apt-get update && apt-get install -y \
     libgdal-dev \
     make \
     curl \
+    unzip \
+    gzip \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory

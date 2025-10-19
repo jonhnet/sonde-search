@@ -343,8 +343,7 @@ class ViewshedServer:
                             <div class="label-help">Elevation data resolution</div>
                         </label>
                         <select id="dem_product">
-                            <option value="SRTM3">SRTM3 (90m, faster)</option>
-                            <option value="SRTM1">SRTM1 (30m, US only)</option>
+                            <option value="SRTM3">SRTM3 (90m, global)</option>
                             <option value="SRTM_BEST" selected>SRTM Best (adaptive)</option>
                         </select>
                     </div>

@@ -161,32 +161,14 @@ class DEMManager:
 
         print(f"  Need to download {len(tiles_missing)} tiles")
 
+        # Always use tile-by-tile method for consistent progress reporting and caching
+        # This processes each 1-degree tile individually with progress updates
         try:
-            # Use elevation.clip to download tiles - the VRT is automatically created
-            # We create a temporary output just to trigger the download
-            import tempfile
-            with tempfile.NamedTemporaryFile(suffix='.tif', delete=True) as tmp:
-                elevation.clip(bounds=bounds, output=tmp.name, product=product, cache_dir=str(self.cache_dir))
-            # File is automatically deleted, but tiles are now cached
-            print(f"  Tiles downloaded, using VRT: {vrt_path}")
+            self._download_tiles_in_chunks(bounds, product, progress_callback)
+            # Rebuild the VRT from cached tiles
+            elevation.clean(cache_dir=str(self.cache_dir), product=product)
+            print(f"  All tiles downloaded, using VRT: {vrt_path}")
             return vrt_path
-
-        except RuntimeError as e:
-            if "Too many tiles" in str(e):
-                # elevation library has a tile limit, so download in chunks
-                print(f"  Too many tiles for single download, splitting into smaller chunks...")
-                try:
-                    self._download_tiles_in_chunks(bounds, product, progress_callback)
-                    # Rebuild the VRT from cached tiles
-                    elevation.clean(cache_dir=str(self.cache_dir), product=product)
-                    print(f"  All tiles downloaded, using VRT: {vrt_path}")
-                    return vrt_path
-                except Exception as e2:
-                    print(f"  ERROR downloading DEM tiles with chunked method: {e2}")
-                    raise
-            else:
-                print(f"  ERROR downloading DEM tiles: {e}")
-                raise
         except Exception as e:
             print(f"  ERROR downloading DEM tiles: {e}")
             raise

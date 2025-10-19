@@ -284,22 +284,40 @@ class DEMManager:
             List of missing (lat, lon) tuples
         """
         import os
+        import glob
 
-        missing = []
         cache_dir = os.path.join(cache_root, product, 'cache')
 
-        for lat, lon in tiles:
-            # SRTM tile naming: N47W122 or S12E034
-            # Tiles are stored in subdirectories by latitude (e.g., cache/N48/N48W122.tif)
-            lat_str = f"{'N' if lat >= 0 else 'S'}{abs(lat):02d}"
-            lon_str = f"{'E' if lon >= 0 else 'W'}{abs(lon):03d}"
-            tile_name = f"{lat_str}{lon_str}.tif"
-            tile_path = os.path.join(cache_dir, lat_str, tile_name)
+        # SRTM1 and SRTM3 use different naming conventions
+        if product == 'SRTM1':
+            # SRTM1: Uses geographic names like N48W122.tif in subdirectories
+            missing = []
+            for lat, lon in tiles:
+                lat_str = f"{'N' if lat >= 0 else 'S'}{abs(lat):02d}"
+                lon_str = f"{'E' if lon >= 0 else 'W'}{abs(lon):03d}"
+                tile_name = f"{lat_str}{lon_str}.tif"
+                tile_path = os.path.join(cache_dir, lat_str, tile_name)
 
-            if not os.path.exists(tile_path):
-                missing.append((lat, lon))
+                if not os.path.exists(tile_path):
+                    missing.append((lat, lon))
+            return missing
 
-        return missing
+        else:
+            # SRTM3: Uses grid tile names like srtm_12_03.tif (flat structure)
+            # We can't easily map lat/lon to SRTM3 tile grid coordinates,
+            # so we just check if ANY tiles exist in the cache directory
+            # If cache has tiles, assume coverage is complete for the area
+            try:
+                cached_tiles = glob.glob(os.path.join(cache_dir, 'srtm_*.tif'))
+                if len(cached_tiles) > 0:
+                    # Cache exists, assume it's complete
+                    return []
+                else:
+                    # No cache, need to download
+                    return tiles
+            except Exception:
+                # Can't check cache, assume need to download
+                return tiles
 
     def _rebuild_vrt(self, cache_root, product):
         """

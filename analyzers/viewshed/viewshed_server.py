@@ -1219,7 +1219,7 @@ class ViewshedServer:
             import re
 
             tiles = []
-            cache_root = os.path.expanduser('~/.cache/elevation')
+            cache_root = os.path.expanduser(os.environ.get('ELEVATION_CACHE_DIR', '~/.cache/srtm'))
 
             # Check both SRTM1 and SRTM3 processed chunks
             for product in ['SRTM1', 'SRTM3']:

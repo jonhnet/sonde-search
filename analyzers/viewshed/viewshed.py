@@ -25,7 +25,6 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-import requests
 import sys
 import time
 from matplotlib.patches import Circle
@@ -44,9 +43,6 @@ cx.set_cache_dir(os.path.expanduser("~/.cache/geotiles"))
 EARTH_RADIUS_M = 6371000  # Earth radius in meters
 METERS_PER_KM = 1000
 METERS_PER_MILE = 1609.34
-
-# National Map Elevation API
-ELEVATION_API_URL = 'https://epqs.nationalmap.gov/v1/json'
 
 # Coordinate transformations
 wgs84_to_mercator = Transformer.from_crs(crs_from='EPSG:4326', crs_to='EPSG:3857')
@@ -86,31 +82,15 @@ def get_elevation(lat, lon, cache=None, dem_manager=None, dem_file=None):
 
     elev = None
 
-    # Try local DEM first if available
+    # Use local DEM (required - no API fallback)
     if dem_manager is not None:
         try:
             elev = dem_manager.get_elevation(lat, lon, dem_file)
         except Exception as e:
             print(f"Warning: DEM lookup failed for {lat},{lon}: {e}")
             elev = None
-
-    # Fallback to API if DEM unavailable
-    if elev is None and dem_manager is None:
-        try:
-            resp = requests.get(ELEVATION_API_URL, params={
-                'x': lon,
-                'y': lat,
-                'units': 'Meters',
-                'wkid': '4326',
-            }, timeout=10)
-            resp.raise_for_status()
-            data = resp.json()
-
-            # Extract elevation value
-            if 'value' in data and data['value'] is not None:
-                elev = float(data['value'])
-        except Exception as e:
-            print(f"Warning: Failed to get elevation for {lat},{lon}: {e}")
+    else:
+        print(f"Warning: No DEM manager provided for elevation lookup at {lat},{lon}")
 
     if cache is not None and elev is not None:
         cache[key] = elev

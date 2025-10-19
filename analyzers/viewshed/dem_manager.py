@@ -142,12 +142,12 @@ class DEMManager:
 
             if vals and len(vals) > 0:
                 elev = float(vals[0][0])
-                # Check for no-data values
+                # Check for no-data values - treat as sea level (0m)
                 if src.nodata is not None and elev == src.nodata:
-                    return None
+                    return 0.0
                 # SRTM uses -32768 as no-data in some cases
                 if elev < -1000:
-                    return None
+                    return 0.0
                 return elev
 
             return None

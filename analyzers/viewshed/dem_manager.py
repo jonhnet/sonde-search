@@ -164,7 +164,7 @@ class DEMManager:
         # Always use tile-by-tile method for consistent progress reporting and caching
         # This processes each 1-degree tile individually with progress updates
         try:
-            self._download_tiles_in_chunks(bounds, product, progress_callback)
+            self._download_tiles(bounds, product, progress_callback)
             # Rebuild the VRT from cached tiles
             elevation.clean(cache_dir=str(self.cache_dir), product=product)
             print(f"  All tiles downloaded, using VRT: {vrt_path}")
@@ -173,9 +173,9 @@ class DEMManager:
             print(f"  ERROR downloading DEM tiles: {e}")
             raise
 
-    def _download_tiles_in_chunks(self, bounds, product, progress_callback=None):
+    def _download_tiles(self, bounds, product, progress_callback=None):
         """
-        Download and process individual 1-degree tiles for a large area.
+        Download and process individual 1-degree tiles.
 
         Processes each 1-degree SRTM tile individually, matching the source data boundaries.
         This ensures we never reprocess a tile - once downloaded and processed, it's cached forever.

@@ -1445,58 +1445,75 @@ class ViewshedServer:
 
             print(f"Hill climb complete: ({current_lat:.4f}, {current_lon:.4f}): {best_coverage*100:.1f}% coverage")
 
-            # Convert to GeoJSON from visible/blocked points
-            grid_spacing_km = (radius / (grid_points / 2))
-            circle_radius_m = (grid_spacing_km * 1000) / 2
+            # Convert to GeoJSON using the SAME logic as regular viewshed (single code path!)
+            # Calculate grid spacing in meters
+            grid_spacing_km = (radius * 2) / (grid_points - 1)  # -1 because N points = N-1 intervals
+            grid_spacing_meters = grid_spacing_km * 1000
 
-            features = []
+            geojson_data = {
+                'type': 'FeatureCollection',
+                'properties': {
+                    'grid_spacing_meters': grid_spacing_meters
+                },
+                'features': []
+            }
+
             # Add visible points
-            for lat, lon in best_viewshed['visible_points']:
-                features.append({
+            for lat_point, lon_point in best_viewshed['visible_points']:
+                geojson_data['features'].append({
                     'type': 'Feature',
                     'geometry': {
                         'type': 'Point',
-                        'coordinates': [lon, lat]
+                        'coordinates': [lon_point, lat_point]
                     },
                     'properties': {
-                        'visible': True,
-                        'radius': circle_radius_m
+                        'visible': True
                     }
                 })
 
             # Add blocked points
-            for lat, lon in best_viewshed['blocked_points']:
-                features.append({
+            for lat_point, lon_point in best_viewshed['blocked_points']:
+                geojson_data['features'].append({
                     'type': 'Feature',
                     'geometry': {
                         'type': 'Point',
-                        'coordinates': [lon, lat]
+                        'coordinates': [lon_point, lat_point]
                     },
                     'properties': {
-                        'visible': False,
-                        'radius': circle_radius_m
+                        'visible': False
                     }
                 })
 
-            geojson = {
-                'type': 'FeatureCollection',
-                'features': features
-            }
+            # Add observer location (optimized position)
+            geojson_data['features'].append({
+                'type': 'Feature',
+                'geometry': {
+                    'type': 'Point',
+                    'coordinates': [current_lon, current_lat]
+                },
+                'properties': {
+                    'type': 'observer',
+                    'height_agl': best_viewshed['observer_height_agl'],
+                    'elevation_msl': best_viewshed['observer_elevation']
+                }
+            })
 
-            # Store results
+            # Store results in the same format as regular viewshed
             with jobs_lock:
                 jobs[job_id].update({
                     'status': 'completed',
                     'progress': 'Complete',
                     'completed': time.time(),
-                    # Top-level fields expected by the UI
+                    'geojson': geojson_data,
+                    'observer_lat': current_lat,
+                    'observer_lon': current_lon,
                     'observer_elevation': float(best_viewshed['observer_elevation']),
                     'observer_height_agl': float(height),
                     'visible_count': len(best_viewshed['visible_points']),
                     'blocked_count': len(best_viewshed['blocked_points']),
                     'visibility_pct': best_coverage * 100,
                     'max_range_km': float(best_viewshed['max_range_km']),
-                    # Nested result object for hill climb-specific data
+                    # Hill climb-specific data in result object
                     'result': {
                         'optimized_lat': current_lat,
                         'optimized_lon': current_lon,
@@ -1508,8 +1525,7 @@ class ViewshedServer:
                         'max_range_km': float(best_viewshed['max_range_km']),
                         'observer_elevation': float(best_viewshed['observer_elevation']),
                         'observer_height_agl': float(height),
-                    },
-                    'geojson': geojson
+                    }
                 })
 
         except Exception as e:

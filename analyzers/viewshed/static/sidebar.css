@@ -1,0 +1,66 @@
+/* Shared sidebar and toggle button styles */
+
+.sidebar {
+    transition: transform 0.3s ease;
+}
+
+.sidebar.collapsed {
+    transform: translateX(-100%);
+}
+
+/* Map container adjusts when sidebar collapses */
+.map-container {
+    transition: margin-left 0.3s ease;
+}
+
+.sidebar.collapsed ~ .map-container {
+    margin-left: -400px;
+}
+
+.toggle-sidebar {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 1001;
+    background: white;
+    border: 2px solid #333;
+    border-radius: 4px;
+    padding: 10px 15px;
+    cursor: pointer;
+    font-size: 24px;
+    font-weight: bold;
+    color: #333;
+    line-height: 1;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    width: auto;
+    min-width: 44px;
+}
+
+.toggle-sidebar:hover {
+    background: #f0f0f0;
+    border-color: #4CAF50;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .sidebar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        max-width: 350px;
+        height: 100vh;
+        transform: translateX(-100%);
+        z-index: 1000;
+    }
+
+    .sidebar:not(.collapsed) {
+        transform: translateX(0);
+    }
+
+    /* On mobile, map doesn't adjust margin */
+    .map-container,
+    .sidebar.collapsed ~ .map-container {
+        margin-left: 0 !important;
+    }
+}

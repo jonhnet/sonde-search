@@ -1221,27 +1221,50 @@ class ViewshedServer:
             tiles = []
             cache_root = os.path.expanduser(os.environ.get('ELEVATION_CACHE_DIR', '~/.cache/srtm'))
 
-            # Check both SRTM1 and SRTM3 processed chunks
-            for product in ['SRTM1', 'SRTM3']:
-                chunks_dir = os.path.join(cache_root, product, 'processed_chunks')
-                if not os.path.exists(chunks_dir):
-                    continue
-
-                # Find all cached tile files
-                pattern = os.path.join(chunks_dir, '*.tif')
-                for filepath in glob.glob(pattern):
+            # Check SRTM1 cached tiles (1-degree tiles with geographic naming)
+            srtm1_cache = os.path.join(cache_root, 'SRTM1', 'cache')
+            if os.path.exists(srtm1_cache):
+                # SRTM1 tiles are in subdirectories by latitude: N47/N47W122.tif
+                for filepath in glob.glob(os.path.join(srtm1_cache, '*', '*.tif')):
                     filename = os.path.basename(filepath)
-                    # Parse filename format: -125_46_to_-124_47.tif
-                    match = re.match(r'(-?\d+)_(-?\d+)_to_(-?\d+)_(-?\d+)\.tif', filename)
+                    # Parse SRTM1 filename: N47W122.tif (1-degree tile)
+                    match = re.match(r'([NS])(\d+)([EW])(\d+)\.tif$', filename)
                     if match:
-                        min_lon, min_lat, max_lon, max_lat = map(int, match.groups())
+                        lat_dir, lat_val, lon_dir, lon_val = match.groups()
+                        lat = int(lat_val) * (1 if lat_dir == 'N' else -1)
+                        lon = int(lon_val) * (-1 if lon_dir == 'W' else 1)
+                        # Each tile is 1 degree square
                         tiles.append({
-                            'product': product,
+                            'product': 'SRTM1',
                             'bounds': {
-                                'min_lon': min_lon,
-                                'min_lat': min_lat,
-                                'max_lon': max_lon,
-                                'max_lat': max_lat
+                                'min_lon': lon,
+                                'min_lat': lat,
+                                'max_lon': lon + 1,
+                                'max_lat': lat + 1
+                            }
+                        })
+
+            # Check SRTM3 cached tiles (5x5 degree tiles with grid naming)
+            srtm3_cache = os.path.join(cache_root, 'SRTM3', 'cache')
+            if os.path.exists(srtm3_cache):
+                # SRTM3 tiles use grid coordinates: srtm_12_03.tif
+                for filepath in glob.glob(os.path.join(srtm3_cache, 'srtm_*.tif')):
+                    filename = os.path.basename(filepath)
+                    # Parse SRTM3 filename: srtm_12_03.tif (grid coordinates)
+                    match = re.match(r'srtm_(\d+)_(\d+)\.tif$', filename)
+                    if match:
+                        x, y = map(int, match.groups())
+                        # SRTM3 grid: each tile is 5x5 degrees
+                        # Grid origin: x=1 starts at -180°, y=1 starts at 60°
+                        lon = -180 + ((x - 1) * 5)
+                        lat = 60 - ((y - 1) * 5)
+                        tiles.append({
+                            'product': 'SRTM3',
+                            'bounds': {
+                                'min_lon': lon,
+                                'min_lat': lat - 5,
+                                'max_lon': lon + 5,
+                                'max_lat': lat
                             }
                         })
 

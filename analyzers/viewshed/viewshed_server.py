@@ -479,11 +479,27 @@ class ViewshedServer:
 
             map = L.map('map').setView([initialLat, initialLon], initialZoom);
 
-            // Use OpenTopoMap for terrain emphasis
-            L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+            // Define base layers
+            const terrainLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
                 attribution: 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap (CC-BY-SA)',
                 maxZoom: 17
-            }).addTo(map);
+            });
+
+            const aerialLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+                maxZoom: 19
+            });
+
+            // Add default layer (terrain)
+            terrainLayer.addTo(map);
+
+            // Add layer control for switching between terrain and aerial
+            // Position at bottom-right to avoid overlap with sidebar toggle button
+            const baseMaps = {
+                "Terrain": terrainLayer,
+                "Aerial": aerialLayer
+            };
+            L.control.layers(baseMaps, null, { position: 'bottomright' }).addTo(map);
 
             // Draw initial antenna marker from form values
             setAntennaMarker(initialLat, initialLon);

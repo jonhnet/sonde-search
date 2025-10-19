@@ -35,6 +35,31 @@ HOST = '0.0.0.0'
 OUTPUT_DIR = Path('/tmp/viewshed_outputs')
 OUTPUT_DIR.mkdir(exist_ok=True)
 
+# Favorites storage (persistent across restarts)
+# Use /cache/srtm for Docker volume persistence, fallback to ~/.cache for local dev
+CACHE_BASE = os.environ.get('ELEVATION_CACHE_DIR', os.path.expanduser('~/.cache/elevation'))
+FAVORITES_FILE = os.path.join(CACHE_BASE, 'favorites.json')
+favorites_lock = threading.Lock()
+
+def load_favorites():
+    """Load favorites from persistent storage."""
+    try:
+        if os.path.exists(FAVORITES_FILE):
+            with open(FAVORITES_FILE, 'r') as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"Error loading favorites: {e}")
+    return []
+
+def save_favorites(favorites):
+    """Save favorites to persistent storage."""
+    try:
+        os.makedirs(os.path.dirname(FAVORITES_FILE), exist_ok=True)
+        with open(FAVORITES_FILE, 'w') as f:
+            json.dump(favorites, f, indent=2)
+    except Exception as e:
+        print(f"Error saving favorites: {e}")
+
 # Job storage (in-memory for now)
 jobs = {}
 jobs_lock = threading.Lock()
@@ -351,6 +376,7 @@ class ViewshedServer:
             </div>
 
             <button type="submit" id="submitBtn">Compute Viewshed</button>
+            <button type="button" id="favoriteBtn" onclick="addFavorite()" style="background: #2196F3; margin-top: 10px;">Add to Favorites</button>
             <button type="button" id="debugTilesBtn" onclick="toggleCachedTiles()" style="background: #FF9800; margin-top: 10px;">Show Cached Tiles</button>
         </form>
 
@@ -520,6 +546,9 @@ class ViewshedServer:
 
             // Save state when latlng input changes
             document.getElementById('latlng').addEventListener('change', updateLatLonFromInput);
+
+            // Load favorites on page load
+            loadFavorites();
         });
 
         function loadPreset(preset) {
@@ -823,6 +852,105 @@ class ViewshedServer:
             });
         }
 
+        // Favorites management
+        let favoritesLayer = null;
+
+        function loadFavorites() {
+            fetch('favorites')
+                .then(r => r.json())
+                .then(data => {
+                    renderFavorites(data.favorites);
+                })
+                .catch(err => {
+                    console.error('Error loading favorites:', err);
+                });
+        }
+
+        function renderFavorites(favorites) {
+            // Remove existing favorites layer
+            if (favoritesLayer) {
+                map.removeLayer(favoritesLayer);
+            }
+
+            // Create markers for each favorite
+            const markers = favorites.map(fav => {
+                const marker = L.marker([fav.lat, fav.lon], {
+                    icon: L.icon({
+                        iconUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMTQgNmwtMy02TDggNmwtNiAyIDQgMy41LTEgNi41IDYtMyA2IDMtMS02LjUgNC0zLjV6IiBmaWxsPSIjMjE5NkYzIiBzdHJva2U9IiMwMDAiIHN0cm9rZS13aWR0aD0iMC41Ii8+PC9zdmc+',
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 24],
+                        popupAnchor: [0, -24]
+                    })
+                });
+
+                marker.bindPopup(
+                    `<b>${fav.name}</b><br>` +
+                    `${fav.lat.toFixed(4)}, ${fav.lon.toFixed(4)}<br>` +
+                    `<button onclick="loadFavoriteLocation(${fav.lat}, ${fav.lon})" style="margin-top: 5px; padding: 5px 10px; cursor: pointer;">Load Location</button><br>` +
+                    `<button onclick="deleteFavorite('${fav.id}')" style="margin-top: 5px; padding: 5px 10px; cursor: pointer; background: #f44336; color: white; border: none; border-radius: 3px;">Delete</button>`
+                );
+
+                return marker;
+            });
+
+            // Add all markers to map
+            favoritesLayer = L.layerGroup(markers).addTo(map);
+        }
+
+        function loadFavoriteLocation(lat, lon) {
+            updateInputFromLatLon(lat, lon);
+            setAntennaMarker(lat, lon);
+            saveState();
+            map.closePopup();
+        }
+
+        function addFavorite() {
+            const parsed = parseLatLon();
+            if (!parsed) {
+                showStatus('Error: Please enter a valid location first', 'error');
+                return;
+            }
+
+            const name = prompt('Enter a name for this favorite location:', `${parsed.lat.toFixed(4)}, ${parsed.lon.toFixed(4)}`);
+            if (!name) return;
+
+            fetch('add_favorite', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({lat: parsed.lat, lon: parsed.lon, name: name})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showStatus('Favorite added successfully!', 'success');
+                    loadFavorites();
+                } else {
+                    showStatus(`Error: ${data.error}`, 'error');
+                }
+            })
+            .catch(err => {
+                showStatus(`Error adding favorite: ${err}`, 'error');
+            });
+        }
+
+        function deleteFavorite(favoriteId) {
+            if (!confirm('Are you sure you want to delete this favorite?')) return;
+
+            fetch(`delete_favorite?favorite_id=${favoriteId}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        showStatus('Favorite deleted', 'success');
+                        loadFavorites();
+                    } else {
+                        showStatus(`Error: ${data.error}`, 'error');
+                    }
+                })
+                .catch(err => {
+                    showStatus(`Error deleting favorite: ${err}`, 'error');
+                });
+        }
+
         // Debug: Toggle cached tiles visualization
         let cachedTilesLayer = null;
         let cachedTilesVisible = false;
@@ -1118,6 +1246,69 @@ class ViewshedServer:
                         })
 
             return {'tiles': tiles, 'count': len(tiles)}
+
+        except Exception as e:
+            cherrypy.response.status = 500
+            return {"error": str(e)}
+
+    @cherrypy.expose
+    @cherrypy.tools.json_out()
+    def favorites(self):
+        """Get all favorite locations."""
+        with favorites_lock:
+            return {'favorites': load_favorites()}
+
+    @cherrypy.expose
+    @cherrypy.tools.json_in()
+    @cherrypy.tools.json_out()
+    def add_favorite(self):
+        """Add a new favorite location."""
+        try:
+            params = cherrypy.request.json
+
+            # Validate parameters
+            lat = float(params['lat'])
+            lon = float(params['lon'])
+            name = params.get('name', f"{lat:.4f}, {lon:.4f}")
+
+            if not (-90 <= lat <= 90):
+                cherrypy.response.status = 400
+                return {"error": "Latitude out of range"}
+            if not (-180 <= lon <= 180):
+                cherrypy.response.status = 400
+                return {"error": "Longitude out of range"}
+
+            # Add favorite
+            with favorites_lock:
+                favorites = load_favorites()
+                favorite_id = str(uuid.uuid4())
+                favorite = {
+                    'id': favorite_id,
+                    'lat': lat,
+                    'lon': lon,
+                    'name': name,
+                    'created': time.time()
+                }
+                favorites.append(favorite)
+                save_favorites(favorites)
+
+            return {"success": True, "favorite": favorite}
+
+        except (KeyError, ValueError, TypeError) as e:
+            cherrypy.response.status = 400
+            return {"error": str(e)}
+
+    @cherrypy.expose
+    @cherrypy.tools.json_out()
+    def delete_favorite(self, favorite_id):
+        """Delete a favorite location by ID."""
+        try:
+            with favorites_lock:
+                favorites = load_favorites()
+                favorites = [f for f in favorites if f['id'] != favorite_id]
+                save_favorites(favorites)
+
+            return {"success": True}
 
         except Exception as e:
             cherrypy.response.status = 500

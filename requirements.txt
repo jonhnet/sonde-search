@@ -1,7 +1,9 @@
 AltAzRange
 boto3
+cherrypy
 contextily
 dateparser
+elevation
 fastparquet
 folium
 geocoder
@@ -11,4 +13,5 @@ pandas
 pyarrow
 pyproj
 simplekml
+rasterio
 sondehub

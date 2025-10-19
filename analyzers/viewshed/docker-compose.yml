@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  viewshed:
+    build: .
+    container_name: viewshed-server
+    ports:
+      - "6565:6565"
+    volumes:
+      # Persist DEM tile cache across restarts
+      - viewshed-cache:/cache/srtm
+    restart: unless-stopped
+    environment:
+      - ELEVATION_CACHE_DIR=/cache/srtm
+    # Resource limits (optional - adjust as needed)
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+volumes:
+  viewshed-cache:
+    driver: local

@@ -351,6 +351,7 @@ class ViewshedServer:
             </div>
 
             <button type="submit" id="submitBtn">Compute Viewshed</button>
+            <button type="button" id="debugTilesBtn" onclick="toggleCachedTiles()" style="background: #FF9800; margin-top: 10px;">Show Cached Tiles</button>
         </form>
 
             <div id="status"></div>
@@ -821,6 +822,72 @@ class ViewshedServer:
                 document.getElementById('submitBtn').disabled = false;
             });
         }
+
+        // Debug: Toggle cached tiles visualization
+        let cachedTilesLayer = null;
+        let cachedTilesVisible = false;
+
+        function toggleCachedTiles() {
+            if (cachedTilesVisible) {
+                // Hide cached tiles
+                if (cachedTilesLayer) {
+                    map.removeLayer(cachedTilesLayer);
+                    cachedTilesLayer = null;
+                }
+                cachedTilesVisible = false;
+                document.getElementById('debugTilesBtn').textContent = 'Show Cached Tiles';
+                document.getElementById('debugTilesBtn').style.background = '#FF9800';
+            } else {
+                // Show cached tiles
+                fetch('cached_tiles')
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.error) {
+                            showStatus(`Error loading cached tiles: ${data.error}`, 'error');
+                            return;
+                        }
+
+                        // Create a layer group for all tile rectangles
+                        const rectangles = [];
+
+                        data.tiles.forEach(tile => {
+                            const bounds = tile.bounds;
+                            const rectBounds = [
+                                [bounds.min_lat, bounds.min_lon],
+                                [bounds.max_lat, bounds.max_lon]
+                            ];
+
+                            // Use different colors for SRTM1 vs SRTM3
+                            const color = tile.product === 'SRTM1' ? '#0000FF' : '#00FFFF';
+
+                            const rect = L.rectangle(rectBounds, {
+                                color: color,
+                                weight: 2,
+                                fillOpacity: 0.1,
+                                opacity: 0.8
+                            }).bindPopup(
+                                `<b>Cached ${tile.product} Tile</b><br>` +
+                                `Bounds: ${bounds.min_lat},${bounds.min_lon} to ${bounds.max_lat},${bounds.max_lon}`
+                            );
+
+                            rectangles.push(rect);
+                        });
+
+                        // Create layer group and add to map
+                        cachedTilesLayer = L.layerGroup(rectangles).addTo(map);
+                        cachedTilesVisible = true;
+
+                        document.getElementById('debugTilesBtn').textContent = 'Hide Cached Tiles';
+                        document.getElementById('debugTilesBtn').style.background = '#F44336';
+
+                        // Show info message
+                        showStatus(`Showing ${data.count} cached tiles (Blue=SRTM1, Cyan=SRTM3)`, 'info');
+                    })
+                    .catch(err => {
+                        showStatus(`Error loading cached tiles: ${err}`, 'error');
+                    });
+            }
+        }
     </script>
     <script src="static/sidebar.js"></script>
 </body>
@@ -1014,6 +1081,47 @@ class ViewshedServer:
                 return {"error": "Job not completed"}
 
             return job.get('geojson', {})
+
+    @cherrypy.expose
+    @cherrypy.tools.json_out()
+    def cached_tiles(self):
+        """Get boundaries of all cached DEM tiles."""
+        try:
+            import glob
+            import re
+
+            tiles = []
+            cache_root = os.path.expanduser('~/.cache/elevation')
+
+            # Check both SRTM1 and SRTM3 processed chunks
+            for product in ['SRTM1', 'SRTM3']:
+                chunks_dir = os.path.join(cache_root, product, 'processed_chunks')
+                if not os.path.exists(chunks_dir):
+                    continue
+
+                # Find all cached tile files
+                pattern = os.path.join(chunks_dir, '*.tif')
+                for filepath in glob.glob(pattern):
+                    filename = os.path.basename(filepath)
+                    # Parse filename format: -125_46_to_-124_47.tif
+                    match = re.match(r'(-?\d+)_(-?\d+)_to_(-?\d+)_(-?\d+)\.tif', filename)
+                    if match:
+                        min_lon, min_lat, max_lon, max_lat = map(int, match.groups())
+                        tiles.append({
+                            'product': product,
+                            'bounds': {
+                                'min_lon': min_lon,
+                                'min_lat': min_lat,
+                                'max_lon': max_lon,
+                                'max_lat': max_lat
+                            }
+                        })
+
+            return {'tiles': tiles, 'count': len(tiles)}
+
+        except Exception as e:
+            cherrypy.response.status = 500
+            return {"error": str(e)}
 
     @cherrypy.expose
     @cherrypy.tools.json_in()

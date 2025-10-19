@@ -193,7 +193,10 @@ class DEMManager:
 
     def _download_tiles_in_chunks(self, bounds, product, progress_callback=None):
         """
-        Download tiles for a large area by splitting into smaller chunks.
+        Download and process individual 1-degree tiles for a large area.
+
+        Processes each 1-degree SRTM tile individually, matching the source data boundaries.
+        This ensures we never reprocess a tile - once downloaded and processed, it's cached forever.
 
         Args:
             bounds: Tuple of (min_lon, min_lat, max_lon, max_lat)
@@ -202,54 +205,86 @@ class DEMManager:
         """
         min_lon, min_lat, max_lon, max_lat = bounds
 
-        # Calculate chunk size - split into a grid that keeps each chunk small
-        # SRTM tiles are 1 degree squares, and the limit is around 20 tiles
-        # So we'll aim for chunks of about 2x2 degrees (4 tiles max)
-        chunk_size = 2.0  # degrees
+        # Get list of 1-degree tiles needed
+        tiles_needed = self._get_tiles_for_bounds(bounds)
+        tiles_missing = self._check_missing_tiles(tiles_needed, product, os.path.expanduser('~/.cache/elevation'))
 
-        # Calculate number of chunks needed in each direction
-        lon_range = max_lon - min_lon
-        lat_range = max_lat - min_lat
+        total_tiles = len(tiles_missing)
+        print(f"  Processing {total_tiles} tiles individually (1-degree tiles matching source data)...")
 
-        num_lon_chunks = int(np.ceil(lon_range / chunk_size))
-        num_lat_chunks = int(np.ceil(lat_range / chunk_size))
+        # Process each 1-degree tile
+        for idx, (lat, lon) in enumerate(tiles_missing):
+            tile_num = idx + 1
 
-        total_chunks = num_lon_chunks * num_lat_chunks
-        print(f"  Splitting into {num_lon_chunks}x{num_lat_chunks} = {total_chunks} chunks...")
+            # 1-degree tile bounds (tile represents its SW corner)
+            tile_bounds = (lon, lat, lon + 1, lat + 1)
 
-        # Download each chunk
-        chunk_num = 0
-        for i in range(num_lon_chunks):
-            for j in range(num_lat_chunks):
-                chunk_num += 1
-
-                # Calculate chunk bounds
-                chunk_min_lon = min_lon + i * chunk_size
-                chunk_max_lon = min(chunk_min_lon + chunk_size, max_lon)
-                chunk_min_lat = min_lat + j * chunk_size
-                chunk_max_lat = min(chunk_min_lat + chunk_size, max_lat)
-
-                chunk_bounds = (chunk_min_lon, chunk_min_lat, chunk_max_lon, chunk_max_lat)
-
-                print(f"  Downloading chunk {chunk_num}/{total_chunks}...")
+            # Check if we have this tile processed already
+            if self._is_chunk_cached(tile_bounds, product):
+                print(f"  Tile {tile_num}/{total_tiles} already processed (lat={lat}, lon={lon})...")
                 if progress_callback:
                     product_name = "SRTM1 (30m)" if product == 'SRTM1' else "SRTM3 (90m)"
-                    progress_callback(chunk_num - 1, total_chunks, f"Downloading {product_name} tiles ({chunk_num}/{total_chunks})...")
+                    progress_callback(tile_num - 1, total_tiles, f"Loading cached {product_name} tile ({tile_num}/{total_tiles})...")
+                continue
 
-                # Download tiles for this chunk (tiles cached, tempfile auto-deleted)
-                try:
-                    import tempfile
-                    with tempfile.NamedTemporaryFile(suffix='.tif', delete=True) as tmp:
-                        elevation.clip(bounds=chunk_bounds, output=tmp.name, product=product)
-                except RuntimeError as e:
-                    if "Too many tiles" in str(e):
-                        # Even the chunk is too big - recursively split it
-                        print(f"  Chunk still too large, splitting further...")
-                        self._download_tiles_in_chunks(chunk_bounds, product, progress_callback)
-                    else:
-                        raise
+            print(f"  Processing tile {tile_num}/{total_tiles} (lat={lat}, lon={lon})...")
+            if progress_callback:
+                product_name = "SRTM1 (30m)" if product == 'SRTM1' else "SRTM3 (90m)"
+                progress_callback(tile_num - 1, total_tiles, f"Processing {product_name} tile ({tile_num}/{total_tiles})...")
 
-        print(f"  All {total_chunks} chunks downloaded successfully")
+            # Download and process this single 1-degree tile
+            try:
+                # Get cache path for this tile
+                cache_path = self._get_chunk_cache_path(tile_bounds, product)
+                os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+
+                # Run elevation.clip to download and process this single tile
+                # Single 1-degree tile will never hit the "too many tiles" limit
+                elevation.clip(bounds=tile_bounds, output=cache_path, product=product)
+                print(f"  Tile {tile_num}/{total_tiles} processed and cached")
+
+            except Exception as e:
+                print(f"  ERROR processing tile (lat={lat}, lon={lon}): {e}")
+                raise
+
+        print(f"  All {total_tiles} tiles processed successfully")
+
+    def _get_chunk_cache_path(self, bounds, product):
+        """
+        Get cache file path for a processed chunk.
+
+        Args:
+            bounds: Tuple of (min_lon, min_lat, max_lon, max_lat)
+            product: DEM product ('SRTM1' or 'SRTM3')
+
+        Returns:
+            Path to cached chunk file
+        """
+        min_lon, min_lat, max_lon, max_lat = bounds
+
+        # Create a stable filename based on bounds (aligned to degree boundaries)
+        # Format: lon_lat_to_lon_lat.tif (e.g., -122_45_to_-120_47.tif)
+        filename = f"{int(min_lon)}_{int(min_lat)}_to_{int(max_lon)}_{int(max_lat)}.tif"
+
+        # Store in elevation cache under processed_chunks subdirectory
+        cache_root = os.path.expanduser('~/.cache/elevation')
+        cache_dir = os.path.join(cache_root, product, 'processed_chunks')
+
+        return os.path.join(cache_dir, filename)
+
+    def _is_chunk_cached(self, bounds, product):
+        """
+        Check if a processed chunk is already cached.
+
+        Args:
+            bounds: Tuple of (min_lon, min_lat, max_lon, max_lat)
+            product: DEM product ('SRTM1' or 'SRTM3')
+
+        Returns:
+            True if chunk is cached, False otherwise
+        """
+        cache_path = self._get_chunk_cache_path(bounds, product)
+        return os.path.exists(cache_path)
 
     def _get_tiles_for_bounds(self, bounds):
         """

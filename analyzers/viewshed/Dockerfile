@@ -5,6 +5,8 @@ FROM python:3.12-slim
 RUN apt-get update && apt-get install -y \
     gdal-bin \
     libgdal-dev \
+    make \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory

@@ -17,12 +17,19 @@ Usage:
     elevation = dem.get_elevation(47.6, -122.3)
 """
 
-import elevation
 import os
-import rasterio
-from rasterio.windows import from_bounds
 import numpy as np
 from pathlib import Path
+import rasterio
+from rasterio.windows import from_bounds
+
+# Import elevation library and override its cache directory
+import elevation
+import elevation.datasource
+
+# Override elevation library's cache directory to respect ELEVATION_CACHE_DIR env var
+if 'ELEVATION_CACHE_DIR' in os.environ:
+    elevation.datasource.CACHE_DIR = os.environ['ELEVATION_CACHE_DIR']
 
 
 class DEMManager:
@@ -45,8 +52,9 @@ class DEMManager:
         # Keep track of loaded raster datasets to avoid reopening
         self._raster_cache = {}
 
-        # Set elevation library cache directory
-        os.environ['ELEVATION_CACHE_DIR'] = str(self.cache_dir)
+        # Override elevation library cache directory to match our cache_dir
+        # This ensures the elevation library's raw tile cache goes to the same location
+        elevation.datasource.CACHE_DIR = str(self.cache_dir)
 
         print(f"DEM cache directory: {self.cache_dir}")
 

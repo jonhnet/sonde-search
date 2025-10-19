@@ -22,6 +22,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY viewshed_server.py .
 COPY viewshed.py .
 COPY dem_manager.py .
+COPY optimize.html .
+COPY static/ ./static/
 
 # Create cache directory for DEM tiles
 RUN mkdir -p /cache/srtm && chmod 777 /cache/srtm

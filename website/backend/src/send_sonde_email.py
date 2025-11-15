@@ -218,7 +218,11 @@ class EmailNotifier:
             place += geo.county
 
         # get landing time in the subscriber's timezone
-        landing_localtime = landing['datetime'].tz_convert(sub['tzname'])
+        try:
+            landing_localtime = landing['datetime'].tz_convert(sub['tzname'])
+        except Exception:
+            # If timezone conversion fails (invalid timezone), fall back to UTC
+            landing_localtime = landing['datetime'].tz_convert('UTC')
 
         # subject line
         subj = ""

@@ -417,6 +417,91 @@ class Test_v2:
 
         assert tree.tag.endswith('}kml')
 
+    def test_case_insensitive_email(self):
+        # Test that email lookups are case-insensitive
+        addr_lower = 'testcase@example.com'
+        addr_upper = 'TESTCASE@EXAMPLE.COM'
+
+        # Get token with lowercase
+        user_token = self.apiserver.get_user_token_from_email(addr_lower)
+
+        # Subscribe with lowercase
+        resp1 = post('subscribe', data={
+            'lat': '47.6426',
+            'lon': '-122.32271',
+            'max_distance_mi': '100',
+            'units': 'imperial',
+            'tzname': 'America/Los_Angeles',
+        }, cookies={
+            'notifier_user_token_v2': user_token,
+        }).json()
+
+        assert len(resp1['subs']) == 1
+
+        # Get token with uppercase - should return same user
+        user_token_upper = self.apiserver.get_user_token_from_email(addr_upper)
+        assert user_token_upper == user_token
+
+        # Get config with mixed case - should return same subscription
+        resp2 = get('get_config', cookies={
+            'notifier_user_token_v2': user_token_upper,
+        }).json()
+
+        # Should see the same subscription
+        assert len(resp2['subs']) == 1
+        assert resp2['subs'][0]['uuid'] == resp1['subs'][0]['uuid']
+
+        # Verify email is normalized to lowercase
+        assert resp2['email'] == addr_lower
+
+    def test_resubscribe_after_unsubscribe(self):
+        # Test that a user can create a new subscription after unsubscribing
+        addr = 'resubscribe.test@example.com'
+        user_token = self.apiserver.get_user_token_from_email(addr)
+
+        # Create initial subscription
+        resp1 = post('subscribe', data={
+            'lat': '40.0',
+            'lon': '-120.0',
+            'max_distance_mi': '50',
+            'units': 'imperial',
+            'tzname': 'America/Los_Angeles',
+        }, cookies={
+            'notifier_user_token_v2': user_token,
+        }).json()
+
+        assert len(resp1['subs']) == 1
+        sub_uuid = resp1['subs'][0]['uuid']
+
+        # Unsubscribe
+        resp2 = post('managed_unsubscribe', data={
+            'uuid': sub_uuid,
+        }, cookies={
+            'notifier_user_token_v2': user_token,
+        }).json()
+
+        assert len(resp2['subs']) == 0
+
+        # Create a new subscription with different parameters
+        resp3 = post('subscribe', data={
+            'lat': '41.0',
+            'lon': '-121.0',
+            'max_distance_mi': '75',
+            'units': 'imperial',
+            'tzname': 'America/Los_Angeles',
+        }, cookies={
+            'notifier_user_token_v2': user_token,
+        }).json()
+
+        assert len(resp3['subs']) == 1
+        new_sub = resp3['subs'][0]
+
+        # Verify it's a different subscription with new parameters
+        assert new_sub['uuid'] != sub_uuid
+        assert new_sub['lat'] == 41.0
+        assert new_sub['lon'] == -121.0
+        assert new_sub['max_distance_mi'] == 75.0
+
 
 @pytest.mark.usefixtures("sonde_mock_aws")
 @pytest.mark.usefixtures("server")
@@ -571,3 +656,253 @@ class Test_EmailNotifier:
         # Run notifier again and verify no NEW notification is sent
         sent_emails = self.run_notifier(tmp_path, 'sondes-V1854526-66-miles-from-seattle')
         assert len(sent_emails) == initial_email_count  # Same count as before, no new emails
+
+    def test_multiple_subscriptions_multiple_notifications(self, tmp_path: Path):
+        # Test that a user with multiple subscriptions gets notifications for all matching ones
+        addr = 'multi.sub@example.com'
+        user_token = self.apiserver.get_user_token_from_email(addr)
+        self.user_tokens[addr] = user_token
+
+        # Create two subscriptions at different locations
+        # First subscription: Seattle area (should match the test sonde)
+        post('subscribe', data={
+            'lat': '47.6426',
+            'lon': '-122.32271',
+            'max_distance_mi': '100',
+            'units': 'imperial',
+            'tzname': 'America/Los_Angeles',
+        }, cookies={
+            'notifier_user_token_v2': user_token,
+        })
+
+        # Second subscription: Also Seattle but different max distance
+        post('subscribe', data={
+            'lat': '47.7',
+            'lon': '-122.4',
+            'max_distance_mi': '80',
+            'units': 'imperial',
+            'tzname': 'America/Los_Angeles',
+        }, cookies={
+            'notifier_user_token_v2': user_token,
+        })
+
+        # Run notifier - should send 2 emails (one per subscription)
+        sent_emails = self.run_notifier(tmp_path, 'sondes-V1854526-66-miles-from-seattle')
+
+        # Both subscriptions should receive notification for the same sonde
+        assert len(sent_emails) == 2
+        for sent_email in sent_emails:
+            assert addr in sent_email.destinations
+            body = self.get_body(sent_email)
+            assert 'V1854526' in body
+
+    def test_notification_at_exact_boundary_distance(self, tmp_path: Path):
+        # Test notification behavior when sonde is very close to the max distance
+        # The test sonde is 65.6 miles from Seattle
+        # Subscribe with distances just inside and just outside the boundary
+
+        # Test: Subscribe at 65.5 miles - should NOT receive notification
+        self.subscribe(distance=65.5)
+        sent_emails = self.run_notifier(tmp_path, 'sondes-V1854526-66-miles-from-seattle')
+        # Should NOT receive because 65.6 > 65.5
+        assert len(sent_emails) == 0
+
+        # Test: Subscribe at 66 miles - should receive notification
+        addr_outside = 'test.66@supertest.com'
+        user_token = self.apiserver.get_user_token_from_email(addr_outside)
+        self.user_tokens[addr_outside] = user_token
+        post('subscribe', data={
+            'lat': '47.6426',
+            'lon': '-122.32271',
+            'max_distance_mi': '66',
+            'units': 'imperial',
+            'tzname': 'America/Los_Angeles',
+        }, cookies={
+            'notifier_user_token_v2': user_token,
+        })
+
+        sent_emails = self.run_notifier(tmp_path, 'sondes-V1854526-66-miles-from-seattle')
+        # Should receive because 65.6 <= 66
+        # We have 2 subscriptions but only the second one (66 mi) should get email
+        assert len(sent_emails) == 1
+        assert addr_outside in sent_emails[0].destinations
+
+    def test_email_content_accuracy(self, tmp_path: Path):
+        # Test that email contains accurate sonde information
+        addr = self.subscribe(distance=100)
+
+        sent_emails = self.run_notifier(tmp_path, 'sondes-V1854526-66-miles-from-seattle')
+        assert len(sent_emails) == 1
+
+        sent_email = sent_emails[0]
+        body = self.get_body(sent_email)
+        subject = self.get_subject(sent_email)
+
+        # Verify serial number is in body
+        assert 'V1854526' in body
+
+        # Verify subject contains key info (distance, date, and location)
+        assert 'mile' in subject.lower() or 'mi' in subject
+        assert 'land' in subject.lower()
+
+        # Verify distance information is present in body
+        assert 'mi' in body or 'mile' in body.lower()
+
+        # Verify landing information is present (not airborne)
+        assert 'land' in body.lower() or 'ground' in body.lower()
+
+    def test_notification_unit_preferences_in_email(self, tmp_path: Path):
+        # Test that distances in emails are displayed in user's preferred units
+
+        # Subscribe with metric preference
+        addr_metric = 'metric.email@example.com'
+        user_token_metric = self.apiserver.get_user_token_from_email(addr_metric)
+        self.user_tokens[addr_metric] = user_token_metric
+
+        post('subscribe', data={
+            'lat': '47.6426',
+            'lon': '-122.32271',
+            'max_distance_mi': '100',
+            'units': 'metric',
+            'tzname': 'America/Los_Angeles',
+        }, cookies={
+            'notifier_user_token_v2': user_token_metric,
+        })
+
+        # Subscribe with imperial preference
+        addr_imperial = self.subscribe(distance=100)
+
+        sent_emails = self.run_notifier(tmp_path, 'sondes-V1854526-66-miles-from-seattle')
+
+        # Should have 2 emails, one for each subscriber
+        assert len(sent_emails) == 2
+
+        # Find each email by recipient
+        metric_email = None
+        imperial_email = None
+        for email in sent_emails:
+            if addr_metric in email.destinations:
+                metric_email = email
+            elif addr_imperial in email.destinations:
+                imperial_email = email
+
+        assert metric_email is not None
+        assert imperial_email is not None
+
+        metric_body = self.get_body(metric_email)
+        imperial_body = self.get_body(imperial_email)
+
+        # Metric email should contain 'km'
+        assert 'km' in metric_body
+
+        # Imperial email should contain 'mi' or 'mile'
+        assert 'mi' in imperial_body or 'mile' in imperial_body.lower()
+
+    def test_edit_preserves_notification_history(self, tmp_path: Path):
+        # Test that editing a subscription preserves notification history
+        addr = self.subscribe(distance=100)
+        user_token = self.user_tokens[addr]
+
+        # Get initial subscription
+        config = get('get_config', cookies={'notifier_user_token_v2': user_token}).json()
+        original_uuid = config['subs'][0]['uuid']
+
+        # Send a notification
+        sent_emails = self.run_notifier(tmp_path, 'sondes-V1854526-66-miles-from-seattle')
+        assert len(sent_emails) == 1
+
+        # Verify notification history was recorded
+        history = post('get_notification_history', cookies={
+            'notifier_user_token_v2': user_token,
+        }).json()
+        assert len(history) == 1
+        assert history[0]['serial'] == 'V1854526'
+
+        # Edit the subscription (change distance)
+        post('subscribe', data={
+            'lat': '47.6426',
+            'lon': '-122.32271',
+            'max_distance_mi': '150',  # Changed from 100
+            'units': 'imperial',
+            'tzname': 'America/Los_Angeles',
+            'replace_uuid': original_uuid,
+        }, cookies={
+            'notifier_user_token_v2': user_token,
+        })
+
+        # Verify notification history is still accessible
+        # Note: History is tied to subscription UUID, which changes on edit
+        # So the old history should still exist but be for the old UUID
+        history_after = post('get_notification_history', cookies={
+            'notifier_user_token_v2': user_token,
+        }).json()
+        # History should still show the previous notification
+        assert len(history_after) == 1
+        assert history_after[0]['serial'] == 'V1854526'
+
+    def test_notification_deduplication_across_edits(self, tmp_path: Path):
+        # Test notification behavior when editing subscriptions
+        # Note: Currently when a subscription is edited, the UUID changes,
+        # and notification history is tied to the old UUID, so a duplicate
+        # notification WILL be sent. This test documents current behavior.
+        addr = self.subscribe(distance=100)
+        user_token = self.user_tokens[addr]
+
+        # Send initial notification
+        sent_emails = self.run_notifier(tmp_path, 'sondes-V1854526-66-miles-from-seattle')
+        assert len(sent_emails) == 1
+
+        # Get subscription UUID
+        config = get('get_config', cookies={'notifier_user_token_v2': user_token}).json()
+        original_uuid = config['subs'][0]['uuid']
+
+        # Edit the subscription
+        resp = post('subscribe', data={
+            'lat': '47.6426',
+            'lon': '-122.32271',
+            'max_distance_mi': '150',
+            'units': 'imperial',
+            'tzname': 'America/Los_Angeles',
+            'replace_uuid': original_uuid,
+        }, cookies={
+            'notifier_user_token_v2': user_token,
+        }).json()
+
+        # Verify the UUID changed
+        new_uuid = resp['subs'][0]['uuid']
+        assert new_uuid != original_uuid
+
+        # Run notifier again - CURRENT BEHAVIOR: Will send duplicate
+        # because new UUID doesn't have notification history
+        sent_emails = self.run_notifier(tmp_path, 'sondes-V1854526-66-miles-from-seattle')
+        # Currently sends 2 emails total (original + new from edited subscription)
+        assert len(sent_emails) == 2
+
+    def test_invalid_timezone_uses_utc_fallback(self, tmp_path: Path):
+        # Test that invalid timezones fall back to UTC instead of preventing notifications
+        # The backend doesn't validate timezones on subscription, but gracefully
+        # handles invalid timezones by using UTC when sending emails
+        addr = 'timezone.test@example.com'
+        user_token = self.apiserver.get_user_token_from_email(addr)
+        self.user_tokens[addr] = user_token
+
+        # Subscribe with a clearly invalid timezone - this succeeds
+        resp = post('subscribe', data={
+            'lat': '47.6426',
+            'lon': '-122.32271',
+            'max_distance_mi': '100',
+            'units': 'imperial',
+            'tzname': 'Invalid/Timezone',  # Not a real timezone
+        }, cookies={
+            'notifier_user_token_v2': user_token,
+        }).json()
+
+        # Subscription created - no validation at subscription time
+        assert len(resp['subs']) == 1
+        assert resp['prefs']['tzname'] == 'Invalid/Timezone'
+
+        # Run notifier - should send email using UTC fallback for invalid timezone
+        sent_emails = self.run_notifier(tmp_path, 'sondes-V1854526-66-miles-from-seattle')
+        # Email is sent successfully with UTC timezone
+        assert len(sent_emails) == 1
+        assert addr in sent_emails[0].destinations

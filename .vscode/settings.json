@@ -1,4 +1,5 @@
 {
+    "python.defaultInterpreterPath": "/home/jelson/miniforge3/envs/sondesearch/bin/python",
     "python.testing.pytestArgs": [
         "."
     ],

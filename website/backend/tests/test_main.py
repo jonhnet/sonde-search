@@ -540,3 +540,34 @@ class Test_EmailNotifier:
         body = self.get_body(sent_email)
         assert '23037859' in body
         assert self.is_ground_reception(sent_email)
+
+    def test_disabled_subscription_no_notification(self, tmp_path: Path):
+        # Subscribe a user with distance that would receive notification
+        addr = self.subscribe(distance=100)
+
+        # Verify subscription exists and get its UUID
+        user_token = self.user_tokens[addr]
+        config = get('get_config', cookies={'notifier_user_token_v2': user_token}).json()
+        assert len(config['subs']) == 1
+        sub_uuid = config['subs'][0]['uuid']
+
+        # Run notifier once to verify notification would be sent
+        sent_emails = self.run_notifier(tmp_path, 'sondes-V1854526-66-miles-from-seattle')
+        assert len(sent_emails) == 1
+        assert addr in sent_emails[0].destinations
+        initial_email_count = len(sent_emails)
+
+        # Unsubscribe (marks subscription as active=False)
+        post('managed_unsubscribe', data={
+            'uuid': sub_uuid,
+        }, cookies={
+            'notifier_user_token_v2': user_token,
+        })
+
+        # Verify subscription is no longer active
+        config_after = get('get_config', cookies={'notifier_user_token_v2': user_token}).json()
+        assert len(config_after['subs']) == 0
+
+        # Run notifier again and verify no NEW notification is sent
+        sent_emails = self.run_notifier(tmp_path, 'sondes-V1854526-66-miles-from-seattle')
+        assert len(sent_emails) == initial_email_count  # Same count as before, no new emails

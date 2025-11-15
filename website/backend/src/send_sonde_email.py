@@ -503,15 +503,18 @@ class EmailNotifier:
         subs = util.dynamodb_to_dataframe(
             self.tables.subscriptions.scan,
             FilterExpression=Attr('active').eq(True)
-        ).astype({
-            'lat': float,
-            'lon': float,
-            'max_distance_mi': float,
-        })
+        )
 
         # If either table was empty, return nothing
         if subs.empty or users.empty:
             return pd.DataFrame()
+
+        # Convert subscription fields to proper types
+        subs = subs.astype({
+            'lat': float,
+            'lon': float,
+            'max_distance_mi': float,
+        })
 
         # Merge the user data into the subscription data. Each subscription
         # record has a field, "subscriber", which references the uuid field of

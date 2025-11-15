@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 
 import argparse
+import os
+import sys
+from typing import Tuple
+
 import contextily as cx
 import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
 import numpy as np
-import os
 import pandas as pd
 from pyproj import Transformer
-import sondehub
-import sys
 import requests
-from typing import Tuple
+import sondehub
 
 matplotlib.use('Agg')
 cx.set_cache_dir(os.path.expanduser("~/.cache/geotiles"))
@@ -82,7 +84,6 @@ def get_map_limits(points) -> Tuple[float, float, float, float, float]:
     zoom = np.min([zoom_lon, zoom_lat])
     zoom = int(zoom) + 1
     zoom = min(zoom, 18)  # limit to max zoom level of tiles
-
 
     return min_x, min_y, max_x, max_y, zoom
 
@@ -170,7 +171,6 @@ def draw_ground_points_map(ground_points, size=10):
     ax.set_ylabel('North-South distance from average (m)', fontsize=10)
 
     # Format the tick labels to show meters
-    from matplotlib.ticker import FuncFormatter
     ax.xaxis.set_major_formatter(FuncFormatter(lambda x, p: f'{int(mercator_to_meters_x(x))}'))
     ax.yaxis.set_major_formatter(FuncFormatter(lambda y, p: f'{int(mercator_to_meters_y(y))}'))
 
@@ -220,7 +220,6 @@ def get_listeners(sondeid):
     fig.savefig(output_filename, bbox_inches='tight', dpi=150)
     plt.close('all')
     print(f"Map saved to {output_filename}")
-
 
 
 if __name__ == "__main__":

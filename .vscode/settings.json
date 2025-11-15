@@ -35,5 +35,7 @@
         "**/.git/subtree-cache/**": true,
         "**/node_modules/*/**": true,
         "**/.hg/store/**": true
-    }
+    },
+    "git.enabled": true,
+    "git.autorefresh": true
 }

@@ -266,6 +266,28 @@ function set_units(units_arg) {
     $('#subscribe_units').val(units);
 }
 
+function convert_maxdist_field(from_units, to_units) {
+    const maxdist_field = $('#subscribe_maxdist');
+    const current_value = parseFloat(maxdist_field.val());
+
+    // Only convert if there's a valid number in the field
+    if (isNaN(current_value) || current_value === '') {
+        return;
+    }
+
+    let new_value = current_value;
+    if (from_units === 'imperial' && to_units === 'metric') {
+        // Converting from miles to kilometers
+        new_value = mi_to_km(current_value);
+    } else if (from_units === 'metric' && to_units === 'imperial') {
+        // Converting from kilometers to miles
+        new_value = km_to_mi(current_value);
+    }
+
+    // Round to 1 decimal place and update field
+    maxdist_field.val(Math.round(10 * new_value) / 10);
+}
+
 // Called when we've successfully retrieved the notification history
 function process_history(history) {
     if (history == null || history.length == 0) {
@@ -464,6 +486,14 @@ function unsubscribe(del_icon, uuid) {
 }
 
 function OnLoadTrigger() {
+    // Set up event handler for unit conversion when dropdown changes
+    $('#subscribe_units').on('change', function() {
+        const old_units = units;
+        const new_units = $(this).val();
+        convert_maxdist_field(old_units, new_units);
+        set_units(new_units);
+    });
+
     get_state();
 }
 

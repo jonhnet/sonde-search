@@ -24,11 +24,14 @@ DEV_HOST = 'http://localhost:4000'
 # A placeholder for expensive setup that should only be done once. This
 # iteration of the program no longer has any such setup so this now has nothing
 # in it.
+
+
 class GlobalConfig:
     def __init__(self, retriever, dev_mode):
         print('Global setup')
         self.retriever = retriever
         self.dev_mode = dev_mode
+
 
 class ClientError(cherrypy.HTTPError):
     def __init__(self, message):
@@ -40,7 +43,7 @@ class ClientError(cherrypy.HTTPError):
         super().set_response()
         response = cherrypy.serving.response
         response.body = self._msg
-        response.status = 400
+        response.status = 400  # type: ignore[assignment]
         response.headers.pop('Content-Length', None)
 
 
@@ -112,7 +115,7 @@ class SondesearchAPI:
         return rv
 
     @cherrypy.expose
-    @cherrypy.tools.json_out()
+    @cherrypy.tools.json_out()  # type: ignore[attr-defined]
     @allow_lectrobox_cors
     def send_validation_email(self, email, url):
         print(f'got validation request: e={email}, u={url}')
@@ -154,7 +157,7 @@ class SondesearchAPI:
         return {'success': True}
 
     @cherrypy.expose
-    @cherrypy.tools.json_out()
+    @cherrypy.tools.json_out()  # type: ignore[attr-defined]
     @allow_lectrobox_cors
     def get_config(self):
         user_data = self.get_user_data()
@@ -199,7 +202,7 @@ class SondesearchAPI:
         return args[arg]
 
     @cherrypy.expose
-    @cherrypy.tools.json_out()
+    @cherrypy.tools.json_out()  # type: ignore[attr-defined]
     @allow_lectrobox_cors
     def subscribe(self, **args):
         user_data = self.get_user_data()
@@ -280,7 +283,7 @@ class SondesearchAPI:
     # available or required, so no data is returned, no management
     # possible.
     @cherrypy.expose
-    @cherrypy.tools.json_out()
+    @cherrypy.tools.json_out()  # type: ignore[attr-defined]
     @allow_lectrobox_cors
     def oneclick_unsubscribe(self, uuid):
         res = self._unsubscribe_common(uuid)
@@ -296,7 +299,7 @@ class SondesearchAPI:
     # unsubscribe is processed. This prevents the portal from needing
     # a second RTT to get the new config.
     @cherrypy.expose
-    @cherrypy.tools.json_out()
+    @cherrypy.tools.json_out()  # type: ignore[attr-defined]
     @allow_lectrobox_cors
     def managed_unsubscribe(self, uuid):
         user_token = self.get_user_token_from_request()
@@ -324,18 +327,20 @@ class SondesearchAPI:
 
         if subs.empty:
             # If there are no subscriptions, return nothing
-            rv = '[]'
+            rv: str = '[]'
         else:
             # Get notification history for each subscription
             dfs = []
             for sub in subs['uuid']:
                 dfs.append(util.dynamodb_to_dataframe(
                     self.tables.notifications.query,
-                    KeyConditionExpression=Key('subscription_uuid').eq(sub) &
-                    Key('time_sent').gt(time_sent_cutoff),
+                    KeyConditionExpression=(
+                        Key('subscription_uuid').eq(sub)
+                        & Key('time_sent').gt(time_sent_cutoff)
+                    ),
                 ))
             notifications = pd.concat(dfs)
-            rv = notifications.to_json(orient='records')
+            rv = notifications.to_json(orient='records') or '[]'
 
         return rv.encode('utf-8')
 
@@ -367,9 +372,9 @@ class SondesearchAPI:
         kml = simplekml.Kml()
         kml.document.name = serial
         linestring = kml.newlinestring(name=serial)
-        linestring.coords = list(by_minute.itertuples(index=False, name=None))
-        linestring.altitudemode = simplekml.AltitudeMode.absolute
-        linestring.extrude = 1
+        linestring.coords = list(by_minute.itertuples(index=False, name=None))  # type: ignore[assignment]
+        linestring.altitudemode = simplekml.AltitudeMode.absolute  # type: ignore[assignment]
+        linestring.extrude = 1  # type: ignore[assignment]
         linestring.style.linestyle.color = simplekml.Color.red
         linestring.style.linestyle.width = 5
 
@@ -377,7 +382,9 @@ class SondesearchAPI:
         cherrypy.response.headers['Content-Disposition'] = f'attachment; filename="{serial}.kml"'
         return kml.kml().encode('utf8')
 
+
 global_config = None
+
 
 # This is called both by the uwsgi path, via application(), and the unit test
 def mount_server_instance(retriever, dev_mode):
@@ -389,6 +396,7 @@ def mount_server_instance(retriever, dev_mode):
     cherrypy.tree.mount(apiserver)
     return apiserver
 
+
 # "application" is the magic function called by Apache's wsgi module or uwsgi
 def application(environ, start_response):
     mount_server_instance(retriever=util.LiveSondeHub(), dev_mode=False)
@@ -398,6 +406,7 @@ def application(environ, start_response):
         'tools.proxy.on': True,
     })
     return cherrypy.tree(environ, start_response)
+
 
 # For local testing
 if __name__ == "__main__":

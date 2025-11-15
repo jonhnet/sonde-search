@@ -34,7 +34,7 @@ cx.set_cache_dir(os.path.expanduser("~/.cache/geotiles"))
 
 # conversion factors
 METERS_PER_MILE = 1609.34
-METERS_PER_KM   = 1000
+METERS_PER_KM = 1000
 METERS_PER_FOOT = 0.3048
 
 # URLs for email body
@@ -44,6 +44,7 @@ GMAP_URL = 'https://www.google.com/maps/search/?api=1&query={lat},{lon}'
 # random other constants
 DEV_EMAIL = 'jelson@gmail.com'
 SONDE_HISTORY_LOOKBACK_TIME_SEC = 86400
+
 
 class EmailNotifier:
     def __init__(self, args, retriever):
@@ -59,6 +60,7 @@ class EmailNotifier:
     ### Getting the nearest sonde
     def annotate_with_distance(self, sondes, sub):
         def get_path(sonde):
+            # type: ignore[attr-defined] on next line
             path = Geodesic.WGS84.Inverse(sub['lat'], sub['lon'], sonde['lat'], sonde['lon'])
             return (
                 path['s12'],
@@ -124,9 +126,9 @@ class EmailNotifier:
         sonde_x, sonde_y = self.to_mercator_xy(landing['lat'], landing['lon'])
         ax.plot([home_x, sonde_x], [home_y, sonde_y], color='blue', marker='*')
         ax.annotate(
-            xy=[home_x, home_y],
+            xy=(home_x, home_y),
             text='home',
-            xytext=[10, 0],
+            xytext=(10, 0),
             textcoords='offset points',
             arrowprops=dict(arrowstyle='-'),
         )
@@ -143,9 +145,9 @@ class EmailNotifier:
             rx_x, rx_y = self.to_mercator_xy(rx_lat, rx_lon)
             ax.plot([rx_x, sonde_x], [rx_y, sonde_y], color='springgreen', marker='*')
             ax.annotate(
-                xy=[rx_x, rx_y],
+                xy=(rx_x, rx_y),
                 text=f"rx ({landing['uploader_callsign']})",
-                xytext=[10, 0],
+                xytext=(10, 0),
                 textcoords='offset points',
                 arrowprops=dict(arrowstyle='-'),
             )
@@ -159,9 +161,9 @@ class EmailNotifier:
 
         cx.add_basemap(
             ax,
-            zoom=zoom,
+            zoom=zoom,  # type: ignore[arg-type]
             crs='EPSG:3857',
-            source=cx.providers.OpenStreetMap.Mapnik,
+            source=cx.providers.OpenStreetMap.Mapnik,  # type: ignore[attr-defined]
             #source=cx.providers.CyclOSM,
             #source=cx.providers.Stamen.Terrain,
             #source=cx.providers.Stamen.TopOSMFeatures,
@@ -280,7 +282,8 @@ class EmailNotifier:
         <tr>
             <td>Position</td>
             <td>
-                <a href="{GMAP_URL.format(lat=landing['lat'], lon=landing['lon'])}">{landing['lat']}, {landing['lon']}</a>
+                <a href="{GMAP_URL.format(lat=landing['lat'], lon=landing['lon'])}">
+                {landing['lat']}, {landing['lon']}</a>
             </td>
         </tr>
         '''
@@ -440,9 +443,10 @@ class EmailNotifier:
         time_sent_cutoff = Decimal(time.time() - SONDE_HISTORY_LOOKBACK_TIME_SEC)
         sondes_emailed = util.dynamodb_to_dataframe(
             self.tables.notifications.query,
-            KeyConditionExpression=
-               Key('subscription_uuid').eq(sub['uuid_subscription']) &
-               Key('time_sent').gt(time_sent_cutoff),
+            KeyConditionExpression=(
+                Key('subscription_uuid').eq(sub['uuid_subscription'])
+                & Key('time_sent').gt(time_sent_cutoff)
+            ),
             ProjectionExpression='serial',
         )
         if sondes_emailed.empty:
@@ -472,7 +476,7 @@ class EmailNotifier:
 
             print(
                 f"{sub['email']}: notifying for sonde {sonde['serial']}, "
-                f"range {sonde['dist_from_home_m']/METERS_PER_MILE:.1f}, "
+                f"range {sonde['dist_from_home_m'] / METERS_PER_MILE:.1f}, "
                 f"landed at {sonde['datetime'].replace(microsecond=0)}"
             )
             map_url = self.send_email(sub, sonde)
@@ -554,6 +558,7 @@ class EmailNotifier:
                 traceback.print_exc()
                 print(f"Error notifying {sub['email']}: {e}")
 
+
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -578,6 +583,7 @@ def get_args():
 
     return args
 
+
 def main():
     args = get_args()
 
@@ -591,6 +597,7 @@ def main():
 
     notifier = EmailNotifier(args, util.LiveSondeHub())
     notifier.process_all_subs()
+
 
 if __name__ == "__main__":
     main()

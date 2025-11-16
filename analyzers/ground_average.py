@@ -3,7 +3,6 @@
 import argparse
 import os
 import sys
-from typing import Tuple
 
 import contextily as cx
 import matplotlib
@@ -11,21 +10,13 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 import numpy as np
 import pandas as pd
-from pyproj import Transformer
-import requests
 import sondehub
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from lib.map_utils import MapUtils, get_elevation
 
 matplotlib.use('Agg')
 cx.set_cache_dir(os.path.expanduser("~/.cache/geotiles"))
-
-
-def to_mercator_xy(lat, lon):
-    """Convert WGS84 lat/lon to Web Mercator x/y coordinates."""
-    wgs84_to_mercator = Transformer.from_crs(crs_from='EPSG:4326', crs_to='EPSG:3857')
-    return wgs84_to_mercator.transform(lat, lon)
-
-
-MAP_WHITESPACE = 0.2
 
 
 def get_ground_elevation(lat, lon):
@@ -39,60 +30,18 @@ def get_ground_elevation(lat, lon):
         Ground elevation in meters, or None if the API call fails
     """
     try:
-        resp = requests.get('https://epqs.nationalmap.gov/v1/json', params={
-            'x': lon,
-            'y': lat,
-            'units': 'Meters',
-            'wkid': '4326',
-            'includeDate': 'True',
-        })
-        resp.raise_for_status()
-        return float(resp.json()['value'])
+        return get_elevation(lat, lon)
     except Exception as e:
         print(f'Elevation API gave invalid response: {e}')
         return None
 
 
-def get_map_limits(points) -> Tuple[float, float, float, float, float]:
-    """Calculate map boundaries and zoom level for given points.
-
-    Args:
-        points: List of (lat, lon) tuples
-
-    Returns:
-        min_x, min_y, max_x, max_y, zoom
-    """
-    min_lat = min([point[0] for point in points])
-    max_lat = max([point[0] for point in points])
-    min_lon = min([point[1] for point in points])
-    max_lon = max([point[1] for point in points])
-    min_x, min_y = to_mercator_xy(min_lat, min_lon)
-    max_x, max_y = to_mercator_xy(max_lat, max_lon)
-    x_pad = (max_x - min_x) * MAP_WHITESPACE
-    y_pad = (max_y - min_y) * MAP_WHITESPACE
-    max_pad = max(x_pad, y_pad)
-    min_x -= max_pad
-    max_x += max_pad
-    min_y -= max_pad
-    max_y += max_pad
-
-    # Calculate the zoom
-    lat_length = max_lat - min_lat
-    lon_length = max_lon - min_lon
-    zoom_lat = np.ceil(np.log2(360 * 2.0 / lat_length))
-    zoom_lon = np.ceil(np.log2(360 * 2.0 / lon_length))
-    zoom = np.min([zoom_lon, zoom_lat])
-    zoom = int(zoom) + 1
-    zoom = min(zoom, 18)  # limit to max zoom level of tiles
-
-    return min_x, min_y, max_x, max_y, zoom
-
-
-def draw_ground_points_map(ground_points, size=10):
+def draw_ground_points_map(ground_points, map_utils, size=10):
     """Draw a map containing all ground points.
 
     Args:
         ground_points: DataFrame with 'lat' and 'lon' columns
+        map_utils: MapUtils instance for coordinate transformation
         size: Figure size in inches
 
     Returns:
@@ -102,7 +51,7 @@ def draw_ground_points_map(ground_points, size=10):
     ax.set_aspect('equal')
 
     # Convert all ground points to mercator coordinates
-    ground_x, ground_y = to_mercator_xy(ground_points['lat'].values, ground_points['lon'].values)
+    ground_x, ground_y = map_utils.to_mercator_xy(ground_points['lat'].values, ground_points['lon'].values)
 
     # Plot all ground points
     ax.scatter(ground_x, ground_y, color='red', s=50, alpha=0.6, marker='o', label='Ground points')
@@ -110,7 +59,7 @@ def draw_ground_points_map(ground_points, size=10):
     # Calculate weighted average of lat/lon (equal weights for now)
     avg_lat = ground_points['lat'].mean()
     avg_lon = ground_points['lon'].mean()
-    avg_x, avg_y = to_mercator_xy(avg_lat, avg_lon)
+    avg_x, avg_y = map_utils.to_mercator_xy(avg_lat, avg_lon)
 
     # Plot the weighted average point
     ax.scatter(avg_x, avg_y, color='blue', s=200, alpha=0.8, marker='*',
@@ -144,7 +93,7 @@ def draw_ground_points_map(ground_points, size=10):
     map_limits = [[lat, lon] for lat, lon in zip(ground_points['lat'], ground_points['lon'])]
 
     # Find the limits of the map
-    min_x, min_y, max_x, max_y, zoom = get_map_limits(map_limits)
+    min_x, min_y, max_x, max_y, zoom = map_utils.get_map_limits(map_limits)
     ax.set_xlim(min_x, max_x)
     ax.set_ylim(min_y, max_y)
     print(f"Downloading basemap at zoom level {zoom}")
@@ -215,7 +164,8 @@ def get_listeners(sondeid):
     print(f"Found {len(ground_points)} ground points for sonde '{sondeid}'")
 
     # Draw a map of all ground points
-    fig = draw_ground_points_map(ground_points)
+    map_utils = MapUtils()
+    fig = draw_ground_points_map(ground_points, map_utils)
     output_filename = f"ground_points_{sondeid}.png"
     fig.savefig(output_filename, bbox_inches='tight', dpi=150)
     plt.close('all')

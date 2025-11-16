@@ -8,15 +8,12 @@ from decimal import Decimal
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from geographiclib.geodesic import Geodesic
-from pyproj import Transformer
-from typing import Tuple
 import argparse
 import boto3
 import contextily as cx  # type: ignore
 import geocoder
 import matplotlib
 import matplotlib.pyplot as plt
-import numpy as np
 import os
 import pandas as pd
 import sys
@@ -27,6 +24,9 @@ sys.path.insert(0, os.path.dirname(__file__))
 import constants
 import table_definitions
 import util
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../'))
+from lib.map_utils import MapUtils
 
 matplotlib.use('Agg')
 
@@ -50,8 +50,8 @@ class EmailNotifier:
     def __init__(self, args, retriever):
         self.args = args
         self.retriever = retriever
-        self.wgs84_to_mercator = Transformer.from_crs(crs_from='EPSG:4326', crs_to='EPSG:3857')
         self.ses_client = boto3.client('ses')
+        self.map_utils = MapUtils()
 
     #
     # Sonde data retrieval
@@ -82,48 +82,18 @@ class EmailNotifier:
     #### Drawing map
     ####
 
-    def to_mercator_xy(self, lat, lon):
-        return self.wgs84_to_mercator.transform(lat, lon)
-
-    MAP_WHITESPACE = 0.2
-
-    def get_map_limits(self, points) -> Tuple[float, float, float, float, float]:
-        min_lat = min([point[0] for point in points])
-        max_lat = max([point[0] for point in points])
-        min_lon = min([point[1] for point in points])
-        max_lon = max([point[1] for point in points])
-        min_x, min_y = self.to_mercator_xy(min_lat, min_lon)
-        max_x, max_y = self.to_mercator_xy(max_lat, max_lon)
-        x_pad = (max_x - min_x) * self.MAP_WHITESPACE
-        y_pad = (max_y - min_y) * self.MAP_WHITESPACE
-        max_pad = max(x_pad, y_pad)
-        min_x -= max_pad
-        max_x += max_pad
-        min_y -= max_pad
-        max_y += max_pad
-
-        # Calculate the zoom
-        lat_length = max_lat - min_lat
-        lon_length = max_lon - min_lon
-        zoom_lat = np.ceil(np.log2(360 * 2.0 / lat_length))
-        zoom_lon = np.ceil(np.log2(360 * 2.0 / lon_length))
-        zoom = np.min([zoom_lon, zoom_lat])
-        zoom = int(zoom) + 1
-
-        return min_x, min_y, max_x, max_y, zoom
-
     def get_email_image(self, sub, size, flight, landing):
         fig, ax = plt.subplots(figsize=(size, size))
         ax.axis('off')
         ax.set_aspect('equal')
 
         # Plot the balloon's path
-        (flight_x, flight_y) = self.to_mercator_xy(flight.lat, flight.lon)
+        (flight_x, flight_y) = self.map_utils.to_mercator_xy(flight.lat, flight.lon)
         ax.plot(flight_x, flight_y, color='red')
 
         # Plot a line from home to the landing point
-        home_x, home_y = self.to_mercator_xy(sub['lat'], sub['lon'])
-        sonde_x, sonde_y = self.to_mercator_xy(landing['lat'], landing['lon'])
+        home_x, home_y = self.map_utils.to_mercator_xy(sub['lat'], sub['lon'])
+        sonde_x, sonde_y = self.map_utils.to_mercator_xy(landing['lat'], landing['lon'])
         ax.plot([home_x, sonde_x], [home_y, sonde_y], color='blue', marker='*')
         ax.annotate(
             xy=(home_x, home_y),
@@ -142,7 +112,7 @@ class EmailNotifier:
         # landing point
         if not pd.isna(landing['uploader_position']):
             rx_lat, rx_lon = [float(f) for f in landing['uploader_position'].split(',')]
-            rx_x, rx_y = self.to_mercator_xy(rx_lat, rx_lon)
+            rx_x, rx_y = self.map_utils.to_mercator_xy(rx_lat, rx_lon)
             ax.plot([rx_x, sonde_x], [rx_y, sonde_y], color='springgreen', marker='*')
             ax.annotate(
                 xy=(rx_x, rx_y),
@@ -154,7 +124,7 @@ class EmailNotifier:
             map_limits.append([rx_lat, rx_lon])
 
         # Find the limits of the map
-        min_x, min_y, max_x, max_y, zoom = self.get_map_limits(map_limits)
+        min_x, min_y, max_x, max_y, zoom = self.map_utils.get_map_limits(map_limits)
         ax.set_xlim(min_x, max_x)
         ax.set_ylim(min_y, max_y)
         print(f"{sub['email']}: downloading at zoomlevel {zoom}")
@@ -178,8 +148,7 @@ class EmailNotifier:
 
     def get_elevation(self, lat, lon):
         try:
-            resp = self.retriever.get_elevation_data(lat, lon)
-            return float(resp['value'])
+            return self.retriever.get_elevation_data(lat, lon)
         except Exception as e:
             print(f'Elevation API gave invalid response: {e}')
             return None

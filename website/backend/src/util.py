@@ -4,6 +4,11 @@ import requests
 import time
 import bz2
 import json
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../'))
+from lib.map_utils import get_elevation
+
 
 # Get sonde data from the same live API that the SondeHub web site uses
 class SondeHubRetrieverBase:
@@ -99,15 +104,7 @@ class LiveSondeHub(SondeHubRetrieverBase):
         return response.json(), pd.Timestamp.utcnow()
 
     def get_elevation_data(self, lat, lon):
-        resp = requests.get('https://epqs.nationalmap.gov/v1/json', params={
-            'x': lon,
-            'y': lat,
-            'units': 'Meters',
-            'wkid': '4326',
-            'includeDate': 'True',
-        })
-        resp.raise_for_status()
-        return resp.json()
+        return get_elevation(lat, lon)
 
 class FakeSondeHub(SondeHubRetrieverBase):
     def __init__(self, filename):
@@ -141,7 +138,7 @@ class FakeSondeHub(SondeHubRetrieverBase):
         return records, self._time
 
     def get_elevation_data(self, lat, lon):
-        return {'value': 100}
+        return 100
 
 def dynamodb_to_dataframe(operation, **query_args):
     df_list = []

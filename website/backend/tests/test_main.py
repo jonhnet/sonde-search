@@ -8,6 +8,7 @@ from unittest import mock
 import argparse
 import base64
 import boto3
+import bz2
 import cherrypy
 import email
 import email.header
@@ -413,12 +414,18 @@ class Test_v2:
         assert resp1['subs'][0]['max_distance_mi'] == 222
 
     def test_kml_conversion(self, server):
-        resp = get('get_sonde_kml', params={'serial': 'V1854526'})
+        # Load test data and patch sondehub.download to return it
+        test_data_file = Path(__file__).parent / 'data' / 'V1854526-singlesonde.json.bz2'
+        with bz2.open(test_data_file) as ifh:
+            test_data = json.load(ifh)
 
-        import xml.etree.ElementTree as ET
-        tree = ET.fromstring(resp.text)
+        with mock.patch('sondehub.download', return_value=test_data):
+            resp = get('get_sonde_kml', params={'serial': 'V1854526'})
 
-        assert tree.tag.endswith('}kml')
+            import xml.etree.ElementTree as ET
+            tree = ET.fromstring(resp.text)
+
+            assert tree.tag.endswith('}kml')
 
     def test_case_insensitive_email(self):
         # Test that email lookups are case-insensitive

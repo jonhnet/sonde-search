@@ -6,7 +6,6 @@ import cherrypy
 import datetime
 import os
 import pandas as pd
-import simplekml
 import sys
 import time
 import uuid
@@ -18,6 +17,7 @@ from website.backend.src import constants
 from website.backend.src import table_definitions
 from website.backend.src import util
 from lib import listeners
+from lib import kml_generator
 
 DEFAULT_HOST = 'https://sondesearch.lectrobox.com'
 DEV_HOST = 'http://localhost:4000'
@@ -347,41 +347,10 @@ class SondesearchAPI:
 
     @cherrypy.expose
     def get_sonde_kml(self, serial):
-        sonde, now = self._g.retriever.get_sonde_data(params={
-            'serial': serial,
-        })
-
-        if sonde.empty:
-            return f"Sorry, it seems that sonde {serial} does not exist."
-
-        # Index by datetime and drop all columns other than lat, lon, alt
-        sonde = sonde.set_index('datetime')[['lon', 'lat', 'alt']]
-
-        # For each minute, take the last location a sonde was seen during that
-        # minute. Also add the very first sonde sighting, and the highest
-        # altitude point. Note for the highest point we take head(1) in case
-        # there are multiple reports at that highest altitude. We pass a list
-        # to sonde.loc[] to ensure we get a dataframe back from loc, not a series,
-        # in case the label is uinque.
-        by_minute = pd.concat([
-            sonde.head(1),
-            sonde.resample('1 min', label='right').last(),
-            sonde.loc[[sonde['alt'].idxmax()]].head(1),
-        ]).dropna().sort_index()
-
-        # Create KML document
-        kml = simplekml.Kml()
-        kml.document.name = serial
-        linestring = kml.newlinestring(name=serial)
-        linestring.coords = list(by_minute.itertuples(index=False, name=None))  # type: ignore[assignment]
-        linestring.altitudemode = simplekml.AltitudeMode.absolute  # type: ignore[assignment]
-        linestring.extrude = 1  # type: ignore[assignment]
-        linestring.style.linestyle.color = simplekml.Color.red
-        linestring.style.linestyle.width = 5
-
+        kml_content = kml_generator.generate_kml(serial)
         cherrypy.response.headers['Content-Type'] = 'application/vnd.google-earth.kml+xml'
         cherrypy.response.headers['Content-Disposition'] = f'attachment; filename="{serial}.kml"'
-        return kml.kml().encode('utf8')
+        return kml_content.encode('utf8')
 
     @cherrypy.expose
     @cherrypy.tools.json_out()  # type: ignore[attr-defined]

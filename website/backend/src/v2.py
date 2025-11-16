@@ -18,6 +18,7 @@ from website.backend.src import table_definitions
 from website.backend.src import util
 from lib import listeners
 from lib import kml_generator
+from lib import landing_calendar
 
 DEFAULT_HOST = 'https://sondesearch.lectrobox.com'
 DEV_HOST = 'http://localhost:4000'
@@ -395,6 +396,34 @@ class SondesearchAPI:
                 'success': False,
                 'error': f'Unexpected error: {str(e)}'
             }
+
+    @cherrypy.expose
+    @allow_lectrobox_cors
+    def generate_landing_calendar(self, bottom_lat, left_lon, top_lat, right_lon):
+        """
+        Generate a 12-month landing calendar for the given geographic bounds.
+
+        Returns WebP image bytes.
+        """
+        try:
+            # Validate and convert parameters
+            bottom_lat = float(bottom_lat)
+            left_lon = float(left_lon)
+            top_lat = float(top_lat)
+            right_lon = float(right_lon)
+
+            # Generate the calendar
+            image_bytes = landing_calendar.generate_calendar(
+                bottom_lat, left_lon, top_lat, right_lon, format='webp'
+            )
+
+            cherrypy.response.headers['Content-Type'] = 'image/webp'
+            return image_bytes
+
+        except ValueError as e:
+            raise ClientError(f'Invalid parameters: {str(e)}')
+        except Exception as e:
+            raise ClientError(f'Error generating calendar: {str(e)}')
 
 
 global_config = None

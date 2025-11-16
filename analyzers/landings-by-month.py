@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 
-import calendar
+import argparse
 import contextily as cx
-import geopandas
-import matplotlib.pyplot as plt
-import pandas as pd
+import os
 import subprocess
 import sys
 
 cx.set_cache_dir("/tmp/cached-tiles")
 
-sys.path.insert(0, "..")
-from data.cache import get_sonde_summaries_as_dataframe, years_covered
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from lib.landing_calendar import generate_calendar
 
 MAPS = {
     "spokane": {
@@ -37,98 +35,50 @@ MAPS = {
 }
 
 
-def get_filtered_data(df, config):
-    # get local landings
-    df = df.loc[
-        (df["lat"] >= config["bottomleft"][0])
-        & (df["lat"] <= config["topright"][0])
-        & (df["lon"] >= config["bottomleft"][1])
-        & (df["lon"] <= config["topright"][1])
-    ]
-    print("Filtered")
+def draw_calendar(title, config):
+    """Generate calendar for a named region."""
+    bottom_lat = config["bottomleft"][0]
+    left_lon = config["bottomleft"][1]
+    top_lat = config["topright"][0]
+    right_lon = config["topright"][1]
 
-    # convert to a geodataframe
-    gdf = geopandas.GeoDataFrame(df, geometry=geopandas.points_from_xy(df.lon, df.lat))
-    print("Geoconverted")
+    # Generate PNG
+    png_bytes = generate_calendar(bottom_lat, left_lon, top_lat, right_lon, format='png')
+    png_filename = f"{title}-landings-by-month.png"
+    with open(png_filename, 'wb') as f:
+        f.write(png_bytes)
+    print(f"Generated {png_filename}")
 
-    # reproject from wgs84 to web mercator
-    gdf = gdf.set_crs(epsg=4326)
-    gdf = gdf.to_crs(epsg=3857)
-    print("Reprojected")
-
-    return gdf
-
-
-def draw_one_map(gdf, ax, title):
-    # plot each landing and set options
-    gdf.plot(ax=ax)
-    ax.axis("off")
-    ax.set_title(title)
-
-    # add a map on top
-    cx.add_basemap(ax, crs=gdf.crs, source=cx.providers.OpenStreetMap.Mapnik)
-
-
-def write_fig(fig, filename_base):
-    fig.subplots_adjust(wspace=0, hspace=0)
-    fig.tight_layout()
-    fig.savefig(filename_base + "png", bbox_inches="tight", pad_inches=0)
-    subprocess.check_call(
-        args=["convert", filename_base + "png", filename_base + "webp"]
-    )
-
-
-def draw_calendar(df, title, config):
-    gdf = get_filtered_data(df, config)
-
-    # make a 4x3 matrix of matplotlib axes
-    fig, axs = plt.subplots(4, 3, figsize=(30, 40))
-
-    for month in range(12):
-        ax = axs[month // 3][month % 3]
-
-        # pull out just landings from the month being plotted
-        d = gdf.loc[gdf.month == month + 1]
-
-        print(f"{title:10s}: {calendar.month_name[month + 1]:9s}: {len(d)} landings")
-        draw_one_map(d, ax, calendar.month_name[month + 1])
-
-    write_fig(fig, f"{title}-landings-by-month.")
-
-
-# 1-indexed month
-def draw_year_comparison(df, title, config, month):
-    gdf = get_filtered_data(df, config)
-    years = years_covered(gdf)
-
-    # make a vertical strip of plots
-    fig, axs = plt.subplots(len(years), 1, figsize=(10, len(years) * 10))
-    for i, year in enumerate(years):
-        ax = axs[i]
-
-        # pull out just landings from the year being plotted
-        d = gdf.loc[(gdf["datetime"].dt.year == year) & (gdf["month"] == month)]
-
-        print(f"{title:10s}: {year}: {len(d)} landings")
-        draw_one_map(d, ax, f"{calendar.month_name[month]} {year}")
-
-    write_fig(fig, f"{title}-landings-by-year.")
+    # Convert to WebP
+    webp_filename = f"{title}-landings-by-month.webp"
+    subprocess.check_call(args=["convert", png_filename, webp_filename])
+    print(f"Generated {webp_filename}")
 
 
 def main():
-    df = get_sonde_summaries_as_dataframe()
-    print("Got data")
+    parser = argparse.ArgumentParser(description='Generate landing calendars for predefined regions or custom bounds')
+    parser.add_argument('--region', choices=list(MAPS.keys()), help='Predefined region name')
+    parser.add_argument('--bounds', nargs=4, type=float, metavar=('BOTTOM_LAT', 'LEFT_LON', 'TOP_LAT', 'RIGHT_LON'),
+                        help='Custom bounds: bottom_lat left_lon top_lat right_lon')
+    parser.add_argument('--output', default='calendar', help='Output filename base (default: calendar)')
 
-    # get landings -- the latest frame received for each serial number
-    df = df.loc[df.groupby("serial")["frame"].idxmax()]
+    args = parser.parse_args()
 
-    # annotate with month
-    df["datetime"] = pd.to_datetime(df["datetime"])
-    df["month"] = df["datetime"].dt.month
-
-    for title, config in MAPS.items():
-        draw_calendar(df, title, config)
-        #draw_year_comparison(df, title, config, month=12)
+    # Generate calendar(s)
+    if args.region:
+        # Use predefined region
+        draw_calendar(args.region, MAPS[args.region])
+    elif args.bounds:
+        # Use custom bounds
+        config = {
+            "bottomleft": (args.bounds[0], args.bounds[1]),
+            "topright": (args.bounds[2], args.bounds[3]),
+        }
+        draw_calendar(args.output, config)
+    else:
+        # Generate all predefined regions
+        for title, config in MAPS.items():
+            draw_calendar(title, config)
 
 
 if __name__ == "__main__":

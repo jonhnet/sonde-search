@@ -35,15 +35,30 @@
          * Build a full URL for an API endpoint
          *
          * @param {string} endpoint - The API endpoint path (e.g., 'get_config', 'subscribe')
+         * @param {Object} params - Optional query parameters as key-value pairs
          * @returns {string} The full URL
          */
-        buildUrl: function(endpoint) {
+        buildUrl: function(endpoint, params) {
             var baseUrl = this.getBaseUrl();
             // Remove leading slash from endpoint if present
             if (endpoint.startsWith('/')) {
                 endpoint = endpoint.substring(1);
             }
-            return baseUrl + endpoint;
+            var url = baseUrl + endpoint;
+
+            // Add query parameters if provided
+            if (params && typeof params === 'object') {
+                var queryString = Object.keys(params)
+                    .map(function(key) {
+                        return encodeURIComponent(key) + '=' + encodeURIComponent(params[key]);
+                    })
+                    .join('&');
+                if (queryString) {
+                    url += '?' + queryString;
+                }
+            }
+
+            return url;
         },
 
         /**

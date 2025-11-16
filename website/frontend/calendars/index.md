@@ -32,15 +32,109 @@ consistently land in the ocean or the forest. We can confidently plan not to
 spend time sonde-hunting during the summer here! The best months seem to be
 November to January.
 
-Currently, this site only has a few example calendars. Coming soon will be an
-online generator that will plot a map-calendar for any part of the world you
-select. If you're impatient, you can run the mapper yourself: the code is
-[here](https://github.com/jonhnet/sonde-search/blob/main/analyzers/landings-by-month.py).
+You can view these other pre-generated example calendars:
 
-The four examples available are:
-
-* [Seattle, WA](https://sondesearch.lectrobox.com/vault/calendars/seattle-landings-by-month.webp)
 * [Spokane, WA](https://sondesearch.lectrobox.com/vault/calendars/spokane-landings-by-month.webp)
 * [Kitchener, Ontario](https://sondesearch.lectrobox.com/vault/calendars/kitchener-landings-by-month.webp)
 * [Hilo, Hawaii](https://sondesearch.lectrobox.com/vault/calendars/hilo-landings-by-month.webp)
 * [Madison, WI](https://sondesearch.lectrobox.com/vault/calendars/madison-landings-by-month.webp)
+
+<br clear="all">
+
+## Interactive Calendar Generator
+
+Use the map below to pan and zoom to your area of interest, then click "Generate Calendar" to create a custom landing calendar for any region in the world.
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="/assets/js/sondesearch-api.js"></script>
+
+<div style="margin-top: 30px; margin-bottom: 20px;">
+  <button type="button" id="generate_button" class="ladda-button" data-style="slide-right" onclick="generateCalendar()">Generate Calendar</button>
+  <span id="status_message" style="margin-left: 15px;"></span>
+</div>
+
+<div id="map" style="width: 100%; height: 600px; margin-bottom: 30px; position: relative; z-index: 1;"></div>
+
+<div id="result_area"></div>
+
+<script>
+  // Initialize map centered on North America
+  const map = L.map('map').setView([40, -100], 4);
+
+  // Add OpenStreetMap tiles
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  }).addTo(map);
+
+  function generateCalendar() {
+    // Get current map bounds
+    const bounds = map.getBounds();
+    const southWest = bounds.getSouthWest();
+    const northEast = bounds.getNorthEast();
+
+    const bottom_lat = southWest.lat;
+    const left_lon = southWest.lng;
+    const top_lat = northEast.lat;
+    const right_lon = northEast.lng;
+
+    // Check if map area is too large
+    const latDiff = Math.abs(top_lat - bottom_lat);
+    const lonDiff = Math.abs(right_lon - left_lon);
+
+    if (latDiff > 8 || lonDiff > 8) {
+      $('#status_message').html('<span style="color: red;">Map area too large! Please zoom in. (Maximum 8 degrees of latitude or longitude)</span>');
+      return;
+    }
+
+    // Hide map and show loading message
+    $('#map').hide();
+    $('#status_message').html('<div style="text-align: center; margin: 50px;"><img src="/images/loading.gif" /> Generating calendar...</div>');
+    $('#result_area').html('');
+
+    // Build API URL with parameters
+    const url = SondeSearchAPI.buildUrl('generate_landing_calendar', {
+      bottom_lat: bottom_lat,
+      left_lon: left_lon,
+      top_lat: top_lat,
+      right_lon: right_lon
+    });
+
+    // Fetch the image
+    fetch(url)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('Failed to generate calendar: ' + response.statusText);
+        }
+        return response.blob();
+      })
+      .then(blob => {
+        // Create an object URL for the image
+        const imageUrl = URL.createObjectURL(blob);
+
+        // Display the image
+        $('#result_area').html(`
+          <h2>Your Custom Landing Calendar</h2>
+          <p>Bounds: ${bottom_lat.toFixed(4)}, ${left_lon.toFixed(4)} to ${top_lat.toFixed(4)}, ${right_lon.toFixed(4)}</p>
+          <img src="${imageUrl}" style="width: 100%; height: auto;" alt="Landing Calendar" />
+          <p style="margin-top: 20px;"><button type="button" class="ladda-button" onclick="resetMap()">Generate Another Calendar</button></p>
+        `);
+
+        $('#status_message').html('');
+      })
+      .catch(error => {
+        $('#map').show();
+        $('#status_message').html('<span style="color: red;">Error: ' + error.message + '</span>');
+        $('#result_area').html('');
+      });
+  }
+
+  function resetMap() {
+    $('#map').show();
+    $('#result_area').html('');
+    $('#status_message').html('');
+  }
+</script>
+
+If you prefer to run the mapper yourself, the code is [here](https://github.com/jonhnet/sonde-search/blob/main/analyzers/landings-by-month.py).

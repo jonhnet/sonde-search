@@ -614,6 +614,50 @@ class Test_v2:
         # Verify no warning for historical data
         assert result['warning'] is None
 
+    @mock.patch('lib.landing_calendar.get_sonde_summaries_as_dataframe')
+    def test_generate_landing_calendar(self, mock_get_data, server):
+        # Mock the sonde data
+        test_data = pd.DataFrame({
+            'serial': ['SONDE1', 'SONDE2', 'SONDE3', 'SONDE4'] * 3,
+            'frame': [100, 100, 100, 100, 200, 200, 200, 200, 300, 300, 300, 300],
+            'lat': [47.5, 47.6, 47.7, 47.8] * 3,
+            'lon': [-122.0, -122.1, -122.2, -122.3] * 3,
+            'datetime': ['2023-01-15', '2023-02-15', '2023-03-15', '2023-04-15'] * 3,
+        })
+        mock_get_data.return_value = test_data
+
+        # Call the endpoint with valid bounds
+        resp = get('generate_landing_calendar', params={
+            'bottom_lat': '47.0',
+            'left_lon': '-123.0',
+            'top_lat': '48.0',
+            'right_lon': '-121.0',
+        })
+
+        # Should return 200
+        assert resp.status_code == 200
+
+        # Should return WebP image
+        assert resp.headers['Content-Type'] == 'image/webp'
+
+        # Should have image data
+        assert len(resp.content) > 0
+
+        # Verify it's a valid WebP file (starts with RIFF and contains WEBP)
+        assert resp.content[:4] == b'RIFF'
+        assert b'WEBP' in resp.content[:20]
+
+    def test_generate_landing_calendar_invalid_params(self, server):
+        # Test with missing parameters - should return 500 with TypeError
+        resp = requests.get('http://127.0.0.1:8080/generate_landing_calendar', params={
+            'bottom_lat': '47.0',
+            # Missing other params
+        })
+
+        # Should return error (500 for missing required params)
+        assert resp.status_code == 500
+        assert 'missing' in resp.text and 'required' in resp.text
+
 
 @pytest.mark.usefixtures("sonde_mock_aws")
 @pytest.mark.usefixtures("server")

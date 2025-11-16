@@ -142,13 +142,8 @@ title: "Sonde Email Notifier — Manage"
     <a class="close-reveal-modal" aria-label="Close">&#215;</a>
 </div>
 
+<script src="/assets/js/sondesearch-api.js"></script>
 <script>
-
-{% if site.dev_mode == 1 %}
-let base_url = "http://localhost:4001/";
-{% else %}
-let base_url = "https://api.sondesearch.lectrobox.com/api/v2/";
-{% endif %}
 
 var tzname = null;
 var units = null;
@@ -346,15 +341,15 @@ async function get_state() {
     }
 
     // Fetch both the config and the history in parallel
-    let config_req = fetch(base_url + 'get_config', {
+    let config_req = SondeSearchAPI.get('get_config', {
         credentials: 'include',
     })
-    let history_req = fetch(base_url + 'get_notification_history', {
+    let history_req = SondeSearchAPI.get('get_notification_history', {
         credentials: 'include',
     })
 
-    let config = await (await config_req).json();
-    let history = await (await history_req).json();
+    let config = await config_req;
+    let history = await history_req;
 
     process_config(config);
     process_history(history);
@@ -436,9 +431,9 @@ function subscribe() {
         sub_data['replace_uuid'] = editing_uuid;
     }
 
-    $.ajax({
+    SondeSearchAPI.ajax({
         method: 'POST',
-        url: base_url + 'subscribe',
+        endpoint: 'subscribe',
         xhrFields: {
             withCredentials: true,
         },
@@ -463,9 +458,9 @@ function unsubscribe(del_icon, uuid) {
     var l = Ladda.create(del_icon[0]);
     l.start();
 
-    $.ajax({
+    SondeSearchAPI.ajax({
         method: 'POST',
-        url: base_url + 'managed_unsubscribe',
+        endpoint: 'managed_unsubscribe',
         xhrFields: {
             withCredentials: true,
         },

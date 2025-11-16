@@ -49,7 +49,7 @@
   image: home-thumbs/kml-example-teaser.webp
 
 - title: Receive Site Analyzer
-  url: /analyzers/receiver/
+  url: /analyzers/listeners/
   tags: analysis
   text: Analyze which SondeHub feeder sites were best at receiving a sonde flight
   image: home-thumbs/listeners.webp

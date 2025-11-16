@@ -4,6 +4,7 @@ from moto.ses import ses_backends
 from moto.ses.models import RawMessage
 from pathlib import Path
 from typing import Dict
+from unittest import mock
 import argparse
 import base64
 import boto3
@@ -12,13 +13,15 @@ import email
 import email.header
 import json
 import os
+import pandas as pd
 import pytest
 import re
 import requests
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from src import v2, send_sonde_email, table_definitions, constants, util
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../.."))
+from website.backend.src import v2, send_sonde_email, table_definitions, constants, util
+from lib import listeners
 
 @pytest.fixture
 def sonde_mock_aws(request):
@@ -501,6 +504,108 @@ class Test_v2:
         assert new_sub['lat'] == 41.0
         assert new_sub['lon'] == -121.0
         assert new_sub['max_distance_mi'] == 75.0
+
+    @mock.patch('lib.listeners.sondehub')
+    @mock.patch('lib.listeners.requests')
+    def test_get_sonde_listeners_success(self, mock_requests, mock_sondehub):
+        # Mock sondehub.download to return test data
+        test_data = [
+            {'uploader_callsign': 'KB1LQD', 'frame': 100, 'datetime': '2023-01-01T12:00:00Z',
+             'alt': 1000, 'vel_v': 5.0},
+            {'uploader_callsign': 'KB1LQD', 'frame': 101, 'datetime': '2023-01-01T12:00:01Z',
+             'alt': 1010, 'vel_v': 5.1},
+            {'uploader_callsign': 'KK6HMI-2', 'frame': 100, 'datetime': '2023-01-01T12:00:00Z',
+             'alt': 1000, 'vel_v': 5.0},
+            {'uploader_callsign': 'KK6HMI-2', 'frame': 102, 'datetime': '2023-01-01T12:00:02Z',
+             'alt': 1020, 'vel_v': 5.2},
+        ]
+        mock_sondehub.download.return_value = test_data
+
+        # Call the API endpoint
+        resp = get('get_sonde_listeners/TESTSERIAL').json()
+
+        # Verify response structure
+        assert resp['success'] is True
+        assert 'stats' in resp
+        assert 'coverage' in resp
+        assert resp['warning'] is None
+
+        # Verify we have 2 listeners
+        assert len(resp['stats']) == 2
+
+        # Verify the structure of stats data - this would have caught the cov% bug
+        first_listener = resp['stats'][0]
+        assert 'uploader_callsign' in first_listener
+        assert 'frame_first' in first_listener
+        assert 'frame_last' in first_listener
+        assert 'frame_count' in first_listener
+        assert 'cov%' in first_listener  # This is the key field that was broken
+        assert 'time_first' in first_listener
+        assert 'time_last' in first_listener
+        assert 'alt_first' in first_listener
+        assert 'alt_last' in first_listener
+        assert 'vel_v_first' in first_listener
+        assert 'vel_v_last' in first_listener
+
+        # Verify that cov% is a valid number, not undefined/None
+        assert isinstance(first_listener['cov%'], (int, float))
+        assert first_listener['cov%'] > 0
+
+        # Verify callsigns are present
+        callsigns = {stat['uploader_callsign'] for stat in resp['stats']}
+        assert callsigns == {'KB1LQD', 'KK6HMI-2'}
+
+        # Verify sondehub.download was called with correct serial
+        mock_sondehub.download.assert_called_once_with(serial='TESTSERIAL')
+
+    @mock.patch('lib.listeners.sondehub')
+    @mock.patch('lib.listeners.requests')
+    def test_get_sonde_listeners_not_found(self, mock_requests, mock_sondehub):
+        # Mock sondehub.download to return empty data
+        mock_sondehub.download.return_value = []
+
+        # Mock requests.get to also return empty
+        mock_response = mock.Mock()
+        mock_response.json.return_value = []
+        mock_requests.get.return_value = mock_response
+
+        # Call the API endpoint
+        resp = get('get_sonde_listeners/NONEXISTENT').json()
+
+        # Verify error response
+        assert resp['success'] is False
+        assert 'error' in resp
+        assert 'Cannot find sonde' in resp['error']
+
+    @mock.patch('lib.listeners.sondehub')
+    def test_lib_listeners_function(self, mock_sondehub):
+        # Test the library function directly
+        test_data = [
+            {'uploader_callsign': 'LISTENER1', 'frame': 1000, 'datetime': '2023-01-01T10:00:00Z',
+             'alt': 5000, 'vel_v': 10.0},
+            {'uploader_callsign': 'LISTENER1', 'frame': 1001, 'datetime': '2023-01-01T10:00:01Z',
+             'alt': 5100, 'vel_v': 10.5},
+            {'uploader_callsign': 'LISTENER2', 'frame': 1000, 'datetime': '2023-01-01T10:00:00Z',
+             'alt': 5000, 'vel_v': 10.0},
+        ]
+        mock_sondehub.download.return_value = test_data
+
+        result = listeners.get_listener_stats('TESTSONDE')
+
+        # Verify result structure
+        assert 'stats' in result
+        assert 'coverage' in result
+        assert 'warning' in result
+
+        # Verify stats is a DataFrame
+        assert isinstance(result['stats'], pd.DataFrame)
+        assert len(result['stats']) == 2  # 2 listeners
+
+        # Verify coverage is a Series
+        assert isinstance(result['coverage'], pd.Series)
+
+        # Verify no warning for historical data
+        assert result['warning'] is None
 
 
 @pytest.mark.usefixtures("sonde_mock_aws")

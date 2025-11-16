@@ -13,10 +13,11 @@ import uuid
 
 from boto3.dynamodb.conditions import Key, Attr
 
-sys.path.insert(0, os.path.dirname(__file__))
-import constants
-import table_definitions
-import util
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../..'))
+from website.backend.src import constants
+from website.backend.src import table_definitions
+from website.backend.src import util
+from lib import listeners
 
 DEFAULT_HOST = 'https://sondesearch.lectrobox.com'
 DEV_HOST = 'http://localhost:4000'
@@ -381,6 +382,50 @@ class SondesearchAPI:
         cherrypy.response.headers['Content-Type'] = 'application/vnd.google-earth.kml+xml'
         cherrypy.response.headers['Content-Disposition'] = f'attachment; filename="{serial}.kml"'
         return kml.kml().encode('utf8')
+
+    @cherrypy.expose
+    @cherrypy.tools.json_out()  # type: ignore[attr-defined]
+    @allow_lectrobox_cors
+    def get_sonde_listeners(self, serial):
+        """
+        Analyze listener coverage for a given sonde.
+
+        Returns JSON with listener statistics and coverage information.
+        """
+        try:
+            result = listeners.get_listener_stats(serial)
+
+            # Convert DataFrames to JSON-serializable format
+            stats_df = result['stats']
+            coverage_series = result['coverage']
+
+            # Flatten the multi-index columns for stats
+            # Handle both multi-index columns like ('frame', 'first') and single columns like ('cov%',)
+            stats_df.columns = [
+                '_'.join(str(c) for c in col).strip('_') if isinstance(col, tuple) else str(col)
+                for col in stats_df.columns.values
+            ]
+            stats_data = stats_df.reset_index().to_dict(orient='records')
+
+            # Convert coverage series to dict
+            coverage_data = coverage_series.to_dict()
+
+            return {
+                'success': True,
+                'stats': stats_data,
+                'coverage': coverage_data,
+                'warning': result['warning']
+            }
+        except ValueError as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': f'Unexpected error: {str(e)}'
+            }
 
 
 global_config = None

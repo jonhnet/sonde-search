@@ -18,13 +18,11 @@ Just type the serial number of a sonde into the form and click "Download".
 Flight data will be downloaded from SondeHub automatically and converted to a
 KML file. Check your browser's "downloads" folder to see the KML file.
 
+<script src="/assets/js/sondesearch-api.js"></script>
 <script>
-  //let base_url = 'http://home.circlemud.org:8080/';
-  let base_url = 'https://api.sondesearch.lectrobox.com/api/v2/';
-
   function download() {
     let serial = $('#serial_input_box').val();
-    window.open(base_url + 'get_sonde_kml/' + serial);
+    window.open(SondeSearchAPI.buildUrl('get_sonde_kml/' + serial));
     return false;
   }
 </script>

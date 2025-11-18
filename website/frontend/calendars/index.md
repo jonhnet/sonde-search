@@ -43,7 +43,10 @@ You can view these other pre-generated example calendars:
 
 ## Interactive Calendar Generator
 
-Use the map below to pan and zoom to your area of interest, then click "Generate Calendar" to create a custom landing calendar for any region in the world.
+Use the map below to pan and zoom to your area of interest, then click "Generate
+Calendar" to create a custom landing calendar for any region in the world. If
+you prefer to run the calendar-generator on your own computer, the code is
+[here](https://github.com/jonhnet/sonde-search/blob/main/analyzers/landings-by-month.py).
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -88,9 +91,14 @@ Use the map below to pan and zoom to your area of interest, then click "Generate
       return;
     }
 
-    // Hide map and show loading message
+    // Start Ladda spinner on button
+    let button = $('#generate_button');
+    var l = Ladda.create(button[0]);
+    l.start();
+
+    // Hide map and clear previous results
     $('#map').hide();
-    $('#status_message').html('<div style="text-align: center; margin: 50px;"><img src="/images/loading.gif" /> Generating calendar...</div>');
+    $('#status_message').html('');
     $('#result_area').html('');
 
     // Build API URL with parameters
@@ -110,6 +118,10 @@ Use the map below to pan and zoom to your area of interest, then click "Generate
         return response.blob();
       })
       .then(blob => {
+        // Stop the spinner and hide the generate button
+        l.stop();
+        $('#generate_button').hide();
+
         // Create an object URL for the image
         const imageUrl = URL.createObjectURL(blob);
 
@@ -117,13 +129,19 @@ Use the map below to pan and zoom to your area of interest, then click "Generate
         $('#result_area').html(`
           <h2>Your Custom Landing Calendar</h2>
           <p>Bounds: ${bottom_lat.toFixed(4)}, ${left_lon.toFixed(4)} to ${top_lat.toFixed(4)}, ${right_lon.toFixed(4)}</p>
+          <p style="margin-bottom: 20px;">
+            <a id="download_link" href="${imageUrl}" download="landing-calendar-${bottom_lat.toFixed(2)}-${left_lon.toFixed(2)}.png" class="button">Download Your Calendar Image</a>
+            <button type="button" class="button" onclick="resetMap()">Generate Another Calendar</button>
+          </p>
           <img src="${imageUrl}" style="width: 100%; height: auto;" alt="Landing Calendar" />
-          <p style="margin-top: 20px;"><button type="button" class="ladda-button" onclick="resetMap()">Generate Another Calendar</button></p>
         `);
 
         $('#status_message').html('');
       })
       .catch(error => {
+        // Stop the spinner
+        l.stop();
+
         $('#map').show();
         $('#status_message').html('<span style="color: red;">Error: ' + error.message + '</span>');
         $('#result_area').html('');
@@ -132,9 +150,8 @@ Use the map below to pan and zoom to your area of interest, then click "Generate
 
   function resetMap() {
     $('#map').show();
+    $('#generate_button').show();
     $('#result_area').html('');
     $('#status_message').html('');
   }
 </script>
-
-If you prefer to run the mapper yourself, the code is [here](https://github.com/jonhnet/sonde-search/blob/main/analyzers/landings-by-month.py).

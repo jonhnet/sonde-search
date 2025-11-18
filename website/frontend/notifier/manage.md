@@ -319,10 +319,14 @@ function process_history(history) {
         row.append($('<td class="text-right">').html($('<a>',{
             text: serial,
             href: url,
+            target: '_blank',
+            rel: 'noopener noreferrer'
         })));
         let map_img = $('<img src="/images/map-color.png" width="32" alt="Map" />');
         row.append($('<td class="text-center">').html($('<a>',{
             href: this['map_url'],
+            target: '_blank',
+            rel: 'noopener noreferrer'
         }).append(map_img)));
         $('#history_table').append(row);
     });
@@ -350,6 +354,7 @@ async function get_state() {
     if (user_token == null) {
         //$('#result').html('no auth');
         window.location.href = window.location + '../signup';
+        return;
     }
 
     try {

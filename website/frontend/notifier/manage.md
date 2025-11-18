@@ -13,6 +13,10 @@ title: "Sonde Email Notifier — Manage"
         padding: 4px;
         vertical-align: middle;
     }
+    #history_table td {
+        padding: 4px;
+        vertical-align: middle;
+    }
 </style>
 <div id="loading" class="row t30 text-center">
     <img src="/images/loading.gif" />
@@ -220,17 +224,25 @@ function process_config(config) {
         row.append($('<td class="text-right">').text(render_distance_miles(this['max_distance_mi'])));
 
         // edit
-        let edit_button = $('<button class="trash" style="padding: 0;">');
+        let edit_button = $('<button type="button" class="trash" style="padding: 0;">');
         edit_button.append($('<img src="/images/edit.png" width="20" alt="Edit" />'));
         let sub = this;
-        edit_button.click(function() { start_edit(sub); });
+        edit_button.click(function(e) {
+            e.preventDefault();
+            start_edit(sub);
+            return false;
+        });
         row.append($('<td class="text-center">').html(edit_button));
 
         // delete
-        let del_outer_button = $('<button class="ladda-button trash" data-style="slide-right" data-size="xs">');
+        let del_outer_button = $('<button type="button" class="ladda-button trash" data-style="slide-right" data-size="xs">');
         let del_inner_button = del_outer_button.append($('<img src="/images/trash.png" width="20" alt="Delete" />'));
         let uuid = this['uuid'];
-        del_inner_button.click(function() { unsubscribe(del_outer_button, uuid); });
+        del_inner_button.click(function(e) {
+            e.preventDefault();
+            unsubscribe(del_outer_button, uuid);
+            return false;
+        });
         row.append($('<td class="text-center">').html(del_outer_button));
 
         // map

@@ -340,19 +340,23 @@ async function get_state() {
         window.location.href = window.location + '../signup';
     }
 
-    // Fetch both the config and the history in parallel
-    let config_req = SondeSearchAPI.get('get_config', {
-        credentials: 'include',
-    })
-    let history_req = SondeSearchAPI.get('get_notification_history', {
-        credentials: 'include',
-    })
+    try {
+        // Fetch both the config and the history in parallel
+        let config_req = SondeSearchAPI.get('get_config', {
+            credentials: 'include',
+        })
+        let history_req = SondeSearchAPI.get('get_notification_history', {
+            credentials: 'include',
+        })
 
-    let config = await config_req;
-    let history = await history_req;
+        let config = await config_req;
+        let history = await history_req;
 
-    process_config(config);
-    process_history(history);
+        process_config(config);
+        process_history(history);
+    } catch (error) {
+        config_error();
+    }
 }
 
 function start_subscribe() {

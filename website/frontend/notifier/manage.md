@@ -221,14 +221,14 @@ function process_config(config) {
 
         // edit
         let edit_button = $('<button class="trash" style="padding: 0;">');
-        edit_button.append($('<img src="/images/edit.png" width="20" />'));
+        edit_button.append($('<img src="/images/edit.png" width="20" alt="Edit" />'));
         let sub = this;
         edit_button.click(function() { start_edit(sub); });
         row.append($('<td class="text-center">').html(edit_button));
 
         // delete
         let del_outer_button = $('<button class="ladda-button trash" data-style="slide-right" data-size="xs">');
-        let del_inner_button = del_outer_button.append($('<img src="/images/trash.png" width="20" />'));
+        let del_inner_button = del_outer_button.append($('<img src="/images/trash.png" width="20" alt="Delete" />'));
         let uuid = this['uuid'];
         del_inner_button.click(function() { unsubscribe(del_outer_button, uuid); });
         row.append($('<td class="text-center">').html(del_outer_button));
@@ -237,7 +237,7 @@ function process_config(config) {
         let link = "../map/?lat=" + this['lat'];
         link += "&lon=" + this['lon'];
         link += "&r=" + mi_to_m(this['max_distance_mi']);
-        let map_inner_button = $('<img src="/images/map-color.png" width="32" style="cursor: pointer"/>');
+        let map_inner_button = $('<img src="/images/map-color.png" width="32" alt="Map" style="cursor: pointer"/>');
         map_inner_button.click(function() { window.open(link, 'Notification Area', 'width=600,height=600')})
         row.append($('<td class="text-center">').html(map_inner_button));
 
@@ -308,10 +308,10 @@ function process_history(history) {
             text: serial,
             href: url,
         })));
-        row.append($('<td class="text-right">').html($('<a>',{
-            text: 'Map',
+        let map_img = $('<img src="/images/map-color.png" width="32" alt="Map" />');
+        row.append($('<td class="text-center">').html($('<a>',{
             href: this['map_url'],
-        })));
+        }).append(map_img)));
         $('#history_table').append(row);
     });
 

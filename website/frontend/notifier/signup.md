@@ -37,7 +37,7 @@ authorizes you to configure notifications for that address.
             error: function() {
                 l.stop();
                 button.css("visibility", "hidden");
-                $('#form_result').text("We're sorry -- there was an error trying to sign up. Please try again later.")
+                $('#form_result').text("We're sorry—there was an error trying to sign up. Please try again later.")
                 $('#form_result').css("visibility", "visible");
             }
         });

@@ -449,7 +449,7 @@ function subscribe() {
         },
         error: function(jqXHR, textStatus, errorThrown) {
             l.stop();
-            $('#subscribe_result').html("<p>We're sorry -- there was an error trying to sign up. Please try again.</p><p>Error: <tt>" + jqXHR.responseText + "</tt></p>");
+            $('#subscribe_result').html("<p>We're sorry—there was an error trying to sign up. Please try again.</p><p>Error: <tt>" + jqXHR.responseText + "</tt></p>");
             $('#subscribe_result').css("visibility", "visible");
         }
     });

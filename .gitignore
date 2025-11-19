@@ -3,3 +3,6 @@
 *.FCBak
 *.gcode
 __pycache__
+.coverage
+htmlcov/
+.pytest_cache/

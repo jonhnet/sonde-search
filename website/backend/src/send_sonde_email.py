@@ -156,17 +156,26 @@ class EmailNotifier:
     def render_elevation(self, sub, meters):
         if sub['units'] == 'imperial':
             feet = meters / METERS_PER_FOOT
-            return f"{round(feet):,} ft"
+            return f"{round(feet):,}'"
         else:
-            return f"{round(meters):,} m"
+            return f"{round(meters):,}m"
 
     def render_distance(self, sub, meters):
+        """Render distance in brief format."""
         if sub['units'] == 'imperial':
-            miles = meters / METERS_PER_MILE
-            return f"{round(miles):,} miles"
+            # If more than 1 mile, use miles; otherwise use feet
+            if meters >= METERS_PER_MILE:
+                miles = meters / METERS_PER_MILE
+                return f"{round(miles):,}mi"
+            else:
+                feet = meters / METERS_PER_FOOT
+                return f"{round(feet):,}'"
         else:
-            km = meters / METERS_PER_KM
-            return f"{round(km):,} km"
+            if meters >= METERS_PER_KM:
+                km = meters / METERS_PER_KM
+                return f"{round(km):,}km"
+            else:
+                return f"{round(meters):,}m"
 
     def get_email_text(self, sub, landing):
         # attempt a geocode and DEM lookup
@@ -195,17 +204,28 @@ class EmailNotifier:
             # If timezone conversion fails (invalid timezone), fall back to UTC
             landing_localtime = landing['datetime'].tz_convert('UTC')
 
-        # subject line
-        subj = ""
-        if landing['ground_reception']:
-            subj += 'GROUND RECEPTION! '
-        subj += f"{landing_localtime.month_name()} {landing_localtime.day} "
-        subj += "morning" if landing_localtime.hour < 12 else "afternoon"
-        subj += " sonde landed "
+        # Calculate landing estimation parameters (used in subject line and body)
+        time_to_landing = None
+        horiz_error = None
+        if elev and has_known_velocity:
+            time_to_landing = (landing['alt'] - elev) / -vel_v
+            horiz_error = vel_h * time_to_landing
+
+        # Calculate search radius text for subject line
+        search_radius_text = ""
+        if horiz_error is not None:
+            search_radius_text = f", {self.render_distance(sub, horiz_error)} radius"
+
+        # subject line: "Sonde 33mi away, 2,400' radius, bearing 240 (Place Name)"
+        subj = "Sonde "
         subj += self.render_distance(sub, landing['dist_from_home_m'])
-        subj += f" from home, bearing {round(landing['bearing_from_home'])}°"
+        subj += " away"
+        subj += search_radius_text
+        subj += f", bearing {round(landing['bearing_from_home'])}"
         if place:
             subj += f" ({place})"
+        if landing['ground_reception']:
+            subj = 'GROUND RECEPTION! ' + subj
 
         unsub_url = f"https://sondesearch.lectrobox.com/notifier/unsubscribe/?uuid={sub['uuid_subscription']}"
 
@@ -311,9 +331,7 @@ class EmailNotifier:
                 </tr>
                     '''
 
-        elif elev and has_known_velocity:
-            time_to_landing = (landing['alt'] - elev) / -vel_v
-            horiz_error = vel_h * time_to_landing
+        elif time_to_landing is not None and horiz_error is not None:
             body += f'''
         <tr>
             <th colspan="2">Landing Estimation</th>
@@ -324,11 +342,11 @@ class EmailNotifier:
         </tr>
         <tr>
             <td>Time to landing</td>
-            <td>{round(time_to_landing)} s</td>
+            <td>{round(time_to_landing)}s</td>
         </tr>
         <tr>
             <td>Search Radius</td>
-            <td>{self.render_elevation(sub, horiz_error)}</td>
+            <td>{self.render_distance(sub, horiz_error)}</td>
         </tr>
             '''
 

@@ -96,12 +96,12 @@ class LiveSondeHub(SondeHubRetrieverBase):
     def make_telemetry_request(self, params):
         response = requests.get(self.SONDEHUB_DATA_URL, params=params)
         response.raise_for_status()
-        return response.json(), pd.Timestamp.utcnow()
+        return response.json(), pd.Timestamp.now('UTC')
 
     def make_singlesonde_request(self, serial):
         response = requests.get(self.SONDEHUB_ONESONDE_URL + serial)
         response.raise_for_status()
-        return response.json(), pd.Timestamp.utcnow()
+        return response.json(), pd.Timestamp.now('UTC')
 
     def get_elevation_data(self, lat, lon):
         return get_elevation(lat, lon)

@@ -674,7 +674,9 @@ class Test_EmailNotifier:
     def get_subject(self, sent_email: RawMessage) -> str:
         email_obj = email.message_from_string(sent_email.raw_data)
         subj_enc, encoding = email.header.decode_header(email_obj['Subject'])[0]
-        return subj_enc.decode(encoding)
+        if isinstance(subj_enc, bytes):
+            return subj_enc.decode(encoding or 'utf-8')
+        return subj_enc
 
     def is_ground_reception(self, sent_email: RawMessage):
         body_gr = 'Ground Reception' in self.get_body(sent_email)
@@ -897,9 +899,10 @@ class Test_EmailNotifier:
         # Verify serial number is in body
         assert 'V1854526' in body
 
-        # Verify subject contains key info (distance, date, and location)
-        assert 'mile' in subject.lower() or 'mi' in subject
-        assert 'land' in subject.lower()
+        # Verify subject contains key info (distance and bearing in new brief format)
+        assert 'mi' in subject or 'km' in subject  # distance units
+        assert 'away' in subject.lower()  # distance descriptor
+        assert 'bearing' in subject.lower()  # bearing info
 
         # Verify distance information is present in body
         assert 'mi' in body or 'mile' in body.lower()

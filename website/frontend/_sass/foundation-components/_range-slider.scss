@@ -1,3 +1,4 @@
+@use "sass:color";
 // Foundation by ZURB
 // foundation.zurb.com
 // Licensed under MIT Open Source
@@ -25,7 +26,7 @@ $range-slider-bar-border-color: $gainsboro !default;
 $range-slider-radius: $global-radius !default;
 $range-slider-round: $global-rounded !default;
 $range-slider-bar-bg-color: $ghost !default;
-$range-slider-active-segment-bg-color: scale-color($secondary-color, $lightness: -1%) !default;
+$range-slider-active-segment-bg-color: color.scale($secondary-color, $lightness: -1%) !default;
 
 // Vertical bar styles
 $range-slider-vertical-bar-width: rem-calc(16) !default;
@@ -41,7 +42,7 @@ $range-slider-handle-border-style: solid !default;
 $range-slider-handle-border-color: none !default;
 $range-slider-handle-radius: $global-radius !default;
 $range-slider-handle-round: $global-rounded !default;
-$range-slider-handle-bg-hover-color: scale-color($primary-color, $lightness: -12%) !default;
+$range-slider-handle-bg-hover-color: color.scale($primary-color, $lightness: -12%) !default;
 $range-slider-handle-cursor: pointer !default;
 
 $range-slider-disabled-opacity: 0.7 !default;

@@ -1,3 +1,4 @@
+@use "sass:math";
 // Foundation by ZURB
 // foundation.zurb.com
 // Licensed under MIT Open Source
@@ -168,7 +169,7 @@ $button-group-border-width: 1px !default;
 
   // We use this to make the buttons even width across their container
   @if $even {
-    width: percentage(calc((100/$even) / 100));
+    width: math.percentage(calc((100/$even) / 100));
 
     button,
     .button {

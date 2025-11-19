@@ -1,3 +1,6 @@
+@use "sass:string";
+@use "sass:meta";
+@use "sass:color";
 // Foundation by ZURB
 // foundation.zurb.com
 // Licensed under MIT Open Source
@@ -96,7 +99,7 @@ $block-grid-media-queries: true !default;
         $grid-column: '';
       }
 
-      &:nth-of-type(#{$per-row}n#{unquote($grid-column)}) {
+      &:nth-of-type(#{$per-row}n#{string.unquote($grid-column)}) {
         padding-left: ($spacing - (($spacing / $per-row) * ($per-row - ($i - 1))));
         padding-right: ($spacing - (($spacing / $per-row) * $i));
       }

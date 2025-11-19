@@ -1,3 +1,4 @@
+@use "sass:color";
 // Foundation by ZURB
 // foundation.zurb.com
 // Licensed under MIT Open Source
@@ -14,7 +15,7 @@ $include-html-tabs-classes: $include-html-classes !default;
 $tabs-navigation-padding: rem-calc(16) !default;
 $tabs-navigation-bg-color: $silver !default;
 $tabs-navigation-active-bg-color: $white !default;
-$tabs-navigation-hover-bg-color: scale-color($tabs-navigation-bg-color, $lightness: -6%) !default;
+$tabs-navigation-hover-bg-color: color.scale($tabs-navigation-bg-color, $lightness: -6%) !default;
 $tabs-navigation-font-color: $jet !default;
 $tabs-navigation-active-font-color: $tabs-navigation-font-color !default;
 $tabs-navigation-font-size: rem-calc(16) !default;

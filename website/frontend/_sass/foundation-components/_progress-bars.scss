@@ -1,3 +1,4 @@
+@use "sass:color";
 // Foundation by ZURB
 // foundation.zurb.com
 // Licensed under MIT Open Source
@@ -14,7 +15,7 @@ $progress-bar-height: rem-calc(25) !default;
 $progress-bar-color: $vapor !default;
 
 // We use these to control the border styles
-$progress-bar-border-color: scale-color($white, $lightness: 20%) !default;
+$progress-bar-border-color: color.scale($white, $lightness: 20%) !default;
 $progress-bar-border-size: 1px !default;
 $progress-bar-border-style: solid !default;
 $progress-bar-border-radius: $global-radius !default;

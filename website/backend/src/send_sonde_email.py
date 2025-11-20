@@ -205,76 +205,88 @@ class EmailNotifier:
             landing_localtime = landing['datetime'].tz_convert('UTC')
 
         # Calculate landing estimation parameters (used in subject line and body)
-        time_to_landing = None
-        horiz_error = None
-        if elev and has_known_velocity:
-            time_to_landing = (landing['alt'] - elev) / -vel_v
-            horiz_error = vel_h * time_to_landing
+        subj_lest_text: str = ""
+        body_lest_text: str = ""
+        if elev:
+            body_lest_text += f'''
+                <tr>
+                    <td>Ground Elev</td>
+                    <td>{self.render_elevation(sub, elev)}</td>
+                </tr>
+            '''
 
-        # Calculate search radius text for subject line
-        search_radius_text = ""
-        if horiz_error is not None:
-            search_radius_text = f", {self.render_distance(sub, horiz_error)} radius"
+            if has_known_velocity:
+                time_to_landing = (landing['alt'] - elev) / -vel_v
+                horiz_error = vel_h * time_to_landing
+                subj_lest_text = f", {self.render_distance(sub, horiz_error)} radius"
+                body_lest_text += f'''
+                    <tr>
+                        <td>Time to landing</td>
+                        <td>{round(time_to_landing)}s</td>
+                    </tr>
+                    <tr>
+                        <td>Search Radius</td>
+                        <td>{self.render_distance(sub, horiz_error, precise=True)}</td>
+                    </tr>
+                '''
 
         # subject line: "Sonde 33mi away, 2,400' radius, bearing 240° (Place Name)"
         subj = "Sonde "
         subj += self.render_distance(sub, landing['dist_from_home_m'])
         subj += " away"
-        subj += search_radius_text
+        subj += subj_lest_text
         subj += f", bearing {round(landing['bearing_from_home'])}°"
         if place:
             subj += f" ({place})"
         if landing['ground_reception']:
             subj = 'GROUND RECEPTION! ' + subj
 
-        unsub_url = f"https://sondesearch.lectrobox.com/notifier/unsubscribe/?uuid={sub['uuid_subscription']}"
-
         # body
         uploaders = [u['uploader_callsign'] for u in landing['uploaders']]
 
         body = '''
-    <html>
-    <head>
-    <style>
-    table.sonde {
-        background-color: #e0e0e0;
-    }
-    table.sonde th {
-        background-color:  #404040;
-        color: white;
-    }
-    table.sonde tbody tr:nth-child(odd) {
-        background-color:  #d0d0d0;
-    }
-    </style>
-    </head>
-    <body>
+            <html>
+            <head>
+            <style>
+            table.sonde {
+                background-color: #e0e0e0;
+            }
+            table.sonde th {
+                background-color:  #404040;
+                color: white;
+            }
+            table.sonde tbody tr:nth-child(odd) {
+                background-color:  #d0d0d0;
+            }
+            </style>
+            </head>
+            <body>
         '''
 
         body += f'''
-    <table class="sonde">
-        <tr>
-            <td>Sonde ID</td>
-            <td><a href="{SONDEHUB_MAP_URL.format(serial=landing['serial'])}">{landing['serial']}</a></td>
-        </tr>
-        <tr>
-            <th colspan="2">Last Reception</td>
-        </tr>
-        <tr>
-            <td>Heard</td>
-            <td>{landing_localtime.strftime("%Y-%m-%d %H:%M:%S %Z")} by {", ".join(uploaders)}</td>
-        </tr>
-        <tr>
-            <td>Altitude</td>
-            <td>{self.render_elevation(sub, landing['alt'])}</td>
-        </tr>
-        <tr>
-            <td>Position</td>
-            <td>
-                <a href="{GMAP_URL.format(lat=landing['lat'], lon=landing['lon'])}">
-                {landing['lat']}, {landing['lon']}</a>
-            </td>
-        </tr>
+            <table class="sonde">
+                <tr>
+                    <td>Sonde ID</td>
+                    <td><a href="{SONDEHUB_MAP_URL.format(serial=landing['serial'])}">{landing['serial']}</a></td>
+                </tr>
+                <tr>
+                    <th colspan="2">Last Reception</td>
+                </tr>
+                <tr>
+                    <td>Heard</td>
+                    <td>{landing_localtime.strftime("%Y-%m-%d %H:%M:%S %Z")} by {", ".join(uploaders)}</td>
+                </tr>
+                <tr>
+                    <td>Altitude</td>
+                    <td>{self.render_elevation(sub, landing['alt'])}</td>
+                </tr>
+                <tr>
+                    <td>Position</td>
+                    <td>
+                        <a href="{GMAP_URL.format(lat=landing['lat'], lon=landing['lon'])}">
+                        {landing['lat']}, {landing['lon']}</a>
+                    </td>
+                </tr>
         '''
 
         if place:
@@ -282,84 +294,67 @@ class EmailNotifier:
             if geo and geo.address:
                 nearest_addr += f'<br>{geo.address}'
             body += f'''
-        <tr>
-            <td>Address</td>
-            <td>{nearest_addr}</td>
-        </tr>
+                <tr>
+                    <td>Address</td>
+                    <td>{nearest_addr}</td>
+                </tr>
             '''
 
         body += f'''
-        <tr>
-            <td>Distance</td>
-            <td>
-               {self.render_distance(sub, landing['dist_from_home_m'], precise=True)} from home
-               (configured max:
-               {self.render_distance(sub, METERS_PER_MILE * sub['max_distance_mi'])})
-            </td>
-        </tr>
-        <tr>
-            <td>Bearing</td>
-            <td>{round(landing['bearing_from_home'])}° from home</td>
-        </tr>
+            <tr>
+                <td>Distance</td>
+                <td>
+                {self.render_distance(sub, landing['dist_from_home_m'], precise=True)} from home
+                (configured max:
+                {self.render_distance(sub, METERS_PER_MILE * sub['max_distance_mi'])})
+                </td>
+            </tr>
+            <tr>
+                <td>Bearing</td>
+                <td>{round(landing['bearing_from_home'])}° from home</td>
+            </tr>
         '''
 
         if has_known_velocity:
             body += f'''
-            <tr>
-                <td>Descent Rate</td>
-                <td>
-                {self.render_elevation(sub, -vel_v)}/s,
-                moving laterally
-                {self.render_elevation(sub, vel_h)}/s,
-                heading {round(landing['heading'])}°
-                </td>
-            </tr>
+                <tr>
+                    <td>Descent Rate</td>
+                    <td>
+                    {self.render_elevation(sub, -vel_v)}/s,
+                    moving laterally
+                    {self.render_elevation(sub, vel_h)}/s,
+                    heading {round(landing['heading'])}°
+                    </td>
+                </tr>
             '''
 
-        if elev:
-            body += f'''
+        if body_lest_text:
+            body += '''
                 <tr>
-                    <td>Ground Elevation</td>
-                    <td>{self.render_elevation(sub, elev)}</td>
+                    <th colspan="2">Landing Estimation</th>
                 </tr>
-                '''
+            '''
+            body += body_lest_text
 
         if landing['ground_reception']:
             body += '''
                 <tr>
                     <td colspan="2"><b>Ground Reception</b></td>
                 </tr>
-                    '''
+                '''
 
-        elif time_to_landing is not None and horiz_error is not None:
-            body += f'''
-        <tr>
-            <th colspan="2">Landing Estimation</th>
-        </tr>
-        <tr>
-            <td>Ground Elev</td>
-            <td>{self.render_elevation(sub, elev)}</td>
-        </tr>
-        <tr>
-            <td>Time to landing</td>
-            <td>{round(time_to_landing)}s</td>
-        </tr>
-        <tr>
-            <td>Search Radius</td>
-            <td>{self.render_distance(sub, horiz_error, precise=True)}</td>
-        </tr>
-            '''
+        unsub_url = f"https://sondesearch.lectrobox.com/notifier/unsubscribe/?uuid={sub['uuid_subscription']}"
 
         body += f'''
-    </table>
-    <p><i>
-        This email was sent from the
-        <a href="https://sondesearch.lectrobox.com/notifier/">Sonde Notification Service</a>.
-        To unsubscribe from this notification,
-        <a href="{unsub_url}">click here</a>.
-        To configure your notifications,
-        <a href="https://sondesearch.lectrobox.com/notifier/manage/">click here</a>.
-    </i></p>
+            </table>
+            <p><i>
+                This email was sent from the
+                <a href="https://sondesearch.lectrobox.com/notifier/">Sonde Notification Service</a>.
+                To unsubscribe from this notification,
+                <a href="{unsub_url}">click here</a>.
+                To configure your notifications,
+                <a href="https://sondesearch.lectrobox.com/notifier/manage/">click here</a>.
+            </i></p>
         '''
 
         return subj, body, unsub_url
@@ -436,7 +431,7 @@ class EmailNotifier:
             ),
             ProjectionExpression='serial',
         )
-        if sondes_emailed.empty:
+        if sondes_emailed.empty or self.args.live_test:
             sondes_emailed = set()
         else:
             sondes_emailed = set(sondes_emailed['serial'].values)

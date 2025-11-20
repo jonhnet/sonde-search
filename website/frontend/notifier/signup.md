@@ -21,13 +21,14 @@ authorizes you to configure notifications for that address.
         var l = Ladda.create(button[0]);
         l.start();
         var email = $('#email_input_box').val();
-        $.ajax({
+
+        SondeSearchAPI.ajax({
             method: "POST",
-            url: "https://api.sondesearch.lectrobox.com/api/v2/send_validation_email",
-	    data: {
-		'email': email,
-		'url': window.location.href,
-	    },
+            endpoint: "send_validation_email",
+            data: {
+                'email': email,
+                'url': window.location.href,
+            },
             success: function() {
                 l.stop();
                 button.css("visibility", "hidden");

@@ -16,7 +16,6 @@ including:
 
 To see the analysis, enter a sonde serial number and click "Analyze".
 
-<script src="/assets/js/sondesearch-api.js"></script>
 <script>
 
   function formatTable(stats) {

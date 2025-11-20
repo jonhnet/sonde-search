@@ -146,7 +146,6 @@ title: "Sonde Email Notifier — Manage"
     <a class="close-reveal-modal" aria-label="Close">&#215;</a>
 </div>
 
-<script src="/assets/js/sondesearch-api.js"></script>
 <script>
 
 var tzname = null;

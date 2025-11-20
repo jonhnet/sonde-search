@@ -187,7 +187,7 @@ class EmailNotifier:
         elev = self.get_elevation(landing['lat'], landing['lon'])
         vel_v = landing.get('vel_v', None)
         vel_h = landing.get('vel_h', None)
-        has_known_velocity = not (pd.isna(vel_v) or pd.isna(vel_h))
+        has_known_velocity = (not pd.isna(vel_v)) and (not pd.isna(vel_h)) and (vel_v < 0)
 
         place = ""
         if geo and geo.county:

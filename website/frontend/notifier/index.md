@@ -28,6 +28,7 @@ statistics, like this example:
 table.sonde {
     background-color: #e0e0e0;
     margin: 0 auto;
+    margin-bottom: 20px;
 }
 table.sonde th {
     background-color:  #404040;
@@ -141,9 +142,9 @@ site](https://github.com/projecthorus/radiosonde_auto_rx/wiki)!
 
 Occasionally, if you're very lucky, a sonde will be within earshot of
 a receiver all the way to the ground! This is an exciting
-situation because it means there's *no* error in the sonde's
+situation because it means there's far less error in the sonde's
 location. Since we've gotten its GPS coordinates while it was sitting
-on the ground, we know exactly where it is---we can just go pick it
+on the ground, we know almost exactly where it is---we can just go pick it
 up!
 
 The notifier detects ground receptions when the last data points
@@ -151,6 +152,46 @@ reported by a receive site indicate the sonde's vertical and
 horizontal velocities are both close to zero. In this case, the
 notifier will send an email whose subject excitedly proclaims "GROUND
 RECEPTION!".
+
+Sondes keep transmitting for many hours after they land.
+If we're lucky enough to hear a sonde while it's on the ground,
+we can estimate the its final resting position even more precisely
+by averaging all the post-landing frames overheard.
+The notifier does this automatically.
+Ground reception emails tell you the number of ground-transmitted
+frames received, the average lat/lon and elevation of those
+frames, and the position's estimated error (standard deviation).
+Here's an example from sonde <a href="https://sondehub.org/#!mt=Mapnik&mz=9&qm=12h&f=X0933436&q=X0933436" target="_blank">X0933436</a>,
+from which we heard over a thousand frames while it sitting on the ground:
+
+<table class="sonde">
+    <tbody>
+    <tr>
+        <th colspan="2">Ground Reception</th>
+    </tr>
+    <tr>
+        <td>Ground Points</td>
+        <td>1266 frames</td>
+    </tr>
+    <tr>
+        <td>Avg Position</td>
+        <td><a href="https://www.google.com/maps/search/?api=1&query=47.397525,-122.680011" target="_blank">47.397525, -122.680011</a> (±16')</td>
+    </tr>
+    <tr>
+        <td>Avg Altitude</td>
+        <td>311' (±9')</td>
+    </tr>
+    <tr>
+        <td>Est. Height</td>
+        <td>15' AGL</td>
+    </tr>
+</tbody></table>
+
+The notification also includes a special map showing
+all the GPS positions reported while on the ground.
+
+
+{% include thumb-image.html image="ground-reception-example.webp" %}
 
 ### Notification History
 

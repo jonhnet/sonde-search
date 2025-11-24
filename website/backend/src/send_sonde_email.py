@@ -26,7 +26,7 @@ import table_definitions
 import util
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../'))
-from lib.map_utils import MapUtils
+import lib.map_utils as map_utils
 
 matplotlib.use('Agg')
 
@@ -51,7 +51,7 @@ class EmailNotifier:
         self.args = args
         self.retriever = retriever
         self.ses_client = boto3.client('ses')
-        self.map_utils = MapUtils()
+        self.map_utils = map_utils.MapUtils()
 
     #
     # Sonde data retrieval
@@ -257,7 +257,11 @@ class EmailNotifier:
             subj = 'GROUND RECEPTION! ' + subj
 
         # body
-        uploaders = [u['uploader_callsign'] for u in landing['uploaders']]
+        # Handle uploaders field which may not always be present
+        if 'uploaders' in landing:
+            uploaders_text = ", ".join([u['uploader_callsign'] for u in landing['uploaders']])
+        else:
+            uploaders_text = "unknown"
 
         body = '''
             <html>
@@ -289,7 +293,7 @@ class EmailNotifier:
                 </tr>
                 <tr>
                     <td>Heard</td>
-                    <td>{landing_localtime.strftime("%Y-%m-%d %H:%M:%S %Z")} by {", ".join(uploaders)}</td>
+                    <td>{landing_localtime.strftime("%Y-%m-%d %H:%M:%S %Z")} by {uploaders_text}</td>
                 </tr>
                 <tr>
                     <td>Altitude</td>
@@ -351,26 +355,7 @@ class EmailNotifier:
             '''
             body += body_lest_text
 
-        if landing['ground_reception']:
-            body += '''
-                <tr>
-                    <td colspan="2"><b>Ground Reception</b></td>
-                </tr>
-                '''
-
         unsub_url = f"https://sondesearch.lectrobox.com/notifier/unsubscribe/?uuid={sub['uuid_subscription']}"
-
-        body += f'''
-            </table>
-            <p><i>
-                This email was sent from the
-                <a href="https://sondesearch.lectrobox.com/notifier/">Sonde Notification Service</a>.
-                To unsubscribe from this notification,
-                <a href="{unsub_url}">click here</a>.
-                To configure your notifications,
-                <a href="https://sondesearch.lectrobox.com/notifier/manage/">click here</a>.
-            </i></p>
-        '''
 
         return subj, body, unsub_url
 
@@ -390,20 +375,89 @@ class EmailNotifier:
         msg['To'] = sub['email']
         msg['List-Unsubscribe'] = f'<{unsub_url}>'
 
-        # Generate map link for email
+        # Generate map filenames
         t = landing['datetime']
         map_suffix = \
             f"{sub['uuid_subscription']}/{t.year}/{t.month}/{t.day}-{t.hour}-{landing['lat']}-{landing['lon']}.jpg"
         map_url = os.path.join(EXTERNAL_IMAGES_URL) + map_suffix
-        body += f'<p><img width="100%" src="{map_url}">'
-
-        # Store map to external images root directory
         map_local_fn = os.path.join(self.args.external_images_root, map_suffix)
+
+        # Create directory for all maps
         map_dir = os.path.split(map_local_fn)[0]
         os.makedirs(map_dir, exist_ok=True)
+
+        ground_map_url = None
+        ground_stats = None
+
+        # If this is a ground reception, generate the ground reception map and get stats first
+        if landing['ground_reception']:
+            ground_points = map_utils.identify_ground_points(flight)
+            if ground_points is not None and len(ground_points) > 0:
+                # Generate filename for ground reception map
+                ground_map_suffix = \
+                    f"{sub['uuid_subscription']}/{t.year}/{t.month}/{t.day}-{t.hour}-{landing['lat']}-{landing['lon']}-ground.jpg"
+                ground_map_url = os.path.join(EXTERNAL_IMAGES_URL) + ground_map_suffix
+                ground_map_local_fn = os.path.join(self.args.external_images_root, ground_map_suffix)
+
+                # Generate and save the ground reception map
+                print(f"{sub['email']}: generating ground reception map with {len(ground_points)} points")
+                ground_fig, ground_stats = map_utils.draw_ground_reception_map(ground_points, self.map_utils, size=22)
+                ground_fig.savefig(ground_map_local_fn, bbox_inches='tight')
+                plt.close('all')
+
+        # Add ground reception statistics to the table if we have them
+        if ground_stats is not None:
+            body += '''
+                <tr>
+                    <th colspan="2">Ground Reception</th>
+                </tr>
+            '''
+            body += f'''
+                <tr>
+                    <td>Ground Points</td>
+                    <td>{ground_stats.num_points} frames</td>
+                </tr>
+                <tr>
+                    <td>Avg Position</td>
+                    <td>
+                        <a href="{GMAP_URL.format(lat=ground_stats.avg_lat, lon=ground_stats.avg_lon)}">
+                        {ground_stats.avg_lat:.6f}, {ground_stats.avg_lon:.6f}</a>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Avg Altitude</td>
+                    <td>{self.render_elevation(sub, ground_stats.avg_alt)}</td>
+                </tr>
+                <tr>
+                    <td>Horiz Error</td>
+                    <td>±{self.render_distance(sub, ground_stats.std_dev_combined)}</td>
+                </tr>
+            '''
+
+        # Close the table
+        body += '</table>'
+
+        # Add footer
+        body += f'''
+            <p><i>
+                This email was sent from the
+                <a href="https://sondesearch.lectrobox.com/notifier/">Sonde Notification Service</a>.
+                To unsubscribe from this notification,
+                <a href="{unsub_url}">click here</a>.
+                To configure your notifications,
+                <a href="https://sondesearch.lectrobox.com/notifier/manage/">click here</a>.
+            </i></p>
+        '''
+
+        # Generate and add the main flight map
         fig = self.get_email_image(sub, 22, flight, landing)
         fig.savefig(map_local_fn, bbox_inches='tight')
         plt.close('all')
+        body += f'<p><img width="100%" src="{map_url}">'
+
+        # Add the ground reception map if we generated one
+        if ground_map_url is not None:
+            body += f'<p><img width="100%" src="{ground_map_url}">'
 
         # all done
         body += '</body></html>'
@@ -412,7 +466,7 @@ class EmailNotifier:
         alternatives.attach(MIMEText(body, 'html', 'utf-8'))
         msg.attach(alternatives)
 
-        if self.args.really_send or self.args.live_test:
+        if self.args.really_send or self.args.live_test or self.args.test_sonde:
             self.ses_client.send_raw_email(
                 Source=constants.FROM_EMAIL_ADDR,
                 Destinations=[constants.FROM_EMAIL_ADDR, sub['email']],
@@ -538,6 +592,52 @@ class EmailNotifier:
 
         return subs
 
+    def process_test_sonde(self, sonde_id):
+        """Test mode: send email for a specific sonde ID to dev email."""
+        # Get sonde data from SondeHub for the specific sonde
+        sondes, now = self.retriever.get_sonde_data(params={
+            'duration': '1d',
+            'serial': sonde_id,
+        })
+
+        if sondes.empty:
+            print(f"Error: No data found for sonde {sonde_id}")
+            return
+
+        # Get the last frame for this sonde
+        last_frame_idx = sondes['frame'].idxmax()
+        landing = sondes.loc[last_frame_idx]
+
+        # Create a mock subscription with dev email
+        # Set home location 0.5 degrees away to show realistic distance/bearing
+        mock_sub = pd.Series({
+            'email': DEV_EMAIL,
+            'lat': landing['lat'] - 0.5,
+            'lon': landing['lon'] - 0.5,
+            'max_distance_mi': 100.0,
+            'units': 'imperial',
+            'tzname': 'UTC',
+            'uuid_subscription': 'test-sonde-mode',
+        })
+
+        # Annotate the landing with distance/bearing from mock home location
+        sondes_df = pd.DataFrame([landing])
+        sondes_df = self.annotate_with_distance(sondes_df, mock_sub)
+        landing = sondes_df.iloc[0]
+
+        print(f"Sending test email for sonde {sonde_id} to {DEV_EMAIL}")
+        print(f"  Last heard: {landing['datetime']}")
+        print(f"  Position: {landing['lat']}, {landing['lon']}")
+        print(f"  Ground reception: {landing['ground_reception']}")
+        print(f"  Distance from mock home: {landing['dist_from_home_m'] / METERS_PER_MILE:.1f} mi")
+
+        try:
+            self.send_email(mock_sub, landing)
+            print(f"Test email sent successfully!")
+        except Exception as e:
+            traceback.print_exc()
+            print(f"Error sending test email: {e}")
+
     def process_all_subs(self):
         # Get subscription data
         subs = self.get_subscriber_data()
@@ -576,6 +676,11 @@ def get_args():
         help='Send real email only to developers as a test',
         action='store_true',
     )
+    parser.add_argument(
+        '--test-sonde',
+        type=str,
+        help='Test mode: send email for specific sonde ID to dev email address',
+    )
     args = parser.parse_args(sys.argv[1:])
 
     return args
@@ -584,7 +689,7 @@ def get_args():
 def main():
     args = get_args()
 
-    if not args.really_send and not args.live_test:
+    if not args.really_send and not args.live_test and not args.test_sonde:
         args.external_images_root = "./test-maps"
         if not os.path.exists(args.external_images_root):
             os.makedirs(args.external_images_root)
@@ -593,7 +698,13 @@ def main():
         raise Exception(f"External images root {args.external_images_root} does not exist")
 
     notifier = EmailNotifier(args, util.LiveSondeHub())
-    notifier.process_all_subs()
+
+    if args.test_sonde:
+        # Test mode: send email for specific sonde ID
+        notifier.process_test_sonde(args.test_sonde)
+    else:
+        # Normal mode: process all subscriptions
+        notifier.process_all_subs()
 
 
 if __name__ == "__main__":

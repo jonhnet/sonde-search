@@ -422,15 +422,15 @@ class EmailNotifier:
                     <td>
                         <a href="{GMAP_URL.format(lat=ground_stats.avg_lat, lon=ground_stats.avg_lon)}">
                         {ground_stats.avg_lat:.6f}, {ground_stats.avg_lon:.6f}</a>
+                        (±{self.render_distance(sub, ground_stats.std_dev_combined)})
                     </td>
                 </tr>
                 <tr>
-                    <td>Horiz Error</td>
-                    <td>±{self.render_distance(sub, ground_stats.std_dev_combined)}</td>
-                </tr>
-                <tr>
                     <td>Avg Altitude</td>
-                    <td>{self.render_elevation(sub, ground_stats.avg_alt)} (±{self.render_elevation(sub, ground_stats.std_dev_alt)})</td>
+                    <td>
+                        {self.render_elevation(sub, ground_stats.avg_alt)}
+                        (±{self.render_elevation(sub, ground_stats.std_dev_alt)})
+                    </td>
                 </tr>
             '''
             # Add estimated AGL height if we have ground elevation

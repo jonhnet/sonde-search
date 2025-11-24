@@ -160,7 +160,7 @@ class EmailNotifier:
         else:
             return f"{round(meters):,}m"
 
-    def render_distance(self, sub: pd.Series, meters: float, precise: bool = False):
+    def render_distance(self, sub: pd.Series, meters: float, precise: bool = True):
         """Render distance in brief format."""
         if sub['units'] == 'imperial':
             # If more than 1 mile, use miles; otherwise use feet
@@ -187,7 +187,7 @@ class EmailNotifier:
         elev = self.get_elevation(landing['lat'], landing['lon'])
         vel_v = landing.get('vel_v', None)
         vel_h = landing.get('vel_h', None)
-        has_known_velocity = (not pd.isna(vel_v)) and (not pd.isna(vel_h)) and (vel_v < 0)
+        has_known_velocity = (not pd.isna(vel_v)) and (not pd.isna(vel_h))
 
         place = ""
         if geo and geo.county:
@@ -226,7 +226,7 @@ class EmailNotifier:
                     </tr>
                     <tr>
                         <td>Search Radius</td>
-                        <td>{self.render_distance(sub, horiz_error, precise=True)}</td>
+                        <td>{self.render_distance(sub, horiz_error)}</td>
                     </tr>
                 '''
 
@@ -304,7 +304,7 @@ class EmailNotifier:
             <tr>
                 <td>Distance</td>
                 <td>
-                {self.render_distance(sub, landing['dist_from_home_m'], precise=True)} from home
+                {self.render_distance(sub, landing['dist_from_home_m'])} from home
                 (configured max:
                 {self.render_distance(sub, METERS_PER_MILE * sub['max_distance_mi'])})
                 </td>

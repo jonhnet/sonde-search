@@ -160,20 +160,20 @@ class EmailNotifier:
         else:
             return f"{round(meters):,}m"
 
-    def render_distance(self, sub: pd.Series, meters: float, precise: bool = True):
+    def render_distance(self, sub: pd.Series, meters: float):
         """Render distance in brief format."""
         if sub['units'] == 'imperial':
             # If more than 1 mile, use miles; otherwise use feet
             if meters >= METERS_PER_MILE:
                 miles = meters / METERS_PER_MILE
-                return f"{round(miles, 1 if precise else None):,}mi"
+                return f"{round(miles, 1 if miles < 10 else None):,}mi"
             else:
                 feet = meters / METERS_PER_FOOT
                 return f"{round(feet):,}'"
         else:
             if meters >= METERS_PER_KM:
                 km = meters / METERS_PER_KM
-                return f"{round(km, 1 if precise else None):,}km"
+                return f"{round(km, 1 if km < 10 else None):,}km"
             else:
                 return f"{round(meters):,}m"
 
@@ -391,6 +391,11 @@ class EmailNotifier:
 
         # If this is a ground reception, generate the ground reception map and get stats first
         if landing['ground_reception']:
+            body += '''
+                <tr>
+                    <th colspan="2">Ground Reception</th>
+                </tr>
+            '''
             ground_points = map_utils.identify_ground_points(flight)
             if ground_points is not None and len(ground_points) > 0:
                 # Generate filename for ground reception map
@@ -407,11 +412,6 @@ class EmailNotifier:
 
         # Add ground reception statistics to the table if we have them
         if ground_stats is not None:
-            body += '''
-                <tr>
-                    <th colspan="2">Ground Reception</th>
-                </tr>
-            '''
             body += f'''
                 <tr>
                     <td>Ground Points</td>
@@ -425,12 +425,21 @@ class EmailNotifier:
                     </td>
                 </tr>
                 <tr>
-                    <td>Avg Altitude</td>
-                    <td>{self.render_elevation(sub, ground_stats.avg_alt)}</td>
-                </tr>
-                <tr>
                     <td>Horiz Error</td>
                     <td>±{self.render_distance(sub, ground_stats.std_dev_combined)}</td>
+                </tr>
+                <tr>
+                    <td>Avg Altitude</td>
+                    <td>{self.render_elevation(sub, ground_stats.avg_alt)} (±{self.render_elevation(sub, ground_stats.std_dev_alt)})</td>
+                </tr>
+            '''
+            # Add estimated AGL height if we have ground elevation
+            if ground_stats.ground_elev is not None:
+                height_agl = ground_stats.avg_alt - ground_stats.ground_elev
+                body += f'''
+                <tr>
+                    <td>Est. Height</td>
+                    <td>{self.render_elevation(sub, height_agl)} AGL</td>
                 </tr>
             '''
 
@@ -633,7 +642,7 @@ class EmailNotifier:
 
         try:
             self.send_email(mock_sub, landing)
-            print(f"Test email sent successfully!")
+            print("Test email sent successfully!")
         except Exception as e:
             traceback.print_exc()
             print(f"Error sending test email: {e}")

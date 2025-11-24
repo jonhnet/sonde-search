@@ -102,7 +102,7 @@
 <body>
     <div class="email-container">
         <div class="header">
-            <h1>🎈 Verify Your Email</h1>
+            <h1>🎈 Sonde Notifier</h1>
         </div>
 
         <div class="content">

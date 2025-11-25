@@ -412,8 +412,8 @@ class SondesearchAPI:
             top_lat = float(top_lat)
             right_lon = float(right_lon)
 
-            # Generate the calendar
-            image_bytes = landing_calendar.generate_calendar(
+            # Generate the calendar in a subprocess to avoid memory accumulation
+            image_bytes = landing_calendar.generate_calendar_subprocess(
                 bottom_lat, left_lon, top_lat, right_lon, format='webp'
             )
 

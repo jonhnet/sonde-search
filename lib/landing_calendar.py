@@ -186,9 +186,14 @@ def generate_calendar_subprocess(bottom_lat, left_lon, top_lat, right_lon, forma
     try:
         # Run this module as a script in a subprocess
         script_path = os.path.abspath(__file__)
+
+        # Find python executable - sys.executable may be uwsgi in production,
+        # but it's in the same conda env so python is in the same directory
+        python_exe = os.path.join(os.path.dirname(sys.executable), 'python')
+
         result = subprocess.run(
             [
-                sys.executable,
+                python_exe,
                 script_path,
                 '--bottom-lat', str(bottom_lat),
                 '--left-lon', str(left_lon),

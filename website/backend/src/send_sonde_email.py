@@ -10,6 +10,7 @@ from email.mime.text import MIMEText
 from geographiclib.geodesic import Geodesic
 import argparse
 import boto3
+import html
 import contextily as cx  # type: ignore
 import geocoder
 import matplotlib
@@ -116,7 +117,7 @@ class EmailNotifier:
             ax.plot([rx_x, sonde_x], [rx_y, sonde_y], color='springgreen', marker='*')
             ax.annotate(
                 xy=(rx_x, rx_y),
-                text=f"rx ({landing['uploader_callsign']})",
+                text=f"rx ({html.escape(landing['uploader_callsign'])})",
                 xytext=(10, 0),
                 textcoords='offset points',
                 arrowprops=dict(arrowstyle='-'),
@@ -259,7 +260,7 @@ class EmailNotifier:
         # body
         # Handle uploaders field which may not always be present
         if 'uploaders' in landing:
-            uploaders_text = ", ".join([u['uploader_callsign'] for u in landing['uploaders']])
+            uploaders_text = ", ".join([html.escape(u['uploader_callsign']) for u in landing['uploaders']])
         else:
             uploaders_text = "unknown"
 
@@ -282,11 +283,12 @@ class EmailNotifier:
             <body>
         '''
 
+        serial_escaped = html.escape(landing['serial'])
         body += f'''
             <table class="sonde">
                 <tr>
                     <td>Sonde ID</td>
-                    <td><a href="{SONDEHUB_MAP_URL.format(serial=landing['serial'])}">{landing['serial']}</a></td>
+                    <td><a href="{SONDEHUB_MAP_URL.format(serial=serial_escaped)}">{serial_escaped}</a></td>
                 </tr>
                 <tr>
                     <th colspan="2">Last Reception</td>
@@ -309,9 +311,9 @@ class EmailNotifier:
         '''
 
         if place:
-            nearest_addr = place
+            nearest_addr = html.escape(place)
             if geo and geo.address:
-                nearest_addr += f'<br>{geo.address}'
+                nearest_addr += f'<br>{html.escape(geo.address)}'
             body += f'''
                 <tr>
                     <td>Address</td>

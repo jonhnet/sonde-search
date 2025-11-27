@@ -207,9 +207,9 @@ and the map attached to the notification. Here's an example:
             <th>Sonde ID</th>
             <th>Map</th>
         </tr>
-        <tr><td class="text-right">12/23/2023, 4:57:08 PM</td><td class="text-right">94.2 mi</td><td class="text-right"><a href="https://sondehub.org/#!mt=Mapnik&amp;mz=9&amp;qm=12h&amp;f=V1750589&amp;q=V1750589">V1750589</a></td><td class="text-right"><a href="https://sondemaps.lectrobox.com/792dac8089004349a86f54940b3a7716/2023/12/24-0-47.88929--124.30961.jpg">Map</a></td></tr>
-        <tr><td class="text-right">12/23/2023, 5:03:06 AM</td><td class="text-right">71 mi</td><td class="text-right"><a href="https://sondehub.org/#!mt=Mapnik&amp;mz=9&amp;qm=12h&amp;f=V1750579&amp;q=V1750579">V1750579</a></td><td class="text-right"><a href="https://sondemaps.lectrobox.com/792dac8089004349a86f54940b3a7716/2023/12/23-13-47.72163--123.84317.jpg">Map</a></td></tr>
-        <tr><td class="text-right">12/22/2023, 5:29:15 AM</td><td class="text-right">152.6 mi</td><td class="text-right"><a href="https://sondehub.org/#!mt=Mapnik&amp;mz=9&amp;qm=12h&amp;f=V4030234&amp;q=V4030234">V4030234</a></td><td class="text-right"><a href="https://sondemaps.lectrobox.com/9feabde880ef4d2bb80c538070bf9426/2023/12/22-13-45.41774--122.69893.jpg">Map</a></td></tr>
+        <tr><td class="text-right">12/23/2023, 4:57:08 PM</td><td class="text-right">94.2 mi</td><td class="text-right"><a href="https://sondehub.org/#!mt=Mapnik&amp;mz=9&amp;qm=12h&amp;f=V1750589&amp;q=V1750589">V1750589</a></td><td class="text-right"><a href="https://maps.sondesearch.lectrobox.com/792dac8089004349a86f54940b3a7716/2023/12/24-0-47.88929--124.30961.jpg">Map</a></td></tr>
+        <tr><td class="text-right">12/23/2023, 5:03:06 AM</td><td class="text-right">71 mi</td><td class="text-right"><a href="https://sondehub.org/#!mt=Mapnik&amp;mz=9&amp;qm=12h&amp;f=V1750579&amp;q=V1750579">V1750579</a></td><td class="text-right"><a href="https://maps.sondesearch.lectrobox.com/792dac8089004349a86f54940b3a7716/2023/12/23-13-47.72163--123.84317.jpg">Map</a></td></tr>
+        <tr><td class="text-right">12/22/2023, 5:29:15 AM</td><td class="text-right">152.6 mi</td><td class="text-right"><a href="https://sondehub.org/#!mt=Mapnik&amp;mz=9&amp;qm=12h&amp;f=V4030234&amp;q=V4030234">V4030234</a></td><td class="text-right"><a href="https://maps.sondesearch.lectrobox.com/9feabde880ef4d2bb80c538070bf9426/2023/12/22-13-45.41774--122.69893.jpg">Map</a></td></tr>
         </tbody>
 </table>
 

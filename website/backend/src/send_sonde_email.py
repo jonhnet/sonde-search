@@ -659,6 +659,21 @@ class EmailNotifier:
         # Get sonde data from SondeHub
         sondes, now = self.retriever.get_sonde_data(params={'duration': '6h'})
 
+        # For each sonde, compute max altitude and final altitude
+        grouped = sondes.groupby('serial')
+        max_alt = grouped['alt'].max()
+        final_alt = grouped.apply(
+            lambda g: g.loc[g['frame'].idxmax(), 'alt'], include_groups=False
+        )
+
+        # Only include sondes where:
+        # - max altitude >= 5000m (filter out ground-based transmitters)
+        # - final altitude is at least 500m below max (filter out still-ascending)
+        valid_serials = max_alt.index[
+            (max_alt >= 5000) & (final_alt <= max_alt - 500)
+        ]
+        sondes = sondes[sondes['serial'].isin(valid_serials)]
+
         # Filter the data down to just the last frame received from each sonde
         sondes = sondes.loc[sondes.groupby('serial')['frame'].idxmax()]
 

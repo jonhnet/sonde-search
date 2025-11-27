@@ -148,11 +148,7 @@ class EmailNotifier:
     ####
 
     def get_elevation(self, lat, lon):
-        try:
-            return self.retriever.get_elevation_data(lat, lon)
-        except Exception as e:
-            print(f'Elevation API gave invalid response: {e}')
-            return None
+        return self.retriever.get_elevation_data(lat, lon)
 
     def render_elevation(self, sub: pd.Series, meters: float):
         if sub['units'] == 'imperial':
@@ -208,7 +204,7 @@ class EmailNotifier:
         # Calculate landing estimation parameters (used in subject line and body)
         subj_lest_text: str = ""
         body_lest_text: str = ""
-        if elev:
+        if elev is not None:
             body_lest_text += f'''
                 <tr>
                     <td>Ground Elev</td>

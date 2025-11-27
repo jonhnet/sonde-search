@@ -73,17 +73,42 @@ class MapUtils:
         return min_x, min_y, max_x, max_y, zoom
 
 
-# Get ground elevation at a given lat/lon using USGS elevation API
+# Get ground elevation at a given lat/lon.
+# First tries USGS (US only, ~10m resolution), then falls back to
+# OpenTopoData (global coverage, 10-30m resolution depending on region).
 def get_elevation(lat, lon):
-    resp = requests.get('https://epqs.nationalmap.gov/v1/json', params={
-        'x': lon,
-        'y': lat,
-        'units': 'Meters',
-        'wkid': '4326',
-        'includeDate': 'True',
-    })
-    resp.raise_for_status()
-    return float(resp.json()['value'])
+    # Try USGS first (US only, ~10m resolution)
+    try:
+        resp = requests.get('https://epqs.nationalmap.gov/v1/json', params={
+            'x': lon,
+            'y': lat,
+            'units': 'Meters',
+            'wkid': '4326',
+            'includeDate': 'True',
+        }, timeout=10)
+        resp.raise_for_status()
+        value = resp.json().get('value')
+        if value is not None:
+            return float(value)
+    except Exception:
+        pass
+
+    # Fall back to OpenTopoData with multiple datasets:
+    # ned10m (10m US), eudem25m (25m Europe), srtm30m (30m global)
+    try:
+        resp = requests.get(
+            'https://api.opentopodata.org/v1/ned10m,eudem25m,srtm30m',
+            params={'locations': f'{lat},{lon}'},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        results = resp.json().get('results', [])
+        if results and results[0].get('elevation') is not None:
+            return float(results[0]['elevation'])
+    except Exception:
+        pass
+
+    return None
 
 
 def identify_ground_points(flight_df: pd.DataFrame) -> Optional[pd.DataFrame]:
@@ -169,11 +194,7 @@ def draw_ground_reception_map(ground_points: pd.DataFrame, map_utils: Optional['
     std_dev_alt = ground_points['alt'].std()
 
     # Get ground elevation at the weighted average position
-    ground_elev = None
-    try:
-        ground_elev = get_elevation(avg_lat, avg_lon)
-    except Exception:
-        pass  # Silently ignore elevation API failures
+    ground_elev = get_elevation(avg_lat, avg_lon)
 
     # Create statistics object
     stats = GroundReceptionStats(

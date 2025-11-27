@@ -8,12 +8,14 @@ from decimal import Decimal
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from geographiclib.geodesic import Geodesic
+from typing import Optional
 import argparse
 import boto3
 import html
 import contextily as cx  # type: ignore
 import geocoder
 import matplotlib
+import matplotlib.figure
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
@@ -48,7 +50,7 @@ SONDE_HISTORY_LOOKBACK_TIME_SEC = 86400
 
 
 class EmailNotifier:
-    def __init__(self, args, retriever):
+    def __init__(self, args: argparse.Namespace, retriever: util.SondeHubRetrieverBase) -> None:
         self.args = args
         self.retriever = retriever
         self.ses_client = boto3.client('ses')
@@ -59,7 +61,7 @@ class EmailNotifier:
     #
 
     ### Getting the nearest sonde
-    def annotate_with_distance(self, sondes, sub):
+    def annotate_with_distance(self, sondes: pd.DataFrame, sub: pd.Series) -> pd.DataFrame:
         def get_path(sonde):
             # type: ignore[attr-defined] on next line
             path = Geodesic.WGS84.Inverse(sub['lat'], sub['lon'], sonde['lat'], sonde['lon'])
@@ -83,7 +85,9 @@ class EmailNotifier:
     #### Drawing map
     ####
 
-    def get_email_image(self, sub, size, flight, landing):
+    def get_email_image(
+        self, sub: pd.Series, size: int, flight: pd.DataFrame, landing: pd.Series
+    ) -> matplotlib.figure.Figure:
         fig, ax = plt.subplots(figsize=(size, size))
         ax.axis('off')
         ax.set_aspect('equal')
@@ -147,17 +151,17 @@ class EmailNotifier:
     #### Sending email
     ####
 
-    def get_elevation(self, lat, lon):
+    def get_elevation(self, lat: float, lon: float) -> Optional[float]:
         return self.retriever.get_elevation_data(lat, lon)
 
-    def render_elevation(self, sub: pd.Series, meters: float):
+    def render_elevation(self, sub: pd.Series, meters: float) -> str:
         if sub['units'] == 'imperial':
             feet = meters / METERS_PER_FOOT
             return f"{round(feet):,}'"
         else:
             return f"{round(meters):,}m"
 
-    def render_distance(self, sub: pd.Series, meters: float):
+    def render_distance(self, sub: pd.Series, meters: float) -> str:
         """Render distance in brief format."""
         if sub['units'] == 'imperial':
             # If more than 1 mile, use miles; otherwise use feet
@@ -174,17 +178,21 @@ class EmailNotifier:
             else:
                 return f"{round(meters):,}m"
 
-    def get_email_text(self, sub, landing):
+    def get_email_text(self, sub: pd.Series, landing: pd.Series) -> tuple[str, str, str]:
         # attempt a geocode and DEM lookup
         geo = geocoder.osm(
             [landing['lat'], landing['lon']],
             method='reverse',
             headers={'User-Agent': 'jelson@gmail.com'}
         )
-        elev = self.get_elevation(landing['lat'], landing['lon'])
-        vel_v = landing.get('vel_v', None)
-        vel_h = landing.get('vel_h', None)
-        has_known_velocity = (not pd.isna(vel_v)) and (not pd.isna(vel_h))
+        elev = self.get_elevation(float(landing['lat']), float(landing['lon']))
+        vel_v: Optional[float] = None
+        vel_h: Optional[float] = None
+        raw_vel_v = landing.get('vel_v', None)
+        raw_vel_h = landing.get('vel_h', None)
+        if raw_vel_v is not None and raw_vel_h is not None and not pd.isna(raw_vel_v) and not pd.isna(raw_vel_h):
+            vel_v = float(raw_vel_v)
+            vel_h = float(raw_vel_h)
 
         place = ""
         if geo and geo.county:
@@ -227,7 +235,7 @@ class EmailNotifier:
                             <td>Small</td>
                         </tr>
                     '''
-                elif has_known_velocity and vel_v <= 0:
+                elif vel_h is not None and vel_v is not None and vel_v <= 0:
                     time_to_landing = (landing['alt'] - elev) / -vel_v
                     horiz_error = vel_h * time_to_landing
                     subj_lest_text = f", {self.render_distance(sub, horiz_error)} radius"
@@ -332,7 +340,7 @@ class EmailNotifier:
             </tr>
         '''
 
-        if has_known_velocity:
+        if vel_h is not None and vel_v is not None:
             body += f'''
                 <tr>
                     <td>Descent Rate</td>
@@ -357,7 +365,7 @@ class EmailNotifier:
 
         return subj, body, unsub_url
 
-    def send_email(self, sub, landing):
+    def send_email(self, sub: pd.Series, landing: pd.Series) -> str:
         # Query SondeHub for detail on the flight
         flight, now = self.retriever.get_sonde_data(params={
             'duration': '1d',
@@ -397,8 +405,10 @@ class EmailNotifier:
             ground_points = map_utils.identify_ground_points(flight)
             if ground_points is not None and len(ground_points) > 0:
                 # Generate filename for ground reception map
-                ground_map_suffix = \
-                    f"{sub['uuid_subscription']}/{t.year}/{t.month}/{t.day}-{t.hour}-{landing['lat']}-{landing['lon']}-ground.jpg"
+                ground_map_suffix = (
+                    f"{sub['uuid_subscription']}/{t.year}/{t.month}/{t.day}-{t.hour}-"
+                    f"{landing['lat']}-{landing['lon']}-ground.jpg"
+                )
                 ground_map_url = os.path.join(EXTERNAL_IMAGES_URL) + ground_map_suffix
                 ground_map_local_fn = os.path.join(self.args.external_images_root, ground_map_suffix)
 
@@ -487,7 +497,7 @@ class EmailNotifier:
 
         return map_url
 
-    def process_one_sub(self, now, sondes, sub):
+    def process_one_sub(self, sondes: pd.DataFrame, now: pd.Timestamp, sub: pd.Series) -> None:
         sondes = self.annotate_with_distance(sondes, sub)
 
         # Sort all landings by distance-to-home
@@ -559,7 +569,7 @@ class EmailNotifier:
               f"nearest sonde {sondes.iloc[0]['dist_from_home_m'] / METERS_PER_MILE:.1f}mi; "
               f"sent {num_emails} emails")
 
-    def get_subscriber_data(self):
+    def get_subscriber_data(self) -> pd.DataFrame:
         self.tables = table_definitions.TableClients()
 
         # Get all user data (e.g. email addresses, units)
@@ -599,7 +609,7 @@ class EmailNotifier:
 
         return subs
 
-    def process_test_sonde(self, sonde_id):
+    def process_test_sonde(self, sonde_id: str) -> None:
         """Test mode: send email for a specific sonde ID to dev email."""
         # Get sonde data from SondeHub for the specific sonde
         sondes, now = self.retriever.get_sonde_data(params={
@@ -645,25 +655,31 @@ class EmailNotifier:
             traceback.print_exc()
             print(f"Error sending test email: {e}")
 
-    def process_all_subs(self):
-        # Get subscription data
-        subs = self.get_subscriber_data()
-
+    def get_sonde_data(self) -> tuple[pd.DataFrame, pd.Timestamp]:
         # Get sonde data from SondeHub
         sondes, now = self.retriever.get_sonde_data(params={'duration': '6h'})
 
         # Filter the data down to just the last frame received from each sonde
         sondes = sondes.loc[sondes.groupby('serial')['frame'].idxmax()]
 
+        return sondes, now
+
+    def process_all_subs(self) -> None:
+        # Get subscription data
+        subs = self.get_subscriber_data()
+
+        # Get sonde data
+        sondes, now = self.get_sonde_data()
+
         for i, sub in subs.iterrows():
             try:
-                self.process_one_sub(now, sondes, sub)
+                self.process_one_sub(sondes, now, sub)
             except Exception as e:
                 traceback.print_exc()
                 print(f"Error notifying {sub['email']}: {e}")
 
 
-def get_args():
+def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--really-send',
@@ -693,7 +709,7 @@ def get_args():
     return args
 
 
-def main():
+def main() -> None:
     args = get_args()
 
     if not args.really_send and not args.live_test and not args.test_sonde:

@@ -24,6 +24,9 @@ class SondeHubRetrieverBase:
     def make_singlesonde_request(self, serial):
         raise NotImplementedError
 
+    def get_elevation_data(self, lat, lon):
+        raise NotImplementedError
+
     def cleanup_sonde_data(self, sondes):
         # Sometimes lat/lon comes as a string instead of float
         try:
@@ -86,8 +89,10 @@ class SondeHubRetrieverBase:
 
 # Subclass of SondeHubRetriever that gets real data from the live service on the
 # Internet
+
+
 class LiveSondeHub(SondeHubRetrieverBase):
-    SONDEHUB_DATA_URL     = 'https://api.v2.sondehub.org/sondes/telemetry'
+    SONDEHUB_DATA_URL = 'https://api.v2.sondehub.org/sondes/telemetry'
     SONDEHUB_ONESONDE_URL = 'https://api.v2.sondehub.org/sonde/'
 
     def __init__(self):
@@ -105,6 +110,7 @@ class LiveSondeHub(SondeHubRetrieverBase):
 
     def get_elevation_data(self, lat, lon):
         return get_elevation(lat, lon)
+
 
 class FakeSondeHub(SondeHubRetrieverBase):
     def __init__(self, filename):
@@ -139,6 +145,7 @@ class FakeSondeHub(SondeHubRetrieverBase):
 
     def get_elevation_data(self, lat, lon):
         return 100
+
 
 def dynamodb_to_dataframe(operation, **query_args):
     df_list = []

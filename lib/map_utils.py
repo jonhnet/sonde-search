@@ -225,6 +225,33 @@ def draw_ground_reception_map(ground_points: pd.DataFrame, map_utils: Optional['
     ax.set_xlim(min_x, max_x)
     ax.set_ylim(min_y, max_y)
 
+    # Calculate tick interval to get regular spacing including 0
+    # The range in meters from the average point
+    x_range = max(abs(max_x - avg_x), abs(min_x - avg_x))
+    y_range = max(abs(max_y - avg_y), abs(min_y - avg_y))
+    max_range = max(x_range, y_range)
+
+    # Pick a nice tick interval (aim for ~5-10 ticks across the range)
+    nice_intervals = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000]
+    tick_interval = nice_intervals[0]
+    for interval in nice_intervals:
+        if max_range / interval <= 10:
+            tick_interval = interval
+            break
+
+    # Generate tick positions centered on avg_x/avg_y (so 0 is always a tick)
+    # Calculate how many ticks we need in each direction
+    n_ticks_neg_x = int((avg_x - min_x) / tick_interval) + 1
+    n_ticks_pos_x = int((max_x - avg_x) / tick_interval) + 1
+    n_ticks_neg_y = int((avg_y - min_y) / tick_interval) + 1
+    n_ticks_pos_y = int((max_y - avg_y) / tick_interval) + 1
+
+    x_ticks = [avg_x + i * tick_interval for i in range(-n_ticks_neg_x, n_ticks_pos_x + 1)]
+    y_ticks = [avg_y + i * tick_interval for i in range(-n_ticks_neg_y, n_ticks_pos_y + 1)]
+
+    ax.set_xticks(x_ticks)
+    ax.set_yticks(y_ticks)
+
     cx.add_basemap(
         ax,
         zoom=zoom,
@@ -251,10 +278,10 @@ def draw_ground_reception_map(ground_points: pd.DataFrame, map_utils: Optional['
     ax.yaxis.set_major_formatter(FuncFormatter(mercator_to_meters_y))
 
     # Add grid for easier reading
-    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+    ax.grid(True, color='grey', linestyle='--', linewidth=1.0)
 
     # Add text box at the top with statistics
-    stats_text = f"Weighted Average: {avg_lat:.6f}, {avg_lon:.6f}\n"
+    stats_text = f"Weighted Avg ({len(ground_points)} points): {avg_lat:.6f}, {avg_lon:.6f}\n"
     stats_text += f"Std Dev: E-W {std_dev_x:.1f}m, N-S {std_dev_y:.1f}m, Combined {std_dev_combined:.1f}m\n"
     stats_text += f"Altitude: {avg_alt:.1f}m (±{std_dev_alt:.1f}m)"
     if ground_elev is not None:

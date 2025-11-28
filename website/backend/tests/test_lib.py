@@ -4,7 +4,8 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../.."))
 
-from lib.map_utils import get_elevation
+from lib.map_utils import get_elevation, identify_ground_points
+from website.backend.src.util import FakeSondeHub
 
 
 class Test_Elevation:
@@ -32,3 +33,26 @@ class Test_Elevation:
             assert isinstance(elev, float), f"Elevation not a float for {description}"
         else:
             assert elev is None, f"Expected None for {description}, got {elev}"
+
+
+class Test_GroundPoints:
+    """Tests for ground point identification."""
+
+    def test_identify_ground_points_V1221460(self):
+        """Test that identify_ground_points returns only points with vel_v and vel_h < 1."""
+        # Load test data
+        sh = FakeSondeHub('V1221460-singlesonde')
+        flight_df, _ = sh.get_sonde_data(params={'serial': 'V1221460'})
+
+        # Get ground points
+        ground_points = identify_ground_points(flight_df)
+
+        # Should have found some ground points
+        assert ground_points is not None, "Expected ground points but got None"
+        assert len(ground_points) > 0, "Expected at least one ground point"
+
+        # Every ground point should have vel_v and vel_h < 1 m/s
+        assert (ground_points['vel_v'].abs() < 1).all(), \
+            f"Found ground points with |vel_v| >= 1: {ground_points[ground_points['vel_v'].abs() >= 1]}"
+        assert (ground_points['vel_h'].abs() < 1).all(), \
+            f"Found ground points with |vel_h| >= 1: {ground_points[ground_points['vel_h'].abs() >= 1]}"

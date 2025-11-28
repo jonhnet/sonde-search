@@ -114,8 +114,9 @@ def get_elevation(lat, lon):
 def identify_ground_points(flight_df: pd.DataFrame) -> Optional[pd.DataFrame]:
     """Identify ground reception points from a flight DataFrame.
 
-    Ground points are defined as frames where both vertical and horizontal
-    velocities are less than 1 m/s.
+    Ground points are defined as the longest continuous series of frames
+    at the end of the trace where both vertical and horizontal velocities
+    are less than 1 m/s.
 
     Args:
         flight_df: DataFrame with flight telemetry including 'vel_v', 'vel_h',
@@ -123,19 +124,24 @@ def identify_ground_points(flight_df: pd.DataFrame) -> Optional[pd.DataFrame]:
 
     Returns:
         DataFrame containing only the ground points, or None if no ground
-        points found
+        points found or if the trace doesn't end with ground points
     """
-    # Find first spot where we can consider it on the ground -- vertical and
-    # horizontal speed both <1 m/s
-    landing = flight_df.loc[(flight_df['vel_v'].abs() < 1) & (flight_df['vel_h'].abs() < 1)]
-    if len(landing) == 0:
+    # Sort by frame to ensure proper ordering
+    flight_df = flight_df.sort_values('frame').reset_index(drop=True)
+
+    # Mark each point as ground (True) or not (False)
+    is_ground = (flight_df['vel_v'].abs() < 1) & (flight_df['vel_h'].abs() < 1)
+
+    # The trace must end with ground points
+    if not is_ground.iloc[-1]:
         return None
 
-    # Get all points received after landing
-    landing_frame = landing['frame'].min()
-    ground_points = flight_df.loc[flight_df['frame'] >= landing_frame]
+    # Find where is_ground transitions from False to True
+    # The last such transition marks the start of the final ground sequence
+    transitions = is_ground & ~is_ground.shift(1, fill_value=False)
+    first_ground_idx = transitions[::-1].idxmax()  # last True in transitions
 
-    return ground_points
+    return flight_df.iloc[first_ground_idx:]
 
 
 def draw_ground_reception_map(ground_points: pd.DataFrame, map_utils: Optional['MapUtils'] = None,

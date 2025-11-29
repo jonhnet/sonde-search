@@ -3,6 +3,7 @@ Shared utilities for generating maps of sonde flights and landing locations.
 """
 
 from dataclasses import dataclass
+from math import ceil
 from typing import Tuple, Optional
 import contextily as cx
 import matplotlib.figure
@@ -15,7 +16,7 @@ from pyproj import Transformer
 
 
 # Whitespace padding around map boundaries (20%)
-MAP_WHITESPACE = 0.2
+DEFAULT_MAP_WHITESPACE = 0.2
 
 
 @dataclass
@@ -46,15 +47,17 @@ class MapUtils:
         return self.wgs84_to_mercator.transform(lat, lon)
 
     # Calculate map boundaries and zoom level for given points
-    def get_map_limits(self, points) -> Tuple[float, float, float, float, float]:
+    def get_map_limits(
+        self, points, map_whitespace: float = DEFAULT_MAP_WHITESPACE
+    ) -> Tuple[float, float, float, float, float]:
         min_lat = min([point[0] for point in points])
         max_lat = max([point[0] for point in points])
         min_lon = min([point[1] for point in points])
         max_lon = max([point[1] for point in points])
         min_x, min_y = self.to_mercator_xy(min_lat, min_lon)
         max_x, max_y = self.to_mercator_xy(max_lat, max_lon)
-        x_pad = (max_x - min_x) * MAP_WHITESPACE
-        y_pad = (max_y - min_y) * MAP_WHITESPACE
+        x_pad = (max_x - min_x) * map_whitespace
+        y_pad = (max_y - min_y) * map_whitespace
         max_pad = max(x_pad, y_pad)
         min_x -= max_pad
         max_x += max_pad
@@ -220,10 +223,8 @@ def draw_ground_reception_map(ground_points: pd.DataFrame, map_utils: Optional['
     # Prepare list of points for map limits calculation
     map_limits = [[lat, lon] for lat, lon in zip(ground_points['lat'], ground_points['lon'])]
 
-    # Find the limits of the map
-    min_x, min_y, max_x, max_y, zoom = map_utils.get_map_limits(map_limits)
-    ax.set_xlim(min_x, max_x)
-    ax.set_ylim(min_y, max_y)
+    # Find the limits of the map (no whitespace - ticks define the boundary)
+    min_x, min_y, max_x, max_y, zoom = map_utils.get_map_limits(map_limits, map_whitespace=0)
 
     # Calculate tick interval to get regular spacing including 0
     # The range in meters from the average point
@@ -231,24 +232,27 @@ def draw_ground_reception_map(ground_points: pd.DataFrame, map_utils: Optional['
     y_range = max(abs(max_y - avg_y), abs(min_y - avg_y))
     max_range = max(x_range, y_range)
 
-    # Pick a nice tick interval (aim for ~5-10 ticks across the range)
+    # Pick a nice tick interval (aim for ~5-8 ticks across the range)
     nice_intervals = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000]
     tick_interval = nice_intervals[0]
     for interval in nice_intervals:
-        if max_range / interval <= 10:
+        if max_range / interval <= 8:
             tick_interval = interval
             break
 
     # Generate tick positions centered on avg_x/avg_y (so 0 is always a tick)
-    # Calculate how many ticks we need in each direction
-    n_ticks_neg_x = int((avg_x - min_x) / tick_interval) + 1
-    n_ticks_pos_x = int((max_x - avg_x) / tick_interval) + 1
-    n_ticks_neg_y = int((avg_y - min_y) / tick_interval) + 1
-    n_ticks_pos_y = int((max_y - avg_y) / tick_interval) + 1
+    # Use ceil to ensure ticks extend to cover all data points
+    n_ticks_neg_x = ceil((avg_x - min_x) / tick_interval)
+    n_ticks_pos_x = ceil((max_x - avg_x) / tick_interval)
+    n_ticks_neg_y = ceil((avg_y - min_y) / tick_interval)
+    n_ticks_pos_y = ceil((max_y - avg_y) / tick_interval)
 
     x_ticks = [avg_x + i * tick_interval for i in range(-n_ticks_neg_x, n_ticks_pos_x + 1)]
     y_ticks = [avg_y + i * tick_interval for i in range(-n_ticks_neg_y, n_ticks_pos_y + 1)]
 
+    # Set axis limits to match the tick range (no extra whitespace)
+    ax.set_xlim(x_ticks[0], x_ticks[-1])
+    ax.set_ylim(y_ticks[0], y_ticks[-1])
     ax.set_xticks(x_ticks)
     ax.set_yticks(y_ticks)
 

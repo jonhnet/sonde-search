@@ -446,7 +446,11 @@ class EmailNotifier:
                 height_agl = ground_stats.avg_alt - ground_stats.ground_elev
                 body += f'''
                 <tr>
-                    <td>Est. Height</td>
+                    <td>Ground Elev at Avg Pos</td>
+                    <td>{self.render_elevation(sub, ground_stats.ground_elev)}</td>
+                </tr>
+                <tr>
+                    <td>Est. Sonde Height</td>
                     <td>{self.render_elevation(sub, height_agl)} AGL</td>
                 </tr>
             '''

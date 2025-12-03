@@ -407,7 +407,7 @@ class EmailNotifier:
                 # Generate filename for ground reception map
                 ground_map_suffix = (
                     f"{sub['uuid_subscription']}/{t.year}/{t.month}/{t.day}-{t.hour}-"
-                    f"{landing['lat']}-{landing['lon']}-ground.jpg"
+                    f"{landing['lat']}-{landing['lon']}-groundreception.jpg"
                 )
                 ground_map_url = os.path.join(EXTERNAL_IMAGES_URL) + ground_map_suffix
                 ground_map_local_fn = os.path.join(self.args.external_images_root, ground_map_suffix)

@@ -212,43 +212,41 @@ class EmailNotifier:
         # Calculate landing estimation parameters (used in subject line and body)
         subj_lest_text: str = ""
         body_lest_text: str = ""
-        if elev is not None:
+        if elev is not None and not landing['ground_reception']:
             body_lest_text += f'''
                 <tr>
                     <td>Ground Elev</td>
                     <td>{self.render_elevation(sub, elev)}</td>
                 </tr>
             '''
-
-            if not landing['ground_reception']:
-                # If this is not a ground reception but the last-heard altitude is
-                # below the ground elevation, indicate near-ground reception
-                if landing['alt'] <= elev:
-                    subj_lest_text += ", small radius"
-                    body_lest_text += '''
-                        <tr>
-                            <td>Time to Landing</td>
-                            <td>Near-ground reception</td>
-                        </tr>
-                        <tr>
-                            <td>Search Radius</td>
-                            <td>Small</td>
-                        </tr>
-                    '''
-                elif vel_h is not None and vel_v is not None and vel_v <= 0:
-                    time_to_landing = (landing['alt'] - elev) / -vel_v
-                    horiz_error = vel_h * time_to_landing
-                    subj_lest_text = f", {self.render_distance(sub, horiz_error)} radius"
-                    body_lest_text += f'''
-                        <tr>
-                            <td>Time to landing</td>
-                            <td>{round(time_to_landing)}s</td>
-                        </tr>
-                        <tr>
-                            <td>Search Radius</td>
-                            <td>{self.render_distance(sub, horiz_error)}</td>
-                        </tr>
-                    '''
+            # If this is not a ground reception but the last-heard altitude is
+            # below the ground elevation, indicate near-ground reception
+            if landing['alt'] <= elev:
+                subj_lest_text += ", small radius"
+                body_lest_text += '''
+                    <tr>
+                        <td>Time to Landing</td>
+                        <td>Near-ground reception</td>
+                    </tr>
+                    <tr>
+                        <td>Search Radius</td>
+                        <td>Small</td>
+                    </tr>
+                '''
+            elif vel_h is not None and vel_v is not None and vel_v <= 0:
+                time_to_landing = (landing['alt'] - elev) / -vel_v
+                horiz_error = vel_h * time_to_landing
+                subj_lest_text = f", {self.render_distance(sub, horiz_error)} radius"
+                body_lest_text += f'''
+                    <tr>
+                        <td>Time to landing</td>
+                        <td>{round(time_to_landing)}s</td>
+                    </tr>
+                    <tr>
+                        <td>Search Radius</td>
+                        <td>{self.render_distance(sub, horiz_error)}</td>
+                    </tr>
+                '''
 
         # subject line: "Sonde 33mi away, 2,400' radius, bearing 240° (Place Name)"
         subj = "Sonde "

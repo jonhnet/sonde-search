@@ -12,6 +12,7 @@ from matplotlib.ticker import FuncFormatter
 import numpy as np
 import pandas as pd
 import requests
+import time
 from pyproj import Transformer
 
 
@@ -76,28 +77,42 @@ class MapUtils:
         return min_x, min_y, max_x, max_y, zoom
 
 
-# Get ground elevation at a given lat/lon.
-# First tries USGS (US only, ~10m resolution), then falls back to
-# OpenTopoData (global coverage, 10-30m resolution depending on region).
 def get_elevation(lat, lon):
-    # Try USGS first (US only, ~10m resolution)
-    try:
-        resp = requests.get('https://epqs.nationalmap.gov/v1/json', params={
-            'x': lon,
-            'y': lat,
-            'units': 'Meters',
-            'wkid': '4326',
-            'includeDate': 'True',
-        }, timeout=10)
-        resp.raise_for_status()
-        value = resp.json().get('value')
-        if value is not None:
-            return float(value)
-    except Exception:
-        pass
+    """Get ground elevation in meters at a given lat/lon.
 
-    # Fall back to OpenTopoData with multiple datasets:
-    # ned10m (10m US), eudem25m (25m Europe), srtm30m (30m global)
+    Tries USGS first (US only, ~10m resolution), then falls back to
+    OpenTopoData (global, 10-30m resolution). USGS is preferred because
+    OpenTopoData's NED data appears to be older/lower-quality.
+
+    The USGS API load-balances across servers with different datasets.
+    We retry up to 5 times, accepting only high-resolution results
+    (resolution < 0.001 degrees). Out-of-region queries return an error
+    message instead of JSON, so we fall back immediately in that case.
+    """
+    for attempt in range(5):
+        try:
+            resp = requests.get('https://epqs.nationalmap.gov/v1/json', params={
+                'x': lon,
+                'y': lat,
+                'units': 'Meters',
+                'wkid': '4326',
+                'includeDate': 'True',
+            }, timeout=10)
+            resp.raise_for_status()
+            # Out-of-region returns "Call failed." error text - fall back immediately
+            if resp.text.startswith('Call failed'):
+                break
+            data = resp.json()
+            value = data.get('value')
+            resolution = data.get('resolution')
+            if value is not None and resolution is not None and resolution < 0.001:
+                return float(value)
+        except Exception:
+            pass
+        if attempt < 4:
+            time.sleep(2)
+
+    # Fall back to OpenTopoData (ned10m US, eudem25m Europe, srtm30m global)
     try:
         resp = requests.get(
             'https://api.opentopodata.org/v1/ned10m,eudem25m,srtm30m',

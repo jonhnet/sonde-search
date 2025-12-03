@@ -113,6 +113,7 @@ def get_elevation(lat, lon):
             time.sleep(2)
 
     # Fall back to OpenTopoData (ned10m US, eudem25m Europe, srtm30m global)
+    print("Falling back to OpenTopoData for elevation")
     try:
         resp = requests.get(
             'https://api.opentopodata.org/v1/ned10m,eudem25m,srtm30m',

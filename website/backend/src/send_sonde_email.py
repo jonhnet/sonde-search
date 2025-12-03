@@ -420,6 +420,13 @@ class EmailNotifier:
 
         # Add ground reception statistics to the table if we have them
         if ground_stats is not None:
+            # Calculate distance from average position to last-heard position
+            path = Geodesic.WGS84.Inverse(
+                ground_stats.avg_lat, ground_stats.avg_lon,
+                landing['lat'], landing['lon']
+            )
+            dist_to_last_heard = path['s12']
+
             body += f'''
                 <tr>
                     <td>Ground Points</td>
@@ -432,6 +439,10 @@ class EmailNotifier:
                         {ground_stats.avg_lat:.6f}, {ground_stats.avg_lon:.6f}</a>
                         (±{self.render_distance(sub, ground_stats.std_dev_combined)})
                     </td>
+                </tr>
+                <tr>
+                    <td>Avg to Last-Frame Dist</td>
+                    <td>{self.render_distance(sub, dist_to_last_heard)}</td>
                 </tr>
                 <tr>
                     <td>Avg Altitude</td>

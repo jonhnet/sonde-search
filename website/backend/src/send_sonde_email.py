@@ -439,7 +439,7 @@ class EmailNotifier:
                     </td>
                 </tr>
                 <tr>
-                    <td>Avg to Last-Frame Dist</td>
+                    <td>Dist from Last Received Pos to Avg Pos</td>
                     <td>{self.render_distance(sub, dist_to_last_heard)}</td>
                 </tr>
                 <tr>

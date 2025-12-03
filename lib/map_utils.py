@@ -101,19 +101,21 @@ def get_elevation(lat, lon):
             resp.raise_for_status()
             # Out-of-region returns "Call failed." error text - fall back immediately
             if resp.text.startswith('Call failed'):
+                print(f'USGS elev {lat},{lon}: out of region')
                 break
             data = resp.json()
             value = data.get('value')
             resolution = data.get('resolution')
             if value is not None and resolution is not None and resolution < 0.001:
                 return float(value)
-        except Exception:
-            pass
+            print(f'USGS elev {lat},{lon}: low-res ({resp.text}), retrying')
+        except Exception as e:
+            print(f'USGS elev {lat},{lon}: {e}, retrying')
         if attempt < 4:
             time.sleep(2)
 
     # Fall back to OpenTopoData (ned10m US, eudem25m Europe, srtm30m global)
-    print("Falling back to OpenTopoData for elevation")
+    print(f'USGS elev {lat},{lon}: falling back to OpenTopoData')
     try:
         resp = requests.get(
             'https://api.opentopodata.org/v1/ned10m,eudem25m,srtm30m',

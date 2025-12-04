@@ -3,6 +3,7 @@ Shared utilities for generating maps of sonde flights and landing locations.
 """
 
 from dataclasses import dataclass
+from functools import lru_cache
 from math import ceil
 from typing import Tuple, Optional
 import contextily as cx
@@ -77,8 +78,17 @@ class MapUtils:
         return min_x, min_y, max_x, max_y, zoom
 
 
-def get_elevation(lat, lon):
+def get_elevation(lat: float, lon: float) -> Optional[float]:
     """Get ground elevation in meters at a given lat/lon.
+
+    Results are cached by coordinates rounded to 4 decimal places (~11m).
+    """
+    return _get_elevation_cached(round(lat, 4), round(lon, 4))
+
+
+@lru_cache(maxsize=1000)
+def _get_elevation_cached(lat: float, lon: float) -> Optional[float]:
+    """Cached implementation of elevation lookup.
 
     Tries USGS first (US only, ~10m resolution), then falls back to
     OpenTopoData (global, 10-30m resolution). USGS is preferred because

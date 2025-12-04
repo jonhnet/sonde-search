@@ -5,9 +5,23 @@ import time
 import bz2
 import json
 import sys
+from functools import lru_cache
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../'))
 from lib.map_utils import get_elevation
+
+
+# Module-level cache for singlesonde API requests
+SONDEHUB_ONESONDE_URL = 'https://api.v2.sondehub.org/sonde/'
+
+
+@lru_cache(maxsize=1000)
+def _fetch_singlesonde_cached(serial: str):
+    """Cached fetch of single sonde data from SondeHub API."""
+    print(f'SondeHub API: fetching {serial} (not cached)')
+    response = requests.get(SONDEHUB_ONESONDE_URL + serial)
+    response.raise_for_status()
+    return response.json()
 
 
 # Get sonde data from the same live API that the SondeHub web site uses
@@ -93,7 +107,6 @@ class SondeHubRetrieverBase:
 
 class LiveSondeHub(SondeHubRetrieverBase):
     SONDEHUB_DATA_URL = 'https://api.v2.sondehub.org/sondes/telemetry'
-    SONDEHUB_ONESONDE_URL = 'https://api.v2.sondehub.org/sonde/'
 
     def __init__(self):
         super(LiveSondeHub, self).__init__()
@@ -104,9 +117,8 @@ class LiveSondeHub(SondeHubRetrieverBase):
         return response.json(), pd.Timestamp.now('UTC')
 
     def make_singlesonde_request(self, serial):
-        response = requests.get(self.SONDEHUB_ONESONDE_URL + serial)
-        response.raise_for_status()
-        return response.json(), pd.Timestamp.now('UTC')
+        # Uses module-level cached function
+        return _fetch_singlesonde_cached(serial), pd.Timestamp.now('UTC')
 
     def get_elevation_data(self, lat, lon):
         return get_elevation(lat, lon)

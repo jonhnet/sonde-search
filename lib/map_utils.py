@@ -117,8 +117,9 @@ def _get_elevation_cached(lat: float, lon: float) -> Optional[float]:
             value = data.get('value')
             resolution = data.get('resolution')
             if value is not None and resolution is not None and resolution < 0.001:
+                print(f'USGS elev {lat},{lon}: {value}m (res={resolution})')
                 return float(value)
-            print(f'USGS elev {lat},{lon}: low-res ({resp.text}), retrying')
+            print(f'USGS elev {lat},{lon}: low-res (res={resolution}), retrying')
         except Exception as e:
             print(f'USGS elev {lat},{lon}: {e}, retrying')
         if attempt < 4:
@@ -135,7 +136,10 @@ def _get_elevation_cached(lat: float, lon: float) -> Optional[float]:
         resp.raise_for_status()
         results = resp.json().get('results', [])
         if results and results[0].get('elevation') is not None:
-            return float(results[0]['elevation'])
+            elev = float(results[0]['elevation'])
+            dataset = results[0].get('dataset', 'unknown')
+            print(f'OpenTopoData elev {lat},{lon}: {elev}m (dataset={dataset})')
+            return elev
     except Exception:
         pass
 

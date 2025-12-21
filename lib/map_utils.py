@@ -12,16 +12,20 @@ import matplotlib.figure
 
 # Default cache directory for contextily map tiles
 DEFAULT_CONTEXTILY_CACHE_DIR = os.path.expanduser("~/.cache/geotiles")
+CONTEXTILY_CONFIG_FILE = os.path.expanduser("~/.config/contextily/cache-dir-name")
 
 
 def setup_contextily_cache():
     """Configure contextily tile cache directory.
 
-    Uses CONTEXTILY_CACHE_DIR environment variable if set,
+    Reads cache directory path from ~/.config/contextily/cache-dir-name if it exists,
     otherwise falls back to ~/.cache/geotiles.
     """
-    cache_dir = os.environ.get('CONTEXTILY_CACHE_DIR', DEFAULT_CONTEXTILY_CACHE_DIR)
-    cache_dir = os.path.expanduser(cache_dir)
+    cache_dir = DEFAULT_CONTEXTILY_CACHE_DIR
+    if os.path.exists(CONTEXTILY_CONFIG_FILE):
+        with open(CONTEXTILY_CONFIG_FILE) as f:
+            cache_dir = f.read().strip()
+        cache_dir = os.path.expanduser(cache_dir)
     os.makedirs(cache_dir, exist_ok=True)
     cx.set_cache_dir(cache_dir)
 

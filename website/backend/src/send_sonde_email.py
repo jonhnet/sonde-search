@@ -30,10 +30,11 @@ import util
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../'))
 import lib.map_utils as map_utils
+from lib.map_utils import setup_contextily_cache
 
 matplotlib.use('Agg')
 
-cx.set_cache_dir(os.path.expanduser("~/.cache/geotiles"))
+setup_contextily_cache()
 
 # conversion factors
 METERS_PER_MILE = 1609.34

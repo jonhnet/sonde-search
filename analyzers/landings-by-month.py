@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 
 import argparse
-import contextily as cx
 import os
 import subprocess
 import sys
 
-cx.set_cache_dir("/tmp/cached-tiles")
-
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from lib.map_utils import setup_contextily_cache
 from lib.landing_calendar import generate_calendar
+
+setup_contextily_cache()
 
 MAPS = {
     "spokane": {

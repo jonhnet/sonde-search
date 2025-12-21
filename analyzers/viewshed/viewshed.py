@@ -35,9 +35,12 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(__file__))
 from dem_manager import DEMManager
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
+from lib.map_utils import setup_contextily_cache
+
 matplotlib.use('Agg')
 
-cx.set_cache_dir(os.path.expanduser("~/.cache/geotiles"))
+setup_contextily_cache()
 
 # Constants
 EARTH_RADIUS_M = 6371000  # Earth radius in meters

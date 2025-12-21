@@ -2,12 +2,30 @@
 Shared utilities for generating maps of sonde flights and landing locations.
 """
 
+import os
 from dataclasses import dataclass
 from functools import lru_cache
 from math import ceil
 from typing import Tuple, Optional
 import contextily as cx
 import matplotlib.figure
+
+# Default cache directory for contextily map tiles
+DEFAULT_CONTEXTILY_CACHE_DIR = os.path.expanduser("~/.cache/geotiles")
+
+
+def setup_contextily_cache():
+    """Configure contextily tile cache directory.
+
+    Uses CONTEXTILY_CACHE_DIR environment variable if set,
+    otherwise falls back to ~/.cache/geotiles.
+    """
+    cache_dir = os.environ.get('CONTEXTILY_CACHE_DIR', DEFAULT_CONTEXTILY_CACHE_DIR)
+    cache_dir = os.path.expanduser(cache_dir)
+    os.makedirs(cache_dir, exist_ok=True)
+    cx.set_cache_dir(cache_dir)
+
+
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 import numpy as np
@@ -179,8 +197,9 @@ def identify_ground_points(flight_df: pd.DataFrame) -> Optional[pd.DataFrame]:
     return flight_df.iloc[first_ground_idx:]
 
 
-def draw_ground_reception_map(ground_points: pd.DataFrame, map_utils: Optional['MapUtils'] = None,
-                               size: int = 10) -> Tuple[matplotlib.figure.Figure, GroundReceptionStats]:
+def draw_ground_reception_map(ground_points: pd.DataFrame,
+                              map_utils: Optional['MapUtils'] = None,
+                              size: int = 10) -> Tuple[matplotlib.figure.Figure, GroundReceptionStats]:
     """Draw a map showing ground reception points with statistics.
 
     Creates a map with:

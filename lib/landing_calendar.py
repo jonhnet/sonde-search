@@ -22,13 +22,14 @@ import subprocess
 import sys
 import tempfile
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from lib.map_utils import setup_contextily_cache
+from data.cache import get_sonde_summaries_as_dataframe
+
 matplotlib.use('Agg')
 
 # Disable contextily's in-memory tile caching to prevent memory growth
-cx.set_cache_dir(os.path.join(os.path.expanduser("~"), ".cache/geotiles"))
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from data.cache import get_sonde_summaries_as_dataframe
+setup_contextily_cache()
 
 
 def _get_landing_data():

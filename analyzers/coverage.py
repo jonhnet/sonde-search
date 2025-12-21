@@ -5,7 +5,6 @@ DEFAULT_LISTENER_ALT = "100"
 
 from pyproj import Transformer
 import argparse
-import contextily as cx
 import glob
 import matplotlib
 import matplotlib.pyplot as plt
@@ -14,9 +13,12 @@ import pandas as pd
 import sys
 import AltAzRange
 
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from lib.map_utils import setup_contextily_cache
+
 matplotlib.use("Agg")
 
-cx.set_cache_dir(os.path.expanduser("~/.cache/geotiles"))
+setup_contextily_cache()
 
 wgs84_to_mercator = Transformer.from_crs(crs_from="EPSG:4326", crs_to="EPSG:3857")
 

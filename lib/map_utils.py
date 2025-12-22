@@ -27,6 +27,7 @@ def setup_contextily_cache():
             cache_dir = f.read().strip()
         cache_dir = os.path.expanduser(cache_dir)
     os.makedirs(cache_dir, exist_ok=True)
+    print(f"Tile cache dir: {cache_dir}")
     cx.set_cache_dir(cache_dir)
 
 

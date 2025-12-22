@@ -29,8 +29,28 @@ authorizes you to configure notifications for that address.
                 'email': email,
                 'url': window.location.href,
             },
-            success: function() {
+            success: function(response) {
                 l.stop();
+
+                // Set the pending_verification cookie. This cookie must be
+                // present when the user clicks the verification link.
+                // Gmail's link scanner won't have this cookie, preventing
+                // it from authenticating users.
+                if (response.pending_token) {
+{% if site.dev_mode == 1 %}
+                    // Dev mode: set cookie without domain restriction
+                    Cookies.set('pending_verification', response.pending_token, {
+                        expires: 1,  // 1 day
+                    });
+{% else %}
+                    // Production: set cookie with domain
+                    Cookies.set('pending_verification', response.pending_token, {
+                        expires: 1,  // 1 day
+                        domain: '.sondesearch.lectrobox.com',
+                    });
+{% endif %}
+                }
+
                 button.css("visibility", "hidden");
                 $('#form_result').text('Success! Check your email for a link.');
                 $('#form_result').css("visibility", "visible");

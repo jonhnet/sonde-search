@@ -116,6 +116,9 @@ class SondesearchAPI:
         print(f"Got user data for uuid {rv['uuid']}, email {rv['email']}")
         return rv
 
+    # How long pending verification tokens are valid (24 hours)
+    PENDING_VERIFICATION_TTL_SECONDS = 86400
+
     @cherrypy.expose
     @cherrypy.tools.json_out()  # type: ignore[attr-defined]
     @allow_lectrobox_cors
@@ -123,10 +126,28 @@ class SondesearchAPI:
         print(f'got validation request: e={email}, u={url}')
         user_token = self.get_user_token_from_email(email)
 
+        # Generate two tokens:
+        # 1. pending_token - stored in browser cookie, proves same browser
+        # 2. email_token - sent in email link, proves email ownership
+        # Both are required to get the user_token, preventing:
+        # - Gmail's scanner (has email_token but no pending_token cookie)
+        # - Malicious signups (can set pending_token but won't receive email)
+        pending_token = uuid.uuid4().hex
+        email_token = uuid.uuid4().hex
+
+        # Store the association with a TTL for automatic cleanup
+        ttl_time = int(time.time()) + self.PENDING_VERIFICATION_TTL_SECONDS
+        self.tables.pending_verifications.put_item(Item={
+            'pending_token': pending_token,
+            'email_token': email_token,
+            'user_token': user_token,
+            'ttl': ttl_time,
+        })
+
         # The client sends its URL to us. Replace the tail (/signup)
-        # with "/manage", plus the user token.
+        # with "/verify" plus the email token.
         idx = url.index('/signup')
-        next_url = url[0:idx] + f'/verify/?user_token={user_token}'
+        next_url = url[0:idx] + f'/verify/?email_token={email_token}'
         print(f'got signup request from {email}: sending to {next_url}')
 
         # construct the email body
@@ -156,7 +177,59 @@ class SondesearchAPI:
             },
         )
 
-        return {'success': True}
+        # Return the pending token so the client can set it as a cookie
+        return {'success': True, 'pending_token': pending_token}
+
+    @cherrypy.expose
+    @cherrypy.tools.json_out()  # type: ignore[attr-defined]
+    @allow_lectrobox_cors
+    def verify_email(self, email_token, pending_token):
+        """Verify the user's email using both tokens.
+
+        Requires:
+        - email_token: from the URL in the verification email (proves email ownership)
+        - pending_token: from the browser cookie set during signup (proves same browser)
+
+        Gmail's link scanner will have the email_token but not the pending_token
+        cookie, so it can't authenticate.
+
+        On success, returns the user_token which the frontend stores as the
+        auth cookie.
+        """
+        print(f'verify_email: email_token={email_token}, pending_token={pending_token}')
+
+        if not pending_token:
+            raise ClientError("Missing browser verification token. "
+                              "Please use the same browser you used to sign up.")
+
+        if not email_token:
+            raise ClientError("Missing email verification token.")
+
+        # Look up the pending verification record by pending_token
+        rv = self.tables.pending_verifications.query(
+            KeyConditionExpression=Key('pending_token').eq(pending_token)
+        )['Items']
+
+        if len(rv) == 0:
+            raise ClientError("Verification token not found or expired. "
+                              "Please sign up again.")
+
+        record = rv[0]
+
+        # Verify the email_token matches
+        if record.get('email_token') != email_token:
+            raise ClientError("Verification tokens do not match. "
+                              "Please use the same browser you used to sign up.")
+
+        user_token = record['user_token']
+
+        # Delete the pending verification record since it's been used
+        self.tables.pending_verifications.delete_item(
+            Key={'pending_token': pending_token}
+        )
+
+        print(f'verify_email: success for user_token={user_token}')
+        return {'success': True, 'user_token': user_token}
 
     @cherrypy.expose
     @cherrypy.tools.json_out()  # type: ignore[attr-defined]

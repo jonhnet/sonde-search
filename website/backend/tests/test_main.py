@@ -8,6 +8,7 @@ from unittest import mock
 import argparse
 import base64
 import boto3
+from boto3.dynamodb.conditions import Key
 import bz2
 import cherrypy
 import email
@@ -118,20 +119,144 @@ class Test_v2:
     # Test sending a notification email
     def test_send_validation_email(self):
         addr = 'jelson@gmail.com'
-        post('send_validation_email', data={
+        resp = post('send_validation_email', data={
             'email': addr,
             'url': 'https://sondesearch.lectrobox.com/notifier/signup',
-        })
+        }).json()
+
+        # Verify the response includes a pending_token for the browser cookie
+        assert resp['success'] is True
+        assert 'pending_token' in resp
+        pending_token = resp['pending_token']
+        assert len(pending_token) == 32  # uuid4().hex is 32 chars
+
         sent_emails = self.ses_backend.sent_messages
         assert len(sent_emails) == 1
         sent_email = sent_emails[0]
         assert 1 == len(sent_email.destinations['ToAddresses'])
         assert addr == sent_email.destinations['ToAddresses'][0]
         assert 'Hello!' in sent_email.body
-        mo = re.search('user_token=([a-z0-9]+)', sent_email.body)
+
+        # Verify email contains email_token (not user_token)
+        mo = re.search('email_token=([a-z0-9]+)', sent_email.body)
         assert mo is not None
+        email_token = mo.group(1)
+        assert len(email_token) == 32
+
+        # Verify user_token is NOT in the email
+        assert 'user_token=' not in sent_email.body
+
+        # Verify the pending_token is stored with both email_token and user_token
         user_token = self.apiserver.get_user_token_from_email(addr)
-        assert mo.group(1) == user_token
+        pending_record = self.apiserver.tables.pending_verifications.query(
+            KeyConditionExpression=Key('pending_token').eq(pending_token)
+        )['Items']
+        assert len(pending_record) == 1
+        assert pending_record[0]['user_token'] == user_token
+        assert pending_record[0]['email_token'] == email_token
+
+    # Test the verify_email endpoint (magic link pattern with 3 tokens)
+    def test_verify_email_success(self):
+        # First, send a validation email to get pending_token and email_token
+        addr = 'verify_test@example.com'
+        resp = post('send_validation_email', data={
+            'email': addr,
+            'url': 'https://sondesearch.lectrobox.com/notifier/signup',
+        }).json()
+
+        pending_token = resp['pending_token']
+
+        # Get email_token from the stored record
+        pending_record = self.apiserver.tables.pending_verifications.query(
+            KeyConditionExpression=Key('pending_token').eq(pending_token)
+        )['Items'][0]
+        email_token = pending_record['email_token']
+        user_token = pending_record['user_token']
+
+        # Now verify with both tokens - should succeed
+        verify_resp = post('verify_email', data={
+            'email_token': email_token,
+            'pending_token': pending_token,
+        }).json()
+
+        assert verify_resp['success'] is True
+        assert verify_resp['user_token'] == user_token
+
+        # Verify the pending_token was deleted (one-time use)
+        pending_record = self.apiserver.tables.pending_verifications.query(
+            KeyConditionExpression=Key('pending_token').eq(pending_token)
+        )['Items']
+        assert len(pending_record) == 0
+
+    def test_verify_email_missing_pending_token(self):
+        # Try to verify without a pending_token (like Gmail's scanner would)
+        addr = 'scanner_test@example.com'
+        resp = post('send_validation_email', data={
+            'email': addr,
+            'url': 'https://sondesearch.lectrobox.com/notifier/signup',
+        }).json()
+
+        # Get email_token from stored record
+        pending_record = self.apiserver.tables.pending_verifications.query(
+            KeyConditionExpression=Key('pending_token').eq(resp['pending_token'])
+        )['Items'][0]
+        email_token = pending_record['email_token']
+
+        # Should fail without pending_token (Gmail scanner scenario)
+        resp = post('verify_email', expected_status=400, data={
+            'email_token': email_token,
+            'pending_token': '',
+        })
+        assert 'Missing browser verification token' in resp.text
+
+    def test_verify_email_wrong_pending_token(self):
+        # Try to verify with a wrong pending_token
+        addr = 'wrong_token_test@example.com'
+        resp = post('send_validation_email', data={
+            'email': addr,
+            'url': 'https://sondesearch.lectrobox.com/notifier/signup',
+        }).json()
+
+        # Get email_token from stored record
+        pending_record = self.apiserver.tables.pending_verifications.query(
+            KeyConditionExpression=Key('pending_token').eq(resp['pending_token'])
+        )['Items'][0]
+        email_token = pending_record['email_token']
+
+        # Should fail with wrong pending_token
+        resp = post('verify_email', expected_status=400, data={
+            'email_token': email_token,
+            'pending_token': 'wrong_token_12345',
+        })
+        assert 'not found or expired' in resp.text
+
+    def test_verify_email_mismatched_tokens(self):
+        # Create two users and try to mix their tokens
+        addr1 = 'user1@example.com'
+        addr2 = 'user2@example.com'
+
+        resp1 = post('send_validation_email', data={
+            'email': addr1,
+            'url': 'https://sondesearch.lectrobox.com/notifier/signup',
+        }).json()
+
+        resp2 = post('send_validation_email', data={
+            'email': addr2,
+            'url': 'https://sondesearch.lectrobox.com/notifier/signup',
+        }).json()
+
+        # Get email_token from user2's record
+        pending_record2 = self.apiserver.tables.pending_verifications.query(
+            KeyConditionExpression=Key('pending_token').eq(resp2['pending_token'])
+        )['Items'][0]
+        email_token2 = pending_record2['email_token']
+
+        # Try to use user1's pending_token with user2's email_token
+        resp = post('verify_email', expected_status=400, data={
+            'email_token': email_token2,
+            'pending_token': resp1['pending_token'],
+        })
+        assert 'do not match' in resp.text
 
     # Test subscribing, then unsubscribing, as if we're using the
     # management portal

@@ -157,12 +157,22 @@ object PredictionApi {
         if (path.isEmpty()) return null
 
         val landing = path.last()
+
+        // Parse landing time from the last trajectory point
+        val allPoints = apiResponse.prediction.flatMap { it.trajectory }
+        val landingTimeStr = allPoints.lastOrNull()?.datetime ?: ""
+        val landingEpoch = try {
+            Instant.parse(landingTimeStr).epochSecond
+        } catch (_: Exception) {
+            0L
+        }
+
         return DescentPrediction(
             path = path,
             landingPoint = LandingPrediction(
                 latitude = landing.latitude,
                 longitude = landing.longitude,
-                timestamp = System.currentTimeMillis() / 1000
+                timestamp = landingEpoch
             )
         )
     }

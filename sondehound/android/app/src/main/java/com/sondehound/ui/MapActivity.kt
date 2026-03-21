@@ -240,6 +240,11 @@ class MapActivity : AppCompatActivity() {
             if (state == null || state.sondes.isEmpty()) {
                 binding.sondeListText.text = status
             }
+            updateBleIcon(state?.connected == true)
+        }
+
+        SondeRepository.receiverState.observe(this) { state ->
+            updateBleIcon(state.connected)
         }
     }
 
@@ -313,11 +318,26 @@ class MapActivity : AppCompatActivity() {
                     Marker(map).apply {
                         setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                         icon = ContextCompat.getDrawable(this@MapActivity, R.drawable.ic_landing)
-                        title = "Predicted Landing"
                         map.overlays.add(this)
                     }
                 }
                 landMarker.position = pred.toGeoPoint()
+                landMarker.title = "Predicted Landing"
+                if (pred.timestamp > 0) {
+                    val landingTime = java.time.Instant.ofEpochSecond(pred.timestamp)
+                        .atZone(java.time.ZoneId.systemDefault())
+                    val timeStr = landingTime.format(
+                        java.time.format.DateTimeFormatter.ofPattern("h:mm a")
+                    )
+                    val etaSec = pred.timestamp - System.currentTimeMillis() / 1000
+                    val etaStr = if (etaSec > 0) {
+                        val mins = etaSec / 60
+                        if (mins < 60) "${mins}m" else "${mins / 60}h ${mins % 60}m"
+                    } else {
+                        "now"
+                    }
+                    landMarker.snippet = "ETA $etaStr ($timeStr)"
+                }
             }
         }
 
@@ -397,6 +417,14 @@ class MapActivity : AppCompatActivity() {
             seconds < 60 -> "${seconds}s"
             seconds < 3600 -> "${seconds / 60}m"
             else -> "${seconds / 3600}h"
+        }
+    }
+
+    private fun updateBleIcon(connected: Boolean) {
+        if (connected) {
+            binding.bleStatusIcon.setColorFilter(Color.parseColor("#4488FF"))
+        } else {
+            binding.bleStatusIcon.setColorFilter(Color.RED)
         }
     }
 

@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPP4323 Power Monitor</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
+    <style>
+        body {
+            background-color: #f8f9fa;
+            padding: 20px;
+        }
+
+        .metric-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .metric-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metric-unit {
+            font-size: 1.2rem;
+            color: #6c757d;
+            font-weight: normal;
+        }
+
+        .chart-container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-active {
+            background-color: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .voltage { color: #007bff; }
+        .current { color: #28a745; }
+        .power { color: #dc3545; }
+        .energy { color: #6f42c1; }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row mb-4">
+            <div class="col">
+                <h1>
+                    <span class="status-indicator status-active"></span>
+                    GPP4323 Power Monitor
+                </h1>
+                <p class="text-muted">Real-time monitoring of Channel 1 load</p>
+            </div>
+            <div class="col-auto">
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-sm btn-outline-primary active" data-range="1m">1 Minute</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-range="1h">1 Hour</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-range="6h">6 Hours</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-range="24h">24 Hours</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-range="all">All Data</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Current Metrics -->
+        <div class="row">
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">Voltage</div>
+                    <div class="metric-value voltage">
+                        <span id="current-voltage">--</span>
+                        <span class="metric-unit">V</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">Current</div>
+                    <div class="metric-value current">
+                        <span id="current-current">--</span>
+                        <span class="metric-unit">A</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">Power</div>
+                    <div class="metric-value power">
+                        <span id="current-power">--</span>
+                        <span class="metric-unit">W</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">Total Energy</div>
+                    <div class="metric-value energy">
+                        <span id="total-energy">--</span>
+                        <span class="metric-unit">Wh</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="row">
+            <div class="col-12">
+                <div class="chart-container">
+                    <h5>Power vs Time</h5>
+                    <canvas id="powerChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="chart-container">
+                    <h5>Voltage vs Time</h5>
+                    <canvas id="voltageChart"></canvas>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="chart-container">
+                    <h5>Current vs Time</h5>
+                    <canvas id="currentChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="chart-container">
+                    <h5>Cumulative Energy vs Time</h5>
+                    <canvas id="energyChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="row">
+            <div class="col-12">
+                <div class="metric-card">
+                    <h6>Session Statistics</h6>
+                    <p class="mb-1">
+                        <strong>Start Time:</strong> <span id="start-time">--</span>
+                    </p>
+                    <p class="mb-1">
+                        <strong>Elapsed Time:</strong> <span id="elapsed-time">--</span>
+                    </p>
+                    <p class="mb-0">
+                        <strong>Sample Count:</strong> <span id="sample-count">--</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Chart configuration
+        const chartConfig = {
+            type: 'line',
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 3,
+                animation: false,
+                scales: {
+                    x: {
+                        type: 'linear',
+                        bounds: 'data',
+                        title: {
+                            display: true,
+                            text: 'Time (seconds)'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        };
+
+        // Initialize charts
+        const powerChart = new Chart(
+            document.getElementById('powerChart'),
+            {
+                ...chartConfig,
+                data: {
+                    datasets: [{
+                        label: 'Power (W)',
+                        data: [],
+                        borderColor: '#dc3545',
+                        backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                        fill: true,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    ...chartConfig.options,
+                    scales: {
+                        ...chartConfig.options.scales,
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Power (W)'
+                            }
+                        }
+                    }
+                }
+            }
+        );
+
+        const voltageChart = new Chart(
+            document.getElementById('voltageChart'),
+            {
+                ...chartConfig,
+                data: {
+                    datasets: [{
+                        label: 'Voltage (V)',
+                        data: [],
+                        borderColor: '#007bff',
+                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                        fill: true,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    ...chartConfig.options,
+                    scales: {
+                        ...chartConfig.options.scales,
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Voltage (V)'
+                            }
+                        }
+                    }
+                }
+            }
+        );
+
+        const currentChart = new Chart(
+            document.getElementById('currentChart'),
+            {
+                ...chartConfig,
+                data: {
+                    datasets: [{
+                        label: 'Current (A)',
+                        data: [],
+                        borderColor: '#28a745',
+                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                        fill: true,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    ...chartConfig.options,
+                    scales: {
+                        ...chartConfig.options.scales,
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Current (A)'
+                            }
+                        }
+                    }
+                }
+            }
+        );
+
+        const energyChart = new Chart(
+            document.getElementById('energyChart'),
+            {
+                ...chartConfig,
+                data: {
+                    datasets: [{
+                        label: 'Energy (Wh)',
+                        data: [],
+                        borderColor: '#6f42c1',
+                        backgroundColor: 'rgba(111, 66, 193, 0.1)',
+                        fill: true,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    ...chartConfig.options,
+                    scales: {
+                        ...chartConfig.options.scales,
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Energy (Wh)'
+                            }
+                        }
+                    }
+                }
+            }
+        );
+
+        // Keep only recent data points
+        const MAX_POINTS = 500;
+
+        function updateCharts(dataPoint) {
+            const elapsed = dataPoint.elapsed;
+
+            // Add new data
+            powerChart.data.datasets[0].data.push({x: elapsed, y: dataPoint.power});
+            voltageChart.data.datasets[0].data.push({x: elapsed, y: dataPoint.voltage});
+            currentChart.data.datasets[0].data.push({x: elapsed, y: dataPoint.current});
+            energyChart.data.datasets[0].data.push({x: elapsed, y: dataPoint.energy_wh});
+
+            // Limit data points
+            if (powerChart.data.datasets[0].data.length > MAX_POINTS) {
+                powerChart.data.datasets[0].data.shift();
+                voltageChart.data.datasets[0].data.shift();
+                currentChart.data.datasets[0].data.shift();
+                energyChart.data.datasets[0].data.shift();
+            }
+
+            // Always update x-axis range to keep new data visible
+            const minX = powerChart.data.datasets[0].data[0].x;
+            const maxX = elapsed;
+
+            powerChart.options.scales.x.min = minX;
+            powerChart.options.scales.x.max = maxX;
+            voltageChart.options.scales.x.min = minX;
+            voltageChart.options.scales.x.max = maxX;
+            currentChart.options.scales.x.min = minX;
+            currentChart.options.scales.x.max = maxX;
+            energyChart.options.scales.x.min = minX;
+            energyChart.options.scales.x.max = maxX;
+
+            // Update charts
+            powerChart.update('none');
+            voltageChart.update('none');
+            currentChart.update('none');
+            energyChart.update('none');
+        }
+
+        function updateStats(stats) {
+            // Update current metric values
+            document.getElementById('current-voltage').textContent = stats.voltage.toFixed(3);
+            document.getElementById('current-current').textContent = stats.current.toFixed(3);
+            document.getElementById('current-power').textContent = stats.power.toFixed(3);
+            document.getElementById('total-energy').textContent = stats.energy_wh.toFixed(4);
+
+            // Update session statistics
+            if (stats.start_time) {
+                const startTime = new Date(stats.start_time);
+                document.getElementById('start-time').textContent = startTime.toLocaleString();
+            }
+
+            const elapsed = stats.elapsed;
+            const hours = Math.floor(elapsed / 3600);
+            const minutes = Math.floor((elapsed % 3600) / 60);
+            const seconds = Math.floor(elapsed % 60);
+            document.getElementById('elapsed-time').textContent =
+                `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+            document.getElementById('sample-count').textContent = stats.total_sample_count.toLocaleString();
+        }
+
+        // Track last seen elapsed time to avoid duplicates
+        let lastElapsedSeen = -1;
+        let dataEventSource = null;
+        let statsEventSource = null;
+
+        function startDataSSE(range = 'live', maxPoints = 500) {
+            // Close existing connection if any
+            if (dataEventSource) {
+                dataEventSource.close();
+            }
+
+            // Server-Sent Events for real-time timeseries data updates
+            const url = `api/timeseries?range=${range}&max_points=${maxPoints}`;
+            dataEventSource = new EventSource(url);
+
+            dataEventSource.onmessage = function(event) {
+                const message = JSON.parse(event.data);
+
+                if (message.type === 'initial') {
+                    // Initial batch of historical/decimated data
+                    powerChart.data.datasets[0].data = [];
+                    voltageChart.data.datasets[0].data = [];
+                    currentChart.data.datasets[0].data = [];
+                    energyChart.data.datasets[0].data = [];
+
+                    // Load all points
+                    for (let i = 0; i < message.data.length; i++) {
+                        const point = message.data[i];
+                        powerChart.data.datasets[0].data.push({x: point.elapsed, y: point.power});
+                        voltageChart.data.datasets[0].data.push({x: point.elapsed, y: point.voltage});
+                        currentChart.data.datasets[0].data.push({x: point.elapsed, y: point.current});
+                        energyChart.data.datasets[0].data.push({x: point.elapsed, y: point.energy_wh});
+                    }
+
+                    // Set x-axis bounds to match the data range
+                    if (message.data.length > 0) {
+                        const minX = message.data[0].elapsed;
+                        const maxX = message.data[message.data.length - 1].elapsed;
+
+                        powerChart.options.scales.x.min = minX;
+                        powerChart.options.scales.x.max = maxX;
+                        voltageChart.options.scales.x.min = minX;
+                        voltageChart.options.scales.x.max = maxX;
+                        currentChart.options.scales.x.min = minX;
+                        currentChart.options.scales.x.max = maxX;
+                        energyChart.options.scales.x.min = minX;
+                        energyChart.options.scales.x.max = maxX;
+                    }
+
+                    // Update charts
+                    powerChart.update();
+                    voltageChart.update();
+                    currentChart.update();
+                    energyChart.update();
+
+                    // Track last elapsed for deduplication
+                    if (message.data.length > 0) {
+                        lastElapsedSeen = message.data[message.data.length - 1].elapsed;
+                    }
+
+                } else if (message.type === 'update') {
+                    // Live update - batch of new points
+                    const dataPoints = message.data;
+
+                    // Process all new points
+                    for (let i = 0; i < dataPoints.length; i++) {
+                        const dataPoint = dataPoints[i];
+
+                        // Only add if this is a new point
+                        if (dataPoint.elapsed > lastElapsedSeen) {
+                            updateCharts(dataPoint);
+                            lastElapsedSeen = dataPoint.elapsed;
+                        }
+                    }
+
+                } else if (message.type === 'error') {
+                    console.error('SSE error:', message.error);
+                }
+            };
+
+            dataEventSource.onerror = function(error) {
+                console.error('Timeseries SSE connection error:', error);
+            };
+        }
+
+        function startStatsSSE() {
+            // Close existing connection if any
+            if (statsEventSource) {
+                statsEventSource.close();
+            }
+
+            // Server-Sent Events for stats updates (always active)
+            statsEventSource = new EventSource('api/stats');
+
+            statsEventSource.onmessage = function(event) {
+                const stats = JSON.parse(event.data);
+                updateStats(stats);
+            };
+
+            statsEventSource.onerror = function(error) {
+                console.error('Stats SSE connection error:', error);
+            };
+        }
+
+        // Initialize on page load - just start SSE streams
+        function initialize() {
+            // Start stats SSE (always running)
+            startStatsSSE();
+            // Start data SSE in 1 minute mode
+            startDataSSE('1m', MAX_POINTS);
+        }
+
+        // Handle time range button clicks
+        let currentMode = '1m';
+        const rangeButtons = document.querySelectorAll('[data-range]');
+
+        rangeButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const range = this.getAttribute('data-range');
+
+                // Update active button styling
+                rangeButtons.forEach(btn => btn.classList.remove('active'));
+                this.classList.add('active');
+
+                // Update mode and restart SSE with new parameters
+                currentMode = range;
+                startDataSSE(range, 500);
+            });
+        });
+
+        // Initial load
+        initialize();
+    </script>
+</body>
+</html>

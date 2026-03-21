@@ -380,6 +380,9 @@ def daemonize(daemon_log: str) -> None:
     # Build new argv without --daemon/-d
     args = [a for a in sys.argv if a not in ('--daemon', '-d')]
 
+    env = os.environ.copy()
+    env['PYTHONUNBUFFERED'] = '1'
+
     with open(daemon_log, 'a') as log_fd:
         subprocess.Popen(
             [sys.executable] + args,
@@ -387,6 +390,7 @@ def daemonize(daemon_log: str) -> None:
             stdout=log_fd,
             stderr=subprocess.STDOUT,
             start_new_session=True,
+            env=env,
         )
 
     print(f"Daemon started, output in {daemon_log}")

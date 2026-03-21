@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Optional, TextIO, Any
 import pandas as pd
 import numpy as np
-from flask import Flask, render_template, Response, request
+from flask import Flask, render_template, Response, request, send_file
 from gpp4323_lib import GPP4323, DataCollector, LoadReading
 
 
@@ -242,6 +242,7 @@ class WebServer:
         self.app.add_url_rule('/', view_func=self.index)
         self.app.add_url_rule('/api/timeseries', view_func=self.stream_timeseries)
         self.app.add_url_rule('/api/stats', view_func=self.stream_stats)
+        self.app.add_url_rule('/api/download', view_func=self.download_csv)
 
     def index(self):
         """Serve the main page"""
@@ -270,24 +271,9 @@ class WebServer:
                 '6h': 6 * 3600,
                 '24h': 24 * 3600
             }
-            SAMPLING_RATE = 1  # Hz
-
-            # Calculate decimation window size (same for initial and live updates)
-            if range_param in RANGE_SECONDS:
-                # Fixed time window
-                range_seconds = RANGE_SECONDS[range_param]
-                expected_points = range_seconds * SAMPLING_RATE
-            else:
-                # 'all' mode - calculate from current elapsed time
-                latest = self.data_store.get_latest()
-                if latest is not None:
-                    expected_points = int(latest['elapsed'] * SAMPLING_RATE)
-                else:
-                    expected_points = max_points
-
-            decimation_window = max(1, int(expected_points // max_points))
 
             # Load and send initial historical data from log file
+            decimation_window = 1
             if os.path.exists(self.data_store.logfile_path):
                 try:
                     # Read CSV with pandas, dropping timestamp column
@@ -297,10 +283,8 @@ class WebServer:
                     if len(df) > 0:
                         # Determine time range window
                         if range_param in RANGE_SECONDS:
-                            # Fixed time window
                             range_seconds = RANGE_SECONDS[range_param]
                         else:
-                            # 'all' mode - auto-calculate range from total elapsed time
                             range_seconds = df['elapsed'].iloc[-1]
 
                         latest_elapsed = df['elapsed'].iloc[-1]
@@ -309,7 +293,8 @@ class WebServer:
                         # Filter by time range
                         filtered_df = df[df['elapsed'] >= cutoff_elapsed]
 
-                        # Decimate and send initial data
+                        # Decimate based on actual point count
+                        decimation_window = max(1, len(filtered_df) // max_points)
                         decimated_df = decimate_data(filtered_df, decimation_window)
 
                         # Convert to list of dicts for JSON serialization
@@ -366,6 +351,14 @@ class WebServer:
                     yield f"data: {json.dumps(stats)}\n\n"
 
         return Response(event_stream(), mimetype='text/event-stream')
+
+    def download_csv(self):
+        """Serve the raw CSV log file for download"""
+        return send_file(
+            self.data_store.logfile_path,
+            mimetype='text/csv',
+            as_attachment=True,
+        )
 
     def run(self, host='0.0.0.0', port=5000, debug=False):
         """Run the Flask web server"""
@@ -430,8 +423,8 @@ def main():
     parser.add_argument(
         '--web-port',
         type=int,
-        default=5000,
-        help='Web server port (default: 5000)'
+        default=14005,
+        help='Web server port (default: 14005)'
     )
     parser.add_argument(
         '--daemon', '-d',

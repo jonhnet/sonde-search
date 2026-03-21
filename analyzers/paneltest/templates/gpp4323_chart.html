@@ -89,13 +89,14 @@
             </div>
             <div class="col-auto">
                 <div class="btn-group" role="group">
-                    <button type="button" class="btn btn-sm btn-outline-primary active" data-range="1m">1 Minute</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-range="1m">1 Minute</button>
                     <button type="button" class="btn btn-sm btn-outline-primary" data-range="10m">10 Minutes</button>
                     <button type="button" class="btn btn-sm btn-outline-primary" data-range="1h">1 Hour</button>
                     <button type="button" class="btn btn-sm btn-outline-primary" data-range="6h">6 Hours</button>
-                    <button type="button" class="btn btn-sm btn-outline-primary" data-range="24h">24 Hours</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary active" data-range="24h">24 Hours</button>
                     <button type="button" class="btn btn-sm btn-outline-primary" data-range="all">All Data</button>
                 </div>
+                <a href="api/download" class="btn btn-sm btn-outline-secondary ms-2">Download CSV</a>
             </div>
         </div>
 
@@ -193,6 +194,36 @@
     </div>
 
     <script>
+        // Time axis auto-scaling: pick the largest unit where the range is >= 1
+        function getTimeUnit(rangeSeconds) {
+            if (rangeSeconds >= 3600) return { divisor: 3600, label: 'Time (hours)' };
+            if (rangeSeconds >= 60) return { divisor: 60, label: 'Time (minutes)' };
+            return { divisor: 1, label: 'Time (seconds)' };
+        }
+
+        const allCharts = [];  // populated after chart creation
+        let currentDivisor = 1;
+
+        function updateTimeAxis(minSeconds, maxSeconds) {
+            const unit = getTimeUnit(maxSeconds - minSeconds);
+
+            // Only rescale all points if the unit changed
+            if (unit.divisor !== currentDivisor) {
+                currentDivisor = unit.divisor;
+                for (const chart of allCharts) {
+                    for (const point of chart.data.datasets[0].data) {
+                        point.x = point._seconds / unit.divisor;
+                    }
+                }
+            }
+
+            for (const chart of allCharts) {
+                chart.options.scales.x.min = minSeconds / unit.divisor;
+                chart.options.scales.x.max = maxSeconds / unit.divisor;
+                chart.options.scales.x.title.text = unit.label;
+            }
+        }
+
         // Chart configuration
         const chartConfig = {
             type: 'line',
@@ -340,17 +371,20 @@
             }
         );
 
+        allCharts.push(powerChart, voltageChart, currentChart, energyChart);
+
         // Keep only recent data points
         const MAX_POINTS = 500;
 
         function updateCharts(dataPoint) {
             const elapsed = dataPoint.elapsed;
 
-            // Add new data
-            powerChart.data.datasets[0].data.push({x: elapsed, y: dataPoint.power});
-            voltageChart.data.datasets[0].data.push({x: elapsed, y: dataPoint.voltage});
-            currentChart.data.datasets[0].data.push({x: elapsed, y: dataPoint.current});
-            energyChart.data.datasets[0].data.push({x: elapsed, y: dataPoint.energy_wh});
+            // Add new data (store _seconds for rescaling)
+            const x = elapsed / currentDivisor;
+            powerChart.data.datasets[0].data.push({_seconds: elapsed, x: x, y: dataPoint.power});
+            voltageChart.data.datasets[0].data.push({_seconds: elapsed, x: x, y: dataPoint.voltage});
+            currentChart.data.datasets[0].data.push({_seconds: elapsed, x: x, y: dataPoint.current});
+            energyChart.data.datasets[0].data.push({_seconds: elapsed, x: x, y: dataPoint.energy_wh});
 
             // Limit data points (but not in 'all' mode — keep everything)
             if (currentRange !== 'all' && powerChart.data.datasets[0].data.length > MAX_POINTS) {
@@ -360,18 +394,9 @@
                 energyChart.data.datasets[0].data.shift();
             }
 
-            // Always update x-axis range to keep new data visible
-            const minX = powerChart.data.datasets[0].data[0].x;
-            const maxX = elapsed;
-
-            powerChart.options.scales.x.min = minX;
-            powerChart.options.scales.x.max = maxX;
-            voltageChart.options.scales.x.min = minX;
-            voltageChart.options.scales.x.max = maxX;
-            currentChart.options.scales.x.min = minX;
-            currentChart.options.scales.x.max = maxX;
-            energyChart.options.scales.x.min = minX;
-            energyChart.options.scales.x.max = maxX;
+            // Update time axis with auto-scaled units
+            const minSeconds = powerChart.data.datasets[0].data[0]._seconds;
+            updateTimeAxis(minSeconds, elapsed);
 
             // Update charts
             powerChart.update('none');
@@ -407,7 +432,7 @@
         let lastElapsedSeen = -1;
         let dataEventSource = null;
         let statsEventSource = null;
-        let currentRange = '1m';
+        let currentRange = '24h';
 
         function startDataSSE(range = 'live', maxPoints = 500) {
             currentRange = range;
@@ -430,28 +455,29 @@
                     currentChart.data.datasets[0].data = [];
                     energyChart.data.datasets[0].data = [];
 
+                    // Determine time unit before loading points
+                    if (message.data.length > 0) {
+                        const minSeconds = message.data[0].elapsed;
+                        const maxSeconds = message.data[message.data.length - 1].elapsed;
+                        const unit = getTimeUnit(maxSeconds - minSeconds);
+                        currentDivisor = unit.divisor;
+                    }
+
                     // Load all points
                     for (let i = 0; i < message.data.length; i++) {
                         const point = message.data[i];
-                        powerChart.data.datasets[0].data.push({x: point.elapsed, y: point.power});
-                        voltageChart.data.datasets[0].data.push({x: point.elapsed, y: point.voltage});
-                        currentChart.data.datasets[0].data.push({x: point.elapsed, y: point.current});
-                        energyChart.data.datasets[0].data.push({x: point.elapsed, y: point.energy_wh});
+                        const x = point.elapsed / currentDivisor;
+                        powerChart.data.datasets[0].data.push({_seconds: point.elapsed, x: x, y: point.power});
+                        voltageChart.data.datasets[0].data.push({_seconds: point.elapsed, x: x, y: point.voltage});
+                        currentChart.data.datasets[0].data.push({_seconds: point.elapsed, x: x, y: point.current});
+                        energyChart.data.datasets[0].data.push({_seconds: point.elapsed, x: x, y: point.energy_wh});
                     }
 
-                    // Set x-axis bounds to match the data range
+                    // Set x-axis bounds with auto-scaled units
                     if (message.data.length > 0) {
-                        const minX = message.data[0].elapsed;
-                        const maxX = message.data[message.data.length - 1].elapsed;
-
-                        powerChart.options.scales.x.min = minX;
-                        powerChart.options.scales.x.max = maxX;
-                        voltageChart.options.scales.x.min = minX;
-                        voltageChart.options.scales.x.max = maxX;
-                        currentChart.options.scales.x.min = minX;
-                        currentChart.options.scales.x.max = maxX;
-                        energyChart.options.scales.x.min = minX;
-                        energyChart.options.scales.x.max = maxX;
+                        const minSeconds = message.data[0].elapsed;
+                        const maxSeconds = message.data[message.data.length - 1].elapsed;
+                        updateTimeAxis(minSeconds, maxSeconds);
                     }
 
                     // Update charts
@@ -514,11 +540,10 @@
             // Start stats SSE (always running)
             startStatsSSE();
             // Start data SSE in 1 minute mode
-            startDataSSE('1m', MAX_POINTS);
+            startDataSSE(currentRange, MAX_POINTS);
         }
 
         // Handle time range button clicks
-        let currentMode = '1m';
         const rangeButtons = document.querySelectorAll('[data-range]');
 
         rangeButtons.forEach(button => {
@@ -529,8 +554,7 @@
                 rangeButtons.forEach(btn => btn.classList.remove('active'));
                 this.classList.add('active');
 
-                // Update mode and restart SSE with new parameters
-                currentMode = range;
+                // Restart SSE with new parameters
                 startDataSSE(range, 500);
             });
         });

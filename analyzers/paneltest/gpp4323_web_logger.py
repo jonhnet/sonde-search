@@ -7,6 +7,7 @@ import time
 import argparse
 import csv
 import json
+import sys
 import threading
 import os
 from datetime import datetime, timezone
@@ -368,6 +369,30 @@ class WebServer:
         self.app.run(host=host, port=port, debug=debug, threaded=True)
 
 
+def daemonize(daemon_log: str) -> None:
+    """Re-exec this process detached from the terminal.
+
+    Removes --daemon/-d from the arguments and relaunches in a new
+    session with stdout/stderr redirected to daemon_log.
+    """
+    import subprocess
+
+    # Build new argv without --daemon/-d
+    args = [a for a in sys.argv if a not in ('--daemon', '-d')]
+
+    with open(daemon_log, 'a') as log_fd:
+        subprocess.Popen(
+            [sys.executable] + args,
+            stdin=subprocess.DEVNULL,
+            stdout=log_fd,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+
+    print(f"Daemon started, output in {daemon_log}")
+    sys.exit(0)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='GPP4323 Web Logger with Streaming Chart'
@@ -401,8 +426,21 @@ def main():
         default=5000,
         help='Web server port (default: 5000)'
     )
+    parser.add_argument(
+        '--daemon', '-d',
+        action='store_true',
+        help='Run as a background daemon (use kill to stop)'
+    )
+    parser.add_argument(
+        '--daemon-log',
+        default='gpp4323_web_logger.log',
+        help='Daemon stdout/stderr log file (default: gpp4323_web_logger.log)'
+    )
 
     args = parser.parse_args()
+
+    if args.daemon:
+        daemonize(args.daemon_log)
 
     # Initialize data store
     data_store = DataStore(logfile_path=args.logfile)

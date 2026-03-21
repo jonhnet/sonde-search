@@ -1,0 +1,14 @@
+*.iml
+.idea
+local.properties
+captures
+.externalNativeBuild
+.cxx
+
+# Ignore contents of build/cache dirs but keep CACHEDIR.TAG
+.gradle/*
+!.gradle/CACHEDIR.TAG
+build/*
+!build/CACHEDIR.TAG
+app/build/*
+!app/build/CACHEDIR.TAG

@@ -90,6 +90,7 @@
             <div class="col-auto">
                 <div class="btn-group" role="group">
                     <button type="button" class="btn btn-sm btn-outline-primary active" data-range="1m">1 Minute</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-range="10m">10 Minutes</button>
                     <button type="button" class="btn btn-sm btn-outline-primary" data-range="1h">1 Hour</button>
                     <button type="button" class="btn btn-sm btn-outline-primary" data-range="6h">6 Hours</button>
                     <button type="button" class="btn btn-sm btn-outline-primary" data-range="24h">24 Hours</button>
@@ -351,8 +352,8 @@
             currentChart.data.datasets[0].data.push({x: elapsed, y: dataPoint.current});
             energyChart.data.datasets[0].data.push({x: elapsed, y: dataPoint.energy_wh});
 
-            // Limit data points
-            if (powerChart.data.datasets[0].data.length > MAX_POINTS) {
+            // Limit data points (but not in 'all' mode — keep everything)
+            if (currentRange !== 'all' && powerChart.data.datasets[0].data.length > MAX_POINTS) {
                 powerChart.data.datasets[0].data.shift();
                 voltageChart.data.datasets[0].data.shift();
                 currentChart.data.datasets[0].data.shift();
@@ -406,8 +407,10 @@
         let lastElapsedSeen = -1;
         let dataEventSource = null;
         let statsEventSource = null;
+        let currentRange = '1m';
 
         function startDataSSE(range = 'live', maxPoints = 500) {
+            currentRange = range;
             // Close existing connection if any
             if (dataEventSource) {
                 dataEventSource.close();

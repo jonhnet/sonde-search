@@ -265,6 +265,7 @@ class WebServer:
             # Define time range mappings
             RANGE_SECONDS = {
                 '1m': 60,
+                '10m': 600,
                 '1h': 3600,
                 '6h': 6 * 3600,
                 '24h': 24 * 3600

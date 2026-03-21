@@ -278,6 +278,7 @@ class MapActivity : AppCompatActivity() {
             marker.position = latest.toGeoPoint()
             marker.title = "${sonde.type} $serial"
             marker.snippet = String.format(
+                java.util.Locale.US,
                 "Alt: %.0fm | %.1fm/s | SNR: %.1f",
                 latest.altitude, latest.climbRate, sonde.snr
             )
@@ -391,7 +392,7 @@ class MapActivity : AppCompatActivity() {
             val selected = if (serial == selectedSondeSerial) "▸" else ""
             sb.append("${selected}$serial")
             if (pos != null) {
-                sb.append(" | %,dm | %.1fm/s".format(pos.altitude.toLong(), pos.climbRate))
+                sb.append(String.format(java.util.Locale.US, " | %,dm | %.1fm/s", pos.altitude.toLong(), pos.climbRate))
                 // Add bearing/distance if we have user location
                 userLocation?.let { loc ->
                     val results = FloatArray(2)
@@ -401,7 +402,7 @@ class MapActivity : AppCompatActivity() {
                     )
                     val distKm = results[0] / 1000.0
                     val brg = if (results[1] < 0) results[1] + 360 else results[1]
-                    sb.append(String.format(" | %.1fkm@%.0f°", distKm, brg))
+                    sb.append(String.format(java.util.Locale.US, " | %.1fkm@%.0f°", distKm, brg))
                 }
                 // Staleness indicator
                 val ageSec = System.currentTimeMillis() / 1000 - pos.timestamp

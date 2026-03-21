@@ -32,7 +32,7 @@ class DataStore:
         self.max_buffer_size = max_buffer_size
         self.start_timestamp: Optional[datetime] = None
         self.logfile_path = logfile_path
-        self.log_file: TextIO
+        self.log_file: Optional[TextIO] = None
         self.total_sample_count = 0  # Track total samples written to file
         self.total_energy_wh = 0.0  # Track cumulative energy
         self.last_sample_time: Optional[datetime] = None
@@ -51,6 +51,9 @@ class DataStore:
             if len(df) > 0:
                 # Restore start timestamp from Unix epoch before dropping the column
                 self.start_timestamp = datetime.fromtimestamp(df['timestamp'].iloc[0], tz=timezone.utc)
+
+                # Restore last sample time so energy calculation works for the first new reading
+                self.last_sample_time = datetime.fromtimestamp(df['timestamp'].iloc[-1], tz=timezone.utc)
 
                 # Track total count and energy from historical file
                 self.total_sample_count = len(df)
@@ -91,7 +94,8 @@ class DataStore:
 
     def close_log_file(self) -> None:
         """Close the log file"""
-        self.log_file.close()
+        if self.log_file:
+            self.log_file.close()
 
     def handle_reading(self, reading: LoadReading) -> None:
         """Process a new reading from the data collector"""
@@ -149,7 +153,7 @@ class DataStore:
     def get_new_data(self, last_elapsed: float) -> pd.DataFrame:
         """Get new data since last_elapsed as a view"""
         with self.lock:
-            return self.data[self.data['elapsed'] > last_elapsed]
+            return self.data[self.data['elapsed'] > last_elapsed].copy()
 
     def get_total_sample_count(self) -> int:
         """Get total sample count"""
@@ -283,7 +287,7 @@ class WebServer:
             if os.path.exists(self.data_store.logfile_path):
                 try:
                     # Read CSV with pandas, dropping timestamp column
-                    df = pd.read_csv(self.data_store.logfile_path)
+                    df = pd.read_csv(self.data_store.logfile_path, on_bad_lines='skip')
                     df = df.drop(columns=['timestamp'])
 
                     if len(df) > 0:

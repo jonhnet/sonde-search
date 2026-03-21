@@ -197,34 +197,36 @@ def decimate_data(df: pd.DataFrame, window_size: int) -> pd.DataFrame:
 
 
 def data_collection_thread(host: str, port: int, rate: float, store: DataStore) -> None:
-    """Background thread for data collection"""
-    psu = GPP4323(host, port)
-    collector: Optional[DataCollector] = None
+    """Background thread for data collection with automatic reconnection"""
+    RETRY_DELAY = 5  # seconds between reconnection attempts
 
-    try:
-        psu.connect()
+    # Open log file once (survives reconnections)
+    store.open_log_file()
 
-        # Open log file
-        store.open_log_file()
+    while True:
+        psu = GPP4323(host, port)
+        collector: Optional[DataCollector] = None
 
-        # Create collector with callback
-        collector = DataCollector(
-            psu=psu,
-            channel=1,
-            rate=rate,
-            callback=store.handle_reading
-        )
+        try:
+            psu.connect()
 
-        # Start collection loop
-        collector.start()
+            collector = DataCollector(
+                psu=psu,
+                channel=1,
+                rate=rate,
+                callback=store.handle_reading
+            )
 
-    except Exception as e:
-        print(f"Data collection error: {e}")
-    finally:
-        if collector:
-            collector.stop()
-        psu.disconnect()
-        store.close_log_file()
+            collector.start()
+
+        except Exception as e:
+            print(f"Data collection error: {e}, retrying in {RETRY_DELAY}s")
+        finally:
+            if collector:
+                collector.stop()
+            psu.disconnect()
+
+        time.sleep(RETRY_DELAY)
 
 
 class WebServer:
@@ -267,7 +269,7 @@ class WebServer:
                 '6h': 6 * 3600,
                 '24h': 24 * 3600
             }
-            SAMPLING_RATE = 10  # Hz
+            SAMPLING_RATE = 1  # Hz
 
             # Calculate decimation window size (same for initial and live updates)
             if range_param in RANGE_SECONDS:
@@ -415,8 +417,8 @@ def main():
     parser.add_argument(
         '--rate',
         type=float,
-        default=10.0,
-        help='Sampling rate in Hz (default: 10.0)'
+        default=1.0,
+        help='Sampling rate in Hz (default: 1.0)'
     )
     parser.add_argument(
         '--logfile',

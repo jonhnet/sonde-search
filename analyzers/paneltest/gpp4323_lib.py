@@ -87,7 +87,7 @@ class DataCollector:
         Args:
             psu: GPP4323 instance to collect data from
             channel: Channel number to monitor (default: 1)
-            rate: Sampling rate in Hz (default: 10.0)
+            rate: Sampling rate in Hz
             callback: Function called with each new LoadReading
         """
         self.psu = psu
@@ -114,16 +114,19 @@ class DataCollector:
         while self.is_running:
             loop_start = time.time()
 
-            # Get load reading
-            voltage, current, power = self.psu.get_channel_load(channel=self.channel)
-            timestamp = datetime.now(timezone.utc)
+            try:
+                # Get load reading
+                voltage, current, power = self.psu.get_channel_load(channel=self.channel)
+                timestamp = datetime.now(timezone.utc)
 
-            # Create reading object
-            reading = LoadReading(voltage, current, power, timestamp)
+                # Create reading object
+                reading = LoadReading(voltage, current, power, timestamp)
 
-            # Call callback if provided
-            if self.callback:
-                self.callback(reading)
+                # Call callback if provided
+                if self.callback:
+                    self.callback(reading)
+            except socket.timeout:
+                print("Warning: power supply read timed out, retrying")
 
             # Sleep to maintain rate
             elapsed_time = time.time() - loop_start

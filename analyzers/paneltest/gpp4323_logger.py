@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 GPP4323 Power Supply Load Logger
-Logs load readings from Channel 1 at 10 Hz
+Logs load readings from Channel 1
 """
 
 import time
@@ -68,7 +68,7 @@ class SimpleLogger:
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Log GPP4323 Channel 1 load readings at 10 Hz'
+        description='Log GPP4323 Channel 1 load readings'
     )
     parser.add_argument(
         '--host',
@@ -84,8 +84,8 @@ def main():
     parser.add_argument(
         '--rate',
         type=float,
-        default=10.0,
-        help='Sampling rate in Hz (default: 10.0)'
+        default=1.0,
+        help='Sampling rate in Hz (default: 1.0)'
     )
     parser.add_argument(
         '--output',

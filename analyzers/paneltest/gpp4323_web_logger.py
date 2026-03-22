@@ -235,6 +235,7 @@ class WebServer:
     def __init__(self, data_store):
         self.data_store = data_store
         self.app = Flask(__name__)
+        self.app.config['TEMPLATES_AUTO_RELOAD'] = True
         self._setup_routes()
 
     def _setup_routes(self):

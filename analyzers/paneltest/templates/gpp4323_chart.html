@@ -250,19 +250,23 @@
                 const tag = d.getDate();
                 annotations[`dawn_${tag}`] = {
                     type: 'box', xMin: s.civilDawn.getTime(), xMax: s.sunrise.getTime(),
-                    backgroundColor: 'rgba(180, 180, 200, 0.15)', borderWidth: 0
+                    backgroundColor: 'rgba(180, 180, 200, 0.15)', borderWidth: 0,
+                    adjustScaleRange: false
                 };
                 annotations[`day_${tag}`] = {
                     type: 'box', xMin: s.sunrise.getTime(), xMax: s.sunset.getTime(),
-                    backgroundColor: 'rgba(255, 255, 0, 0.08)', borderWidth: 0
+                    backgroundColor: 'rgba(255, 255, 0, 0.08)', borderWidth: 0,
+                    adjustScaleRange: false
                 };
                 annotations[`dusk_${tag}`] = {
                     type: 'box', xMin: s.sunset.getTime(), xMax: s.civilDusk.getTime(),
-                    backgroundColor: 'rgba(180, 180, 200, 0.15)', borderWidth: 0
+                    backgroundColor: 'rgba(180, 180, 200, 0.15)', borderWidth: 0,
+                    adjustScaleRange: false
                 };
                 annotations[`noon_${tag}`] = {
                     type: 'line', xMin: s.solarNoon.getTime(), xMax: s.solarNoon.getTime(),
-                    borderColor: 'rgba(255, 0, 0, 0.4)', borderWidth: 1, borderDash: [5, 5]
+                    borderColor: 'rgba(255, 0, 0, 0.4)', borderWidth: 1, borderDash: [5, 5],
+                    adjustScaleRange: false
                 };
             }
             return annotations;
@@ -301,63 +305,44 @@
         const allCharts = [];  // populated after chart creation
         let currentDivisor = 1;
 
-        // Pick a nice tick interval for a given range, targeting ~8-12 ticks
-        function niceTickStep(range) {
-            const rough = range / 10;
-            const mag = Math.pow(10, Math.floor(Math.log10(rough)));
-            const residual = rough / mag;
-            if (residual <= 1) return mag;
-            if (residual <= 2) return 2 * mag;
-            if (residual <= 5) return 5 * mag;
-            return 10 * mag;
-        }
-
         function updateTimeAxis(minSeconds, maxSeconds) {
-            if (timeMode === 'timeofday' && startTimeMs) {
+            const isTimeOfDay = timeMode === 'timeofday' && startTimeMs;
+
+            if (isTimeOfDay) {
                 const minMs = startTimeMs + minSeconds * 1000;
                 const maxMs = startTimeMs + maxSeconds * 1000;
                 const annotations = buildSolarAnnotations(minMs, maxMs);
-                const stepMs = niceTickStep(maxMs - minMs);
 
                 for (const chart of allCharts) {
-                    chart.options.scales.x.min = minMs;
-                    chart.options.scales.x.max = maxMs;
+                    chart.options.scales.x.type = 'time';
                     chart.options.scales.x.title.text = 'Time of Day';
-                    if (!chart.options.scales.x.ticks) chart.options.scales.x.ticks = {};
-                    chart.options.scales.x.ticks.stepSize = stepMs;
-                    chart.options.scales.x.ticks.callback = function(value) {
-                        return new Date(value).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
-                    };
+                    chart.options.scales.x.min = undefined;
+                    chart.options.scales.x.max = undefined;
+                    chart.options.scales.x.ticks = {};
                     if (!chart.options.plugins) chart.options.plugins = {};
                     chart.options.plugins.annotation = { annotations };
                 }
-                return;
-            }
+            } else {
+                // Elapsed mode
+                const unit = getTimeUnit(maxSeconds - minSeconds);
 
-            // Elapsed mode
-            const unit = getTimeUnit(maxSeconds - minSeconds);
-
-            if (unit.divisor !== currentDivisor) {
-                currentDivisor = unit.divisor;
-                for (const chart of allCharts) {
-                    for (const point of chart.data.datasets[0].data) {
-                        point.x = point._seconds / unit.divisor;
+                if (unit.divisor !== currentDivisor) {
+                    currentDivisor = unit.divisor;
+                    for (const chart of allCharts) {
+                        for (const point of chart.data.datasets[0].data) {
+                            point.x = point._seconds / unit.divisor;
+                        }
                     }
                 }
-            }
 
-            const minScaled = minSeconds / unit.divisor;
-            const maxScaled = maxSeconds / unit.divisor;
-            const stepSize = niceTickStep(maxScaled - minScaled);
-
-            for (const chart of allCharts) {
-                chart.options.scales.x.min = minScaled;
-                chart.options.scales.x.max = maxScaled;
-                chart.options.scales.x.title.text = unit.label;
-                if (!chart.options.scales.x.ticks) chart.options.scales.x.ticks = {};
-                chart.options.scales.x.ticks.stepSize = stepSize;
-                delete chart.options.scales.x.ticks.callback;
-                if (chart.options.plugins) chart.options.plugins.annotation = { annotations: {} };
+                for (const chart of allCharts) {
+                    chart.options.scales.x.type = 'linear';
+                    chart.options.scales.x.title.text = unit.label;
+                    chart.options.scales.x.min = undefined;
+                    chart.options.scales.x.max = undefined;
+                    chart.options.scales.x.ticks = {};
+                    if (chart.options.plugins) chart.options.plugins.annotation = { annotations: {} };
+                }
             }
         }
 
@@ -372,7 +357,6 @@
                 scales: {
                     x: {
                         type: 'linear',
-                        bounds: 'data',
                         title: {
                             display: true,
                             text: 'Time (seconds)'

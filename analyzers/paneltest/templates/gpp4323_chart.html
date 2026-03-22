@@ -11,6 +11,7 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 
     <style>
         body {
@@ -95,6 +96,10 @@
                     <button type="button" class="btn btn-sm btn-outline-primary" data-range="6h">6 Hours</button>
                     <button type="button" class="btn btn-sm btn-outline-primary active" data-range="24h">24 Hours</button>
                     <button type="button" class="btn btn-sm btn-outline-primary" data-range="all">All Data</button>
+                </div>
+                <div class="btn-group ms-2" role="group">
+                    <button type="button" class="btn btn-sm btn-outline-info" data-timemode="elapsed">Elapsed</button>
+                    <button type="button" class="btn btn-sm btn-outline-info active" data-timemode="timeofday">Time of Day</button>
                 </div>
                 <a href="api/download" class="btn btn-sm btn-outline-secondary ms-2">Download CSV</a>
             </div>
@@ -194,6 +199,98 @@
     </div>
 
     <script>
+        // Solar position calculator (NOAA algorithm)
+        const SITE_LAT = 47.6;
+        const SITE_LON = -122.33;
+
+        function computeSolarTimes(date, lat, lon) {
+            const start = new Date(date);
+            start.setHours(0, 0, 0, 0);
+            const n = Math.floor((start - new Date(start.getFullYear(), 0, 0)) / 86400000);
+            const B = (2 * Math.PI / 365) * (n - 81);
+            const decl = (23.45 * Math.PI / 180) * Math.sin(B);
+            const eot = 9.87 * Math.sin(2 * B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);
+            const solarNoonUTC = 12 - lon / 15 - eot / 60;  // hours UTC
+            const latRad = lat * Math.PI / 180;
+
+            function hourAngle(zenithDeg) {
+                const cosHA = (Math.cos(zenithDeg * Math.PI / 180) -
+                    Math.sin(latRad) * Math.sin(decl)) /
+                    (Math.cos(latRad) * Math.cos(decl));
+                return (Math.acos(Math.max(-1, Math.min(1, cosHA))) * 180 / Math.PI) / 15;
+            }
+
+            const haRise = hourAngle(90.833);
+            const haCivil = hourAngle(96);
+
+            function utcHoursToDate(h) {
+                const d = new Date(start);
+                d.setUTCHours(0, 0, 0, 0);
+                d.setUTCMinutes(Math.round(h * 60));
+                return d;
+            }
+
+            return {
+                civilDawn: utcHoursToDate(solarNoonUTC - haCivil),
+                sunrise: utcHoursToDate(solarNoonUTC - haRise),
+                solarNoon: utcHoursToDate(solarNoonUTC),
+                sunset: utcHoursToDate(solarNoonUTC + haRise),
+                civilDusk: utcHoursToDate(solarNoonUTC + haCivil),
+            };
+        }
+
+        function buildSolarAnnotations(minMs, maxMs) {
+            const annotations = {};
+            const startDate = new Date(minMs);
+            startDate.setHours(0, 0, 0, 0);
+            const endDate = new Date(maxMs);
+
+            for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+                const s = computeSolarTimes(d, SITE_LAT, SITE_LON);
+                const tag = d.getDate();
+                annotations[`dawn_${tag}`] = {
+                    type: 'box', xMin: s.civilDawn.getTime(), xMax: s.sunrise.getTime(),
+                    backgroundColor: 'rgba(180, 180, 200, 0.15)', borderWidth: 0
+                };
+                annotations[`day_${tag}`] = {
+                    type: 'box', xMin: s.sunrise.getTime(), xMax: s.sunset.getTime(),
+                    backgroundColor: 'rgba(255, 255, 0, 0.08)', borderWidth: 0
+                };
+                annotations[`dusk_${tag}`] = {
+                    type: 'box', xMin: s.sunset.getTime(), xMax: s.civilDusk.getTime(),
+                    backgroundColor: 'rgba(180, 180, 200, 0.15)', borderWidth: 0
+                };
+                annotations[`noon_${tag}`] = {
+                    type: 'line', xMin: s.solarNoon.getTime(), xMax: s.solarNoon.getTime(),
+                    borderColor: 'rgba(255, 0, 0, 0.4)', borderWidth: 1, borderDash: [5, 5]
+                };
+            }
+            return annotations;
+        }
+
+        // Time mode state
+        let timeMode = 'timeofday';  // 'elapsed' or 'timeofday'
+        let startTimeMs = null;
+
+        function secondsToX(seconds) {
+            return (timeMode === 'timeofday' && startTimeMs)
+                ? startTimeMs + seconds * 1000
+                : seconds / currentDivisor;
+        }
+
+        function recalcAllXValues() {
+            for (const chart of allCharts) {
+                for (const point of chart.data.datasets[0].data) {
+                    point.x = secondsToX(point._seconds);
+                }
+            }
+            const data = powerChart.data.datasets[0].data;
+            if (data.length > 0) {
+                updateTimeAxis(data[0]._seconds, data[data.length - 1]._seconds);
+                for (const chart of allCharts) chart.update('none');
+            }
+        }
+
         // Time axis auto-scaling: pick the largest unit where the range is >= 1
         function getTimeUnit(rangeSeconds) {
             if (rangeSeconds >= 3600) return { divisor: 3600, label: 'Time (hours)' };
@@ -204,10 +301,42 @@
         const allCharts = [];  // populated after chart creation
         let currentDivisor = 1;
 
+        // Pick a nice tick interval for a given range, targeting ~8-12 ticks
+        function niceTickStep(range) {
+            const rough = range / 10;
+            const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+            const residual = rough / mag;
+            if (residual <= 1) return mag;
+            if (residual <= 2) return 2 * mag;
+            if (residual <= 5) return 5 * mag;
+            return 10 * mag;
+        }
+
         function updateTimeAxis(minSeconds, maxSeconds) {
+            if (timeMode === 'timeofday' && startTimeMs) {
+                const minMs = startTimeMs + minSeconds * 1000;
+                const maxMs = startTimeMs + maxSeconds * 1000;
+                const annotations = buildSolarAnnotations(minMs, maxMs);
+                const stepMs = niceTickStep(maxMs - minMs);
+
+                for (const chart of allCharts) {
+                    chart.options.scales.x.min = minMs;
+                    chart.options.scales.x.max = maxMs;
+                    chart.options.scales.x.title.text = 'Time of Day';
+                    if (!chart.options.scales.x.ticks) chart.options.scales.x.ticks = {};
+                    chart.options.scales.x.ticks.stepSize = stepMs;
+                    chart.options.scales.x.ticks.callback = function(value) {
+                        return new Date(value).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
+                    };
+                    if (!chart.options.plugins) chart.options.plugins = {};
+                    chart.options.plugins.annotation = { annotations };
+                }
+                return;
+            }
+
+            // Elapsed mode
             const unit = getTimeUnit(maxSeconds - minSeconds);
 
-            // Only rescale all points if the unit changed
             if (unit.divisor !== currentDivisor) {
                 currentDivisor = unit.divisor;
                 for (const chart of allCharts) {
@@ -217,10 +346,18 @@
                 }
             }
 
+            const minScaled = minSeconds / unit.divisor;
+            const maxScaled = maxSeconds / unit.divisor;
+            const stepSize = niceTickStep(maxScaled - minScaled);
+
             for (const chart of allCharts) {
-                chart.options.scales.x.min = minSeconds / unit.divisor;
-                chart.options.scales.x.max = maxSeconds / unit.divisor;
+                chart.options.scales.x.min = minScaled;
+                chart.options.scales.x.max = maxScaled;
                 chart.options.scales.x.title.text = unit.label;
+                if (!chart.options.scales.x.ticks) chart.options.scales.x.ticks = {};
+                chart.options.scales.x.ticks.stepSize = stepSize;
+                delete chart.options.scales.x.ticks.callback;
+                if (chart.options.plugins) chart.options.plugins.annotation = { annotations: {} };
             }
         }
 
@@ -380,7 +517,7 @@
             const elapsed = dataPoint.elapsed;
 
             // Add new data (store _seconds for rescaling)
-            const x = elapsed / currentDivisor;
+            const x = secondsToX(elapsed);
             powerChart.data.datasets[0].data.push({_seconds: elapsed, x: x, y: dataPoint.power});
             voltageChart.data.datasets[0].data.push({_seconds: elapsed, x: x, y: dataPoint.voltage});
             currentChart.data.datasets[0].data.push({_seconds: elapsed, x: x, y: dataPoint.current});
@@ -416,6 +553,7 @@
             if (stats.start_time) {
                 const startTime = new Date(stats.start_time);
                 document.getElementById('start-time').textContent = startTime.toLocaleString();
+                if (!startTimeMs) startTimeMs = startTime.getTime();
             }
 
             const elapsed = stats.elapsed;
@@ -449,6 +587,11 @@
                 const message = JSON.parse(event.data);
 
                 if (message.type === 'initial') {
+                    // Capture start time from initial message
+                    if (message.start_time && !startTimeMs) {
+                        startTimeMs = new Date(message.start_time).getTime();
+                    }
+
                     // Initial batch of historical/decimated data
                     powerChart.data.datasets[0].data = [];
                     voltageChart.data.datasets[0].data = [];
@@ -456,7 +599,7 @@
                     energyChart.data.datasets[0].data = [];
 
                     // Determine time unit before loading points
-                    if (message.data.length > 0) {
+                    if (message.data.length > 0 && timeMode === 'elapsed') {
                         const minSeconds = message.data[0].elapsed;
                         const maxSeconds = message.data[message.data.length - 1].elapsed;
                         const unit = getTimeUnit(maxSeconds - minSeconds);
@@ -466,7 +609,7 @@
                     // Load all points
                     for (let i = 0; i < message.data.length; i++) {
                         const point = message.data[i];
-                        const x = point.elapsed / currentDivisor;
+                        const x = secondsToX(point.elapsed);
                         powerChart.data.datasets[0].data.push({_seconds: point.elapsed, x: x, y: point.power});
                         voltageChart.data.datasets[0].data.push({_seconds: point.elapsed, x: x, y: point.voltage});
                         currentChart.data.datasets[0].data.push({_seconds: point.elapsed, x: x, y: point.current});
@@ -556,6 +699,22 @@
 
                 // Restart SSE with new parameters
                 startDataSSE(range, 500);
+            });
+        });
+
+        // Handle time mode buttons
+        const timeModeButtons = document.querySelectorAll('[data-timemode]');
+        timeModeButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                if (!startTimeMs) return;
+                const newMode = this.getAttribute('data-timemode');
+                if (newMode === timeMode) return;
+
+                timeMode = newMode;
+                timeModeButtons.forEach(btn => btn.classList.remove('active'));
+                this.classList.add('active');
+
+                recalcAllXValues();
             });
         });
 

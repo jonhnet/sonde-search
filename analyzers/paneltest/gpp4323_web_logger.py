@@ -299,7 +299,11 @@ class WebServer:
 
                         # Convert to list of dicts for JSON serialization
                         decimated_data = decimated_df.to_dict('records')
-                        yield f"data: {json.dumps({'type': 'initial', 'data': decimated_data})}\n\n"
+                        start_time = (
+                            self.data_store.start_timestamp.isoformat()
+                            if self.data_store.start_timestamp else None
+                        )
+                        yield f"data: {json.dumps({'type': 'initial', 'data': decimated_data, 'start_time': start_time})}\n\n"
 
                         last_elapsed_sent = df['elapsed'].iloc[-1]
 

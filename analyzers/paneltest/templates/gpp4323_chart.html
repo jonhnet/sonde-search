@@ -12,6 +12,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.min.js"></script>
 
     <style>
         body {
@@ -203,40 +204,8 @@
         const SITE_LAT = 47.6;
         const SITE_LON = -122.33;
 
-        function computeSolarTimes(date, lat, lon) {
-            const start = new Date(date);
-            start.setHours(0, 0, 0, 0);
-            const n = Math.floor((start - new Date(start.getFullYear(), 0, 0)) / 86400000);
-            const B = (2 * Math.PI / 365) * (n - 81);
-            const decl = (23.45 * Math.PI / 180) * Math.sin(B);
-            const eot = 9.87 * Math.sin(2 * B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);
-            const solarNoonUTC = 12 - lon / 15 - eot / 60;  // hours UTC
-            const latRad = lat * Math.PI / 180;
-
-            function hourAngle(zenithDeg) {
-                const cosHA = (Math.cos(zenithDeg * Math.PI / 180) -
-                    Math.sin(latRad) * Math.sin(decl)) /
-                    (Math.cos(latRad) * Math.cos(decl));
-                return (Math.acos(Math.max(-1, Math.min(1, cosHA))) * 180 / Math.PI) / 15;
-            }
-
-            const haRise = hourAngle(90.833);
-            const haCivil = hourAngle(96);
-
-            function utcHoursToDate(h) {
-                const d = new Date(start);
-                d.setUTCHours(0, 0, 0, 0);
-                d.setUTCMinutes(Math.round(h * 60));
-                return d;
-            }
-
-            return {
-                civilDawn: utcHoursToDate(solarNoonUTC - haCivil),
-                sunrise: utcHoursToDate(solarNoonUTC - haRise),
-                solarNoon: utcHoursToDate(solarNoonUTC),
-                sunset: utcHoursToDate(solarNoonUTC + haRise),
-                civilDusk: utcHoursToDate(solarNoonUTC + haCivil),
-            };
+        function solarElevationDeg(timestampMs) {
+            return SunCalc.getPosition(new Date(timestampMs), SITE_LAT, SITE_LON).altitude * 180 / Math.PI;
         }
 
         function buildSolarAnnotations(minMs, maxMs) {
@@ -246,10 +215,12 @@
             const endDate = new Date(maxMs);
 
             for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-                const s = computeSolarTimes(d, SITE_LAT, SITE_LON);
+                const noon = new Date(d);
+                noon.setHours(12, 0, 0, 0);
+                const s = SunCalc.getTimes(noon, SITE_LAT, SITE_LON);
                 const tag = d.getDate();
                 annotations[`dawn_${tag}`] = {
-                    type: 'box', xMin: s.civilDawn.getTime(), xMax: s.sunrise.getTime(),
+                    type: 'box', xMin: s.dawn.getTime(), xMax: s.sunrise.getTime(),
                     backgroundColor: 'rgba(180, 180, 200, 0.15)', borderWidth: 0,
                     adjustScaleRange: false
                 };
@@ -259,7 +230,7 @@
                     adjustScaleRange: false
                 };
                 annotations[`dusk_${tag}`] = {
-                    type: 'box', xMin: s.sunset.getTime(), xMax: s.civilDusk.getTime(),
+                    type: 'box', xMin: s.sunset.getTime(), xMax: s.dusk.getTime(),
                     backgroundColor: 'rgba(180, 180, 200, 0.15)', borderWidth: 0,
                     adjustScaleRange: false
                 };
@@ -284,8 +255,10 @@
 
         function recalcAllXValues() {
             for (const chart of allCharts) {
-                for (const point of chart.data.datasets[0].data) {
-                    point.x = secondsToX(point._seconds);
+                for (const dataset of chart.data.datasets) {
+                    for (const point of dataset.data) {
+                        point.x = secondsToX(point._seconds);
+                    }
                 }
             }
             const data = powerChart.data.datasets[0].data;
@@ -319,8 +292,8 @@
                     chart.options.scales.x.min = undefined;
                     chart.options.scales.x.max = undefined;
                     chart.options.scales.x.ticks = {};
-                    if (!chart.options.plugins) chart.options.plugins = {};
-                    chart.options.plugins.annotation = { annotations };
+                    chart.options.scales.x.time = {};
+                    chart.options.plugins.annotation.annotations = annotations;
                 }
             } else {
                 // Elapsed mode
@@ -341,7 +314,7 @@
                     chart.options.scales.x.min = undefined;
                     chart.options.scales.x.max = undefined;
                     chart.options.scales.x.ticks = {};
-                    if (chart.options.plugins) chart.options.plugins.annotation = { annotations: {} };
+                        chart.options.plugins.annotation.annotations = {};
                 }
             }
         }
@@ -366,6 +339,9 @@
                 plugins: {
                     legend: {
                         display: false
+                    },
+                    annotation: {
+                        annotations: {}
                     }
                 }
             }
@@ -384,6 +360,16 @@
                         backgroundColor: 'rgba(220, 53, 69, 0.1)',
                         fill: true,
                         tension: 0.1
+                    }, {
+                        label: 'Sun Elevation (°)',
+                        data: [],
+                        borderColor: 'rgba(255, 165, 0, 0.6)',
+                        borderWidth: 1,
+                        borderDash: [4, 4],
+                        fill: false,
+                        pointRadius: 0,
+                        tension: 0.4,
+                        yAxisID: 'y2'
                     }]
                 },
                 options: {
@@ -396,7 +382,19 @@
                                 display: true,
                                 text: 'Power (W)'
                             }
+                        },
+                        y2: {
+                            position: 'right',
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Sun Elevation (°)'
+                            },
+                            grid: { drawOnChartArea: false }
                         }
+                    },
+                    plugins: {
+                        ...chartConfig.options.plugins
                     }
                 }
             }
@@ -503,6 +501,10 @@
             // Add new data (store _seconds for rescaling)
             const x = secondsToX(elapsed);
             powerChart.data.datasets[0].data.push({_seconds: elapsed, x: x, y: dataPoint.power});
+            if (startTimeMs) {
+                const elev = solarElevationDeg(startTimeMs + elapsed * 1000);
+                powerChart.data.datasets[1].data.push({_seconds: elapsed, x: x, y: elev > 0 ? elev : null});
+            }
             voltageChart.data.datasets[0].data.push({_seconds: elapsed, x: x, y: dataPoint.voltage});
             currentChart.data.datasets[0].data.push({_seconds: elapsed, x: x, y: dataPoint.current});
             energyChart.data.datasets[0].data.push({_seconds: elapsed, x: x, y: dataPoint.energy_wh});
@@ -510,6 +512,7 @@
             // Limit data points (but not in 'all' mode — keep everything)
             if (currentRange !== 'all' && powerChart.data.datasets[0].data.length > MAX_POINTS) {
                 powerChart.data.datasets[0].data.shift();
+                powerChart.data.datasets[1].data.shift();
                 voltageChart.data.datasets[0].data.shift();
                 currentChart.data.datasets[0].data.shift();
                 energyChart.data.datasets[0].data.shift();
@@ -578,6 +581,7 @@
 
                     // Initial batch of historical/decimated data
                     powerChart.data.datasets[0].data = [];
+                    powerChart.data.datasets[1].data = [];
                     voltageChart.data.datasets[0].data = [];
                     currentChart.data.datasets[0].data = [];
                     energyChart.data.datasets[0].data = [];
@@ -595,6 +599,10 @@
                         const point = message.data[i];
                         const x = secondsToX(point.elapsed);
                         powerChart.data.datasets[0].data.push({_seconds: point.elapsed, x: x, y: point.power});
+                        if (startTimeMs) {
+                            const elev = solarElevationDeg(startTimeMs + point.elapsed * 1000);
+                            powerChart.data.datasets[1].data.push({_seconds: point.elapsed, x: x, y: elev > 0 ? elev : null});
+                        }
                         voltageChart.data.datasets[0].data.push({_seconds: point.elapsed, x: x, y: point.voltage});
                         currentChart.data.datasets[0].data.push({_seconds: point.elapsed, x: x, y: point.current});
                         energyChart.data.datasets[0].data.push({_seconds: point.elapsed, x: x, y: point.energy_wh});

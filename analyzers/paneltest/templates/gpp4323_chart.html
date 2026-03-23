@@ -200,7 +200,7 @@
     </div>
 
     <script>
-        // Solar position calculator (NOAA algorithm)
+        // Solar position calculator (SunCalc.js)
         const SITE_LAT = 47.6;
         const SITE_LON = -122.33;
 
@@ -302,8 +302,10 @@
                 if (unit.divisor !== currentDivisor) {
                     currentDivisor = unit.divisor;
                     for (const chart of allCharts) {
-                        for (const point of chart.data.datasets[0].data) {
-                            point.x = point._seconds / unit.divisor;
+                        for (const dataset of chart.data.datasets) {
+                            for (const point of dataset.data) {
+                                point.x = point._seconds / unit.divisor;
+                            }
                         }
                     }
                 }
@@ -314,7 +316,7 @@
                     chart.options.scales.x.min = undefined;
                     chart.options.scales.x.max = undefined;
                     chart.options.scales.x.ticks = {};
-                        chart.options.plugins.annotation.annotations = {};
+                    chart.options.plugins.annotation.annotations = {};
                 }
             }
         }

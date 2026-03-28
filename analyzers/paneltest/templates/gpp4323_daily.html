@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPP4323 Daily Summary</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; padding: 20px; }
+        .summary-card {
+            background: white; border-radius: 8px; padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .clickable-row { cursor: pointer; }
+        .clickable-row:hover { background-color: #f0f0f0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Daily Energy Summary</h1>
+            <a href="./" class="btn btn-outline-primary">Back to Live</a>
+        </div>
+        <div class="summary-card">
+            <table class="table table-striped mb-0">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th class="text-end">Energy (Wh)</th>
+                        <th class="text-end">Peak Power (W)</th>
+                        <th class="text-end">Samples</th>
+                    </tr>
+                </thead>
+                <tbody id="summary-body">
+                    <tr><td colspan="4" class="text-center text-muted">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <script>
+        fetch('api/daily_summary')
+            .then(r => r.json())
+            .then(data => {
+                const tbody = document.getElementById('summary-body');
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No data</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = data.map(d => `
+                    <tr class="clickable-row" onclick="window.location='./?date=${d.date}'">
+                        <td>${d.date}</td>
+                        <td class="text-end">${d.energy_wh.toFixed(3)}</td>
+                        <td class="text-end">${d.peak_power.toFixed(2)}</td>
+                        <td class="text-end">${d.num_samples.toLocaleString()}</td>
+                    </tr>
+                `).join('');
+            });
+    </script>
+</body>
+</html>

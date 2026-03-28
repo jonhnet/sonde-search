@@ -103,6 +103,7 @@
                     <button type="button" class="btn btn-sm btn-outline-info active" data-timemode="timeofday">Time of Day</button>
                 </div>
                 <a href="api/download" class="btn btn-sm btn-outline-secondary ms-2">Download CSV</a>
+                <a href="daily" class="btn btn-sm btn-outline-secondary ms-2">Daily Summary</a>
             </div>
         </div>
 
@@ -200,6 +201,9 @@
     </div>
 
     <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const dayParam = urlParams.get('date');
+
         // Solar position calculator (SunCalc.js)
         const SITE_LAT = 47.6;
         const SITE_LON = -122.33;
@@ -569,7 +573,9 @@
             }
 
             // Server-Sent Events for real-time timeseries data updates
-            const url = `api/timeseries?range=${range}&max_points=${maxPoints}`;
+            const url = dayParam
+                ? `api/timeseries?date=${dayParam}&max_points=${maxPoints}`
+                : `api/timeseries?range=${range}&max_points=${maxPoints}`;
             dataEventSource = new EventSource(url);
 
             dataEventSource.onmessage = function(event) {
@@ -643,6 +649,8 @@
                         }
                     }
 
+                } else if (message.type === 'done') {
+                    dataEventSource.close();
                 } else if (message.type === 'error') {
                     console.error('SSE error:', message.error);
                 }
@@ -672,12 +680,20 @@
             };
         }
 
-        // Initialize on page load - just start SSE streams
+        // Initialize on page load
         function initialize() {
-            // Start stats SSE (always running)
-            startStatsSSE();
-            // Start data SSE in 1 minute mode
-            startDataSSE(currentRange, MAX_POINTS);
+            if (dayParam) {
+                // Historical day mode: hide range buttons, don't start stats SSE
+                document.querySelectorAll('.btn-group[role="group"]').forEach(g => g.style.display = 'none');
+                document.querySelector('h1').innerHTML =
+                    `<a href="./" class="btn btn-sm btn-outline-secondary me-2">Live</a>` +
+                    `<a href="daily" class="btn btn-sm btn-outline-secondary me-2">Daily</a> ` +
+                    dayParam;
+                startDataSSE('day', MAX_POINTS);
+            } else {
+                startStatsSSE();
+                startDataSSE(currentRange, MAX_POINTS);
+            }
         }
 
         // Handle time range button clicks

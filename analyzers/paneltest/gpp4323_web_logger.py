@@ -10,11 +10,12 @@ import json
 import sys
 import threading
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional, TextIO, Any
 import pandas as pd
 import numpy as np
-from flask import Flask, render_template, Response, request, send_file
+from zoneinfo import ZoneInfo
+from flask import Flask, render_template, Response, request, send_file, jsonify
 from gpp4323_lib import GPP4323, DataCollector, LoadReading
 
 
@@ -244,6 +245,8 @@ class WebServer:
         self.app.add_url_rule('/api/timeseries', view_func=self.stream_timeseries)
         self.app.add_url_rule('/api/stats', view_func=self.stream_stats)
         self.app.add_url_rule('/api/download', view_func=self.download_csv)
+        self.app.add_url_rule('/daily', view_func=self.daily)
+        self.app.add_url_rule('/api/daily_summary', view_func=self.daily_summary)
 
     def index(self):
         """Serve the main page"""
@@ -260,6 +263,7 @@ class WebServer:
         """
         range_param = request.args.get('range', '1m')
         max_points = int(request.args.get('max_points', 500))
+        date_param = request.args.get('date')  # e.g. "2025-03-21"
 
         def event_stream():
             last_elapsed_sent = -1
@@ -277,28 +281,33 @@ class WebServer:
             decimation_window = 1
             if os.path.exists(self.data_store.logfile_path):
                 try:
-                    # Read CSV with pandas, dropping timestamp column
                     df = pd.read_csv(self.data_store.logfile_path, on_bad_lines='skip')
+
+                    # Filter by date if requested (historical day view)
+                    if date_param:
+                        tz = ZoneInfo('America/Los_Angeles')
+                        target = datetime.strptime(date_param, '%Y-%m-%d')
+                        day_start = datetime(target.year, target.month, target.day, tzinfo=tz).timestamp()
+                        day_end = (datetime(target.year, target.month, target.day, tzinfo=tz) + timedelta(days=1)).timestamp()
+                        df = df[(df['timestamp'] >= day_start) & (df['timestamp'] < day_end)]
+
                     df = df.drop(columns=['timestamp'])
 
                     if len(df) > 0:
-                        # Determine time range window
-                        if range_param in RANGE_SECONDS:
+                        if date_param:
+                            # Historical day: use all data for that day
+                            filtered_df = df
+                        elif range_param in RANGE_SECONDS:
                             range_seconds = RANGE_SECONDS[range_param]
+                            latest_elapsed = df['elapsed'].iloc[-1]
+                            filtered_df = df[df['elapsed'] >= latest_elapsed - range_seconds]
                         else:
-                            range_seconds = df['elapsed'].iloc[-1]
-
-                        latest_elapsed = df['elapsed'].iloc[-1]
-                        cutoff_elapsed = latest_elapsed - range_seconds
-
-                        # Filter by time range
-                        filtered_df = df[df['elapsed'] >= cutoff_elapsed]
+                            filtered_df = df
 
                         # Decimate based on actual point count
                         decimation_window = max(1, len(filtered_df) // max_points)
                         decimated_df = decimate_data(filtered_df, decimation_window)
 
-                        # Convert to list of dicts for JSON serialization
                         decimated_data = decimated_df.to_dict('records')
                         start_time = (
                             self.data_store.start_timestamp.isoformat()
@@ -310,6 +319,11 @@ class WebServer:
 
                 except Exception as e:
                     yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+
+            # Historical day mode: no live updates
+            if date_param:
+                yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                return
 
             # Stream live updates with batched decimation
             while True:
@@ -356,6 +370,36 @@ class WebServer:
                     yield f"data: {json.dumps(stats)}\n\n"
 
         return Response(event_stream(), mimetype='text/event-stream')
+
+    def daily(self):
+        """Serve the daily summary page"""
+        return render_template('gpp4323_daily.html')
+
+    def daily_summary(self):
+        """Return JSON summary of energy collected per day"""
+        if not os.path.exists(self.data_store.logfile_path):
+            return jsonify([])
+
+        df = pd.read_csv(self.data_store.logfile_path, on_bad_lines='skip')
+        if len(df) == 0:
+            return jsonify([])
+
+        tz = ZoneInfo('America/Los_Angeles')
+        df['datetime'] = pd.to_datetime(df['timestamp'], unit='s', utc=True)
+        df['date'] = df['datetime'].dt.tz_convert(tz).dt.date
+
+        summary = df.groupby('date').agg(
+            energy_start=('energy_wh', 'first'),
+            energy_end=('energy_wh', 'last'),
+            peak_power=('power', 'max'),
+            num_samples=('timestamp', 'count'),
+        ).reset_index()
+
+        summary['energy_wh'] = summary['energy_end'] - summary['energy_start']
+        summary['date'] = summary['date'].astype(str)
+        summary = summary.sort_values('date', ascending=False)
+
+        return jsonify(summary[['date', 'energy_wh', 'peak_power', 'num_samples']].to_dict('records'))
 
     def download_csv(self):
         """Serve the raw CSV log file for download"""

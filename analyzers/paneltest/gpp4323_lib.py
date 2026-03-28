@@ -111,28 +111,24 @@ class DataCollector:
 
         print(f"Data collection started at {self.rate} Hz on channel {self.channel}")
 
+        next_sample = time.monotonic()
         while self.is_running:
-            loop_start = time.time()
-
             try:
-                # Get load reading
                 voltage, current, power = self.psu.get_channel_load(channel=self.channel)
                 timestamp = datetime.now(timezone.utc)
-
-                # Create reading object
                 reading = LoadReading(voltage, current, power, timestamp)
-
-                # Call callback if provided
                 if self.callback:
                     self.callback(reading)
             except socket.timeout:
                 print("Warning: power supply read timed out, retrying")
 
-            # Sleep to maintain rate
-            elapsed_time = time.time() - loop_start
-            sleep_time = self.interval - elapsed_time
+            next_sample += self.interval
+            sleep_time = next_sample - time.monotonic()
             if sleep_time > 0:
                 time.sleep(sleep_time)
+            else:
+                # Fell behind — reset to avoid burst of catch-up samples
+                next_sample = time.monotonic()
 
     def stop(self) -> None:
         """Stop data collection"""

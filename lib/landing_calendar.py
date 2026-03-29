@@ -86,8 +86,9 @@ def generate_calendar(bottom_lat, left_lon, top_lat, right_lon, format='png'):
         # Load and prepare landing data
         df = _get_landing_data()
 
-        # Filter to landings within bounds
+        # Filter to landings within bounds and free the full dataset
         gdf = _filter_and_project(df, bottom_lat, left_lon, top_lat, right_lon)
+        df = None
 
         # Annotate with month if not already present
         if 'month' not in gdf.columns:

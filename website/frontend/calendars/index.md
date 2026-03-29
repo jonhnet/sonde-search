@@ -85,8 +85,8 @@ you prefer to run the calendar-generator on your own computer, the code is
     const latDiff = Math.abs(top_lat - bottom_lat);
     const lonDiff = Math.abs(right_lon - left_lon);
 
-    if (latDiff > 8 || lonDiff > 8) {
-      $('#status_message').html('<span style="color: red;">Map area too large! Please zoom in. (Maximum 8 degrees of latitude or longitude)</span>');
+    if (latDiff > 10 || lonDiff > 10) {
+      $('#status_message').html('<span style="color: red;">Map area too large! Please zoom in. (Maximum 10 degrees of latitude or longitude)</span>');
       return;
     }
 

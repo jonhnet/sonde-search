@@ -14,7 +14,7 @@ BASE_URL = "https://sondesearch.lectrobox.com/vault/sonde-summaries/parquet/"
 FILENAME_TEMPLATE = "sonde-summaries-{year}.parquet"
 
 
-def get_sonde_summaries_as_dataframe():
+def get_sonde_summaries_as_dataframe(columns=None):
     dirname = os.path.join(tempfile.gettempdir(), "sonde_summaries")
     if not os.path.exists(dirname):
         os.makedirs(dirname)
@@ -33,7 +33,7 @@ def get_sonde_summaries_as_dataframe():
         ])
 
         # load and parse
-        dfs.append(pd.read_parquet(os.path.join(dirname, filename)))
+        dfs.append(pd.read_parquet(os.path.join(dirname, filename), columns=columns))
 
     # Concatenate the dataframes and create a new index, to ensure each index
     # entry is unique

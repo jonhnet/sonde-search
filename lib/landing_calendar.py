@@ -37,9 +37,16 @@ CALENDAR_COLS = 3
 CALENDAR_ROWS = 4
 
 
+_LANDING_DATA_COLUMNS = ['serial', 'frame', 'lat', 'lon', 'datetime']
+
+
 def _get_landing_data():
-    """Load and prepare sonde landing data."""
-    df = get_sonde_summaries_as_dataframe()
+    """Load and prepare sonde landing data.
+
+    Only reads the columns needed for calendar generation, and reduces to
+    landing rows (last frame per sonde) to minimize memory usage.
+    """
+    df = get_sonde_summaries_as_dataframe(columns=_LANDING_DATA_COLUMNS)
 
     # Get landings -- the latest frame received for each serial number
     df = df.loc[df.groupby("serial")["frame"].idxmax()]

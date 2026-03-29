@@ -18,6 +18,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
+from PIL import Image
 import subprocess
 import sys
 import tempfile
@@ -30,6 +31,10 @@ matplotlib.use('Agg')
 
 # Disable contextily's in-memory tile caching to prevent memory growth
 setup_contextily_cache()
+
+# Calendar grid layout
+CALENDAR_COLS = 3
+CALENDAR_ROWS = 4
 
 
 def _get_landing_data():
@@ -46,9 +51,16 @@ def _get_landing_data():
     return df
 
 
+# Size of each individual month subplot in inches
+MONTH_FIGSIZE = (10, 10)
+
+
 # Generate calendar for given bounds
 def generate_calendar(bottom_lat, left_lon, top_lat, right_lon, format='png'):
     """Generate a 12-month calendar of sonde landings within the given bounds.
+
+    Renders each month as an individual matplotlib figure to keep peak memory
+    low, then composites the 12 images into a grid using PIL.
 
     Args:
         bottom_lat: Southern boundary
@@ -62,8 +74,6 @@ def generate_calendar(bottom_lat, left_lon, top_lat, right_lon, format='png'):
     """
     df = None
     gdf = None
-    fig = None
-    buf = None
 
     try:
         # Load and prepare landing data
@@ -76,41 +86,79 @@ def generate_calendar(bottom_lat, left_lon, top_lat, right_lon, format='png'):
         if 'month' not in gdf.columns:
             gdf['month'] = gdf['datetime'].dt.month
 
-        # Create 4x3 grid of subplots (12 months)
-        fig, axs = plt.subplots(4, 3, figsize=(30, 40))
-
+        # Render each month individually and collect as PIL images
+        month_images = []
         for month in range(12):
-            ax = axs[month // 3][month % 3]
-
-            # Filter to just this month
             month_data = gdf.loc[gdf.month == month + 1]
+            img = _render_one_month(month_data, calendar.month_name[month + 1], gdf.crs)
+            month_images.append(img)
 
-            # Draw the map for this month
-            _draw_one_map(month_data, ax, calendar.month_name[month + 1], gdf.crs)
+        # Free the dataframes before compositing
+        df = None
+        gdf = None
+        gc.collect()
 
-        # Save to bytes
-        fig.subplots_adjust(wspace=0, hspace=0)
+        # Composite into a grid
+        return _composite_grid(month_images, format)
+
+    finally:
+        df = None
+        gdf = None
+        gc.collect()
+
+
+def _render_one_month(gdf, title, crs):
+    """Render a single month's map and return it as a PIL Image.
+
+    Creates a temporary matplotlib figure, renders the map, converts to a PIL
+    image, then closes the figure to release memory before returning.
+    """
+    fig = None
+    buf = None
+    try:
+        fig, ax = plt.subplots(1, 1, figsize=MONTH_FIGSIZE)
+        _draw_one_map(gdf, ax, title, crs)
         fig.tight_layout()
 
         buf = io.BytesIO()
-        fig.savefig(buf, format=format, bbox_inches='tight', pad_inches=0)
+        fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0)
         buf.seek(0)
-        result = buf.read()
-        return result
-
+        img = Image.open(buf).copy()  # .copy() so we own the pixels
+        return img
     finally:
-        # Explicitly close and cleanup matplotlib to prevent memory leaks
         if fig is not None:
             plt.close(fig)
-        plt.close('all')
-
-        # Close the BytesIO buffer
         if buf is not None:
             buf.close()
-
-        # Delete references and force garbage collection
-        del df, gdf, fig, buf
         gc.collect()
+
+
+def _composite_grid(images, format):
+    """Arrange a list of PIL Images into a CALENDAR_ROWS x CALENDAR_COLS grid.
+
+    Returns the composited image as bytes in the requested format.
+    """
+    cell_w = max(img.width for img in images)
+    cell_h = max(img.height for img in images)
+
+    grid = Image.new('RGB', (cell_w * CALENDAR_COLS, cell_h * CALENDAR_ROWS), 'white')
+
+    for i, img in enumerate(images):
+        col = i % CALENDAR_COLS
+        row = i // CALENDAR_COLS
+        # Center the image within its cell
+        x = col * cell_w + (cell_w - img.width) // 2
+        y = row * cell_h + (cell_h - img.height) // 2
+        grid.paste(img, (x, y))
+        img.close()
+
+    buf = io.BytesIO()
+    grid.save(buf, format=format.upper())
+    buf.seek(0)
+    result = buf.read()
+    grid.close()
+    buf.close()
+    return result
 
 
 def _filter_and_project(df, bottom_lat, left_lon, top_lat, right_lon):

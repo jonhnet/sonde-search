@@ -22,8 +22,7 @@ def get_near_pairs(df, i):
 
 
 def get_close_landings(lat_min, lat_max, lon_min, lon_max):
-    all = get_sonde_summaries_as_dataframe()
-    all = all[["serial", "frame", "datetime", "lat", "lon"]]
+    all = get_sonde_summaries_as_dataframe(columns=["serial", "frame", "datetime", "lat", "lon"])
     landings = all.loc[all.groupby("serial")["frame"].idxmax()]
     near = landings.loc[(landings.lat >= lat_min) & (landings.lat <= lat_max)]
     near = near.loc[(near.lon >= lon_min) & (near.lon < lon_max)]

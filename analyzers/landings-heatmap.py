@@ -30,7 +30,7 @@ def draw_map(df, name, **kwargs):
 
 def main():
     # Read summaries
-    df = get_sonde_summaries_as_dataframe()
+    df = get_sonde_summaries_as_dataframe(columns=['lat', 'lon', 'vel_v', 'alt', 'datetime'])
     years = years_covered(df)
     range_string = f"{years[0]}-{years[-1]}"
 

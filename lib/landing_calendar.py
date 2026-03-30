@@ -26,7 +26,7 @@ import tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from lib.map_utils import setup_contextily_cache
 from data.cache import get_sonde_summaries_as_dataframe
-from lib.data_utils import filter_real_flights
+from lib.data_utils import filter_real_flights, get_landing_rows
 
 matplotlib.use('Agg')
 
@@ -54,7 +54,7 @@ def _get_landing_data():
     df = filter_real_flights(df)
 
     # Get landings -- the latest frame received for each serial number
-    df = df.loc[df.groupby("serial")["frame"].idxmax()]
+    df = get_landing_rows(df)
 
     # Annotate with datetime and month
     df["datetime"] = pd.to_datetime(df["datetime"])

@@ -7,7 +7,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from lib.data_utils import filter_real_flights, MIN_MAX_ALT, MIN_ALT_DROP
+from lib.data_utils import filter_real_flights, get_landing_rows, MIN_MAX_ALT, MIN_ALT_DROP
 
 
 def _make_sonde(serial, max_alt, final_alt):
@@ -78,4 +78,38 @@ def test_empty_dataframe():
     """An empty DataFrame should return empty."""
     df = pd.DataFrame(columns=['serial', 'frame', 'alt'])
     result = filter_real_flights(df)
+    assert len(result) == 0
+
+
+# --- get_landing_rows tests ---
+
+def test_get_landing_rows_picks_last_frame():
+    """Should return the row with the highest frame number for each sonde."""
+    df = pd.DataFrame([
+        {'serial': 'A', 'frame': 100, 'lat': 1.0},
+        {'serial': 'A', 'frame': 200, 'lat': 2.0},
+        {'serial': 'A', 'frame': 300, 'lat': 3.0},
+        {'serial': 'B', 'frame': 50, 'lat': 10.0},
+        {'serial': 'B', 'frame': 150, 'lat': 20.0},
+    ])
+    result = get_landing_rows(df)
+    assert len(result) == 2
+    assert result.loc[result['serial'] == 'A', 'frame'].iloc[0] == 300
+    assert result.loc[result['serial'] == 'B', 'frame'].iloc[0] == 150
+
+
+def test_get_landing_rows_single_frame():
+    """A sonde with only one frame should still be returned."""
+    df = pd.DataFrame([
+        {'serial': 'SOLO', 'frame': 42, 'lat': 5.0},
+    ])
+    result = get_landing_rows(df)
+    assert len(result) == 1
+    assert result.iloc[0]['frame'] == 42
+
+
+def test_get_landing_rows_empty():
+    """An empty DataFrame should return empty."""
+    df = pd.DataFrame(columns=['serial', 'frame'])
+    result = get_landing_rows(df)
     assert len(result) == 0

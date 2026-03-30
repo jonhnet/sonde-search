@@ -37,3 +37,21 @@ def filter_real_flights(df):
         (max_alt >= MIN_MAX_ALT) & (final_alt <= max_alt - MIN_ALT_DROP)
     ]
     return df[df['serial'].isin(valid_serials)]
+
+
+def get_landing_rows(df):
+    """Reduce a multi-row-per-sonde DataFrame to one row per sonde: the landing.
+
+    The landing row is the one with the highest frame number for each serial,
+    which is the last telemetry point received.
+
+    Args:
+        df: DataFrame with at least 'serial' and 'frame' columns.
+
+    Returns:
+        DataFrame with one row per sonde.
+    """
+    if df.empty:
+        return df
+
+    return df.loc[df.groupby('serial')['frame'].idxmax()]

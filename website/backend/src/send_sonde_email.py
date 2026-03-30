@@ -31,7 +31,7 @@ import util
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../'))
 import lib.map_utils as map_utils
 from lib.map_utils import setup_contextily_cache
-from lib.data_utils import filter_real_flights
+from lib.data_utils import filter_real_flights, get_landing_rows
 
 matplotlib.use('Agg')
 
@@ -678,7 +678,7 @@ class EmailNotifier:
         sondes = filter_real_flights(sondes)
 
         # Filter the data down to just the last frame received from each sonde
-        sondes = sondes.loc[sondes.groupby('serial')['frame'].idxmax()]
+        sondes = get_landing_rows(sondes)
 
         return sondes, now
 

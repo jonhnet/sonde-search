@@ -22,6 +22,7 @@ import sys
 import tarfile
 import time
 from collections import Counter
+from datetime import timedelta
 
 
 NUMERIC_COLUMNS = [
@@ -52,9 +53,6 @@ class TarToParquetConverter:
             frame_nums = [int(rec['frame']) for rec in recs]
         except (ValueError, KeyError):
             return self._drop('missing or non-numeric frame')
-
-        if not (frame_nums[0] <= frame_nums[1] <= frame_nums[2]):
-            return self._drop('out-of-order frames')
 
         for frame_num in frame_nums:
             if frame_num < 0 or frame_num > 4_000_000_000:
@@ -108,7 +106,6 @@ class TarToParquetConverter:
         extract_dur = time.time() - start_time
 
         basename = os.path.splitext(self.infilename)[0]
-        df.to_pickle(basename + ".before.pickle")
 
         # Normalize column names
         if 'freq' in df.columns:
@@ -127,6 +124,17 @@ class TarToParquetConverter:
         df['datetime'] = pd.to_datetime(
             df['datetime'], format='ISO8601', utc=True
         )
+
+        # Drop sonde-reuse records: files where the time span between
+        # records exceeds 24 hours indicate a sonde heard again days/months
+        # later, making the landing position invalid.
+        grouped = df.groupby('archive_source')['datetime']
+        span = grouped.transform('max') - grouped.transform('min')
+        reuse_mask = span > timedelta(hours=24)
+        num_reuse = reuse_mask.sum()
+        if num_reuse > 0:
+            df = df[~reuse_mask]
+            self.drop_reasons['time span > 24h (likely sonde reuse)'] = num_reuse
 
         df.to_parquet(basename + ".parquet")
         total_dur = time.time() - start_time

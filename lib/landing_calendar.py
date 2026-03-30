@@ -26,6 +26,7 @@ import tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from lib.map_utils import setup_contextily_cache
 from data.cache import get_sonde_summaries_as_dataframe
+from lib.data_utils import filter_real_flights
 
 matplotlib.use('Agg')
 
@@ -37,16 +38,20 @@ CALENDAR_COLS = 3
 CALENDAR_ROWS = 4
 
 
-_LANDING_DATA_COLUMNS = ['serial', 'frame', 'lat', 'lon', 'datetime']
+_LANDING_DATA_COLUMNS = ['serial', 'frame', 'lat', 'lon', 'alt', 'datetime']
 
 
 def _get_landing_data():
     """Load and prepare sonde landing data.
 
-    Only reads the columns needed for calendar generation, and reduces to
-    landing rows (last frame per sonde) to minimize memory usage.
+    Only reads the columns needed for calendar generation, filters to real
+    flights, and reduces to landing rows (last frame per sonde) to minimize
+    memory usage.
     """
     df = get_sonde_summaries_as_dataframe(columns=_LANDING_DATA_COLUMNS)
+
+    # Filter out ground tests and non-flights
+    df = filter_real_flights(df)
 
     # Get landings -- the latest frame received for each serial number
     df = df.loc[df.groupby("serial")["frame"].idxmax()]

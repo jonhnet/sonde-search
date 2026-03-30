@@ -7,6 +7,7 @@ import sys
 
 sys.path.insert(0, "..")
 from data.cache import get_sonde_summaries_as_dataframe, years_covered
+from lib.data_utils import filter_real_flights
 
 EXTRA_STYLE = branca.element.Element(
     """
@@ -30,13 +31,16 @@ def draw_map(df, name, **kwargs):
 
 def main():
     # Read summaries
-    df = get_sonde_summaries_as_dataframe(columns=['lat', 'lon', 'vel_v', 'alt', 'datetime'])
+    df = get_sonde_summaries_as_dataframe(
+        columns=['serial', 'frame', 'lat', 'lon', 'vel_v', 'alt', 'datetime']
+    )
     years = years_covered(df)
     range_string = f"{years[0]}-{years[-1]}"
 
     print(f"Plotting data for years {range_string}")
 
-    # Get landings only
+    # Filter to real flights and get landings only
+    df = filter_real_flights(df)
     df = df.loc[(df.vel_v < 0) & (df.alt < 10000)]
     draw_map(
         df,

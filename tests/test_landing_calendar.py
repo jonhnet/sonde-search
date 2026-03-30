@@ -16,16 +16,30 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 def _make_test_dataframe():
     """Create a test DataFrame mimicking sonde summary data with landings
-    spread across multiple months and locations."""
+    spread across multiple months and locations. Each sonde has an ascending
+    frame (high altitude) and a landing frame (low altitude) so it passes
+    the real-flight filter."""
     records = []
     for month in range(1, 13):
         for i in range(3):
+            serial = f'SONDE-M{month}-{i}'
+            # Ascending frame
             records.append({
-                'serial': f'SONDE-M{month}-{i}',
-                'frame': 100 + i,
+                'serial': serial,
+                'frame': 100,
                 'lat': 47.0 + i * 0.1,
                 'lon': -122.0 - i * 0.1,
-                'datetime': f'2023-{month:02d}-15',
+                'alt': 20000.0,
+                'datetime': f'2023-{month:02d}-15T00:00:00',
+            })
+            # Landing frame
+            records.append({
+                'serial': serial,
+                'frame': 200,
+                'lat': 47.0 + i * 0.1,
+                'lon': -122.0 - i * 0.1,
+                'alt': 500.0,
+                'datetime': f'2023-{month:02d}-15T02:00:00',
             })
     return pd.DataFrame(records)
 

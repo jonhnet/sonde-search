@@ -130,7 +130,7 @@ you prefer to run the calendar-generator on your own computer, the code is
           <h2>Your Custom Landing Calendar</h2>
           <p>Bounds: ${bottom_lat.toFixed(4)}, ${left_lon.toFixed(4)} to ${top_lat.toFixed(4)}, ${right_lon.toFixed(4)}</p>
           <p style="margin-bottom: 20px;">
-            <a id="download_link" href="${imageUrl}" download="landing-calendar-${bottom_lat.toFixed(2)}-${left_lon.toFixed(2)}.png" class="button">Download Your Calendar Image</a>
+            <a id="download_link" href="${imageUrl}" download="landing-calendar-${bottom_lat.toFixed(2)}-${left_lon.toFixed(2)}.webp" class="button">Download Your Calendar Image</a>
             <button type="button" class="button" onclick="resetMap()">Generate Another Calendar</button>
           </p>
           <img src="${imageUrl}" style="width: 100%; height: auto;" alt="Landing Calendar" />

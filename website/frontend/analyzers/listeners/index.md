@@ -88,10 +88,14 @@ To see the analysis, enter a sonde serial number and click "Analyze".
       return false;
     }
 
-    $('#result_area').html('<div class="text-center"><img src="/images/loading.gif" /></div>');
+    var l = Ladda.create($('#analyze_button')[0]);
+    l.start();
+    $('#result_area').html('');
 
     SondeSearchAPI.get('get_sonde_listeners/' + serial)
       .then(function(data) {
+        l.stop();
+
         if (!data.success) {
           $('#result_area').html(`<div class="alert alert-danger">Error: ${data.error}</div>`);
           return;
@@ -110,6 +114,7 @@ To see the analysis, enter a sonde serial number and click "Analyze".
         $('#result_area').html(html);
       })
       .catch(function(error) {
+        l.stop();
         $('#result_area').html(`<div class="alert alert-danger">Request failed: ${error.message}</div>`);
       });
 

@@ -21,68 +21,7 @@ import pandas as pd
 import sys
 import tarfile
 import time
-
-
-def is_valid_record(recs, fname):
-    if len(recs) % 3 != 0:
-        print(f'tossing invalid file {fname} with {len(recs)} recs')
-        return False
-
-    frame_nums = [int(rec['frame']) for rec in recs]
-
-    if not (frame_nums[0] <= frame_nums[1] <= frame_nums[2]):
-        print(f'out of order frames in {fname}: {frame_nums}')
-        return False
-
-    for frame_num in frame_nums:
-        if frame_num < 0 or frame_num > 4_000_000_000:
-            print(f'invalid frame number {frame_num} in {fname}')
-            return False
-
-    # Basic datetime sanity check — full parsing is done in bulk later,
-    # which is ~100x faster than per-record pd.to_datetime() calls
-    for rec in recs:
-        dt = rec.get('datetime', '')
-        if not isinstance(dt, str) or len(dt) < 10:
-            print(f'invalid datetime {dt!r} in {fname}')
-            return False
-
-    for rec in recs:
-        rec['archive_source'] = fname
-
-    return True
-
-
-def get_recs_from_tar(infilename):
-    with tarfile.open(infilename) as archive:
-        num_files = 0
-        num_recs = 0
-        start_time = time.time()
-
-        for member in archive:
-            if not member.isfile():
-                continue
-
-            num_files += 1
-
-            try:
-                j = json.load(archive.extractfile(member))
-            except json.decoder.JSONDecodeError:
-                print(f"error parsing json: {member.name}")
-                continue
-
-            if not is_valid_record(j, member.name):
-                continue
-
-            for rec in j:
-                num_recs += 1
-                yield rec
-
-            if num_files % 10000 == 0:
-                dur = time.time() - start_time
-                print(f"[{num_files}] {num_recs} recs, {dur:.2f}s, "
-                      f"{num_files/dur:.0f} files/sec")
-
+from collections import Counter
 
 
 NUMERIC_COLUMNS = [
@@ -94,27 +33,115 @@ NUMERIC_COLUMNS = [
 ]
 
 
-def convert(infilename):
-    df = pd.DataFrame(get_recs_from_tar(infilename))
-    df.to_pickle(os.path.splitext(infilename)[0] + ".before.pickle")
+class TarToParquetConverter:
+    def __init__(self, infilename):
+        self.infilename = infilename
+        self.num_files = 0
+        self.num_recs = 0
+        self.drop_reasons = Counter()
 
-    # Normalize column names
-    if 'freq' in df.columns:
-        if 'frequency' not in df.columns:
-            df = df.rename(columns={'freq': 'frequency'})
-        else:
-            df['frequency'] = df['frequency'].fillna(df['freq'])
-            df = df.drop(columns=['freq'])
+    def _drop(self, reason):
+        self.drop_reasons[reason] += 1
+        return False
 
-    # Convert numeric columns, coercing bad values (empty strings, etc.) to NaN
-    for col in NUMERIC_COLUMNS:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
+    def _is_valid_record(self, recs, fname):
+        if len(recs) % 3 != 0:
+            return self._drop('invalid record count (not multiple of 3)')
 
-    df['datetime'] = pd.to_datetime(df['datetime'], format='ISO8601', utc=True)
+        try:
+            frame_nums = [int(rec['frame']) for rec in recs]
+        except (ValueError, KeyError):
+            return self._drop('missing or non-numeric frame')
 
-    df.to_parquet(os.path.splitext(infilename)[0] + ".parquet")
+        if not (frame_nums[0] <= frame_nums[1] <= frame_nums[2]):
+            return self._drop('out-of-order frames')
+
+        for frame_num in frame_nums:
+            if frame_num < 0 or frame_num > 4_000_000_000:
+                return self._drop('frame number out of range')
+
+        # Basic datetime sanity check — full parsing is done in bulk later,
+        # which is ~100x faster than per-record pd.to_datetime() calls
+        for rec in recs:
+            dt = rec.get('datetime', '')
+            if not isinstance(dt, str) or len(dt) < 10:
+                return self._drop('invalid datetime')
+
+        for rec in recs:
+            rec['archive_source'] = fname
+
+        return True
+
+    def _get_recs_from_tar(self):
+        start_time = time.time()
+
+        with tarfile.open(self.infilename) as archive:
+            for member in archive:
+                if not member.isfile():
+                    continue
+
+                self.num_files += 1
+
+                if self.num_files % 10000 == 0:
+                    dur = time.time() - start_time
+                    print(f"{self.num_files:>7,} files  "
+                          f"{self.num_recs:>7,} records  "
+                          f"{dur:>5.1f}s  "
+                          f"{self.num_files / dur:>7,.0f} files/sec")
+
+                try:
+                    j = json.load(archive.extractfile(member))
+                except json.decoder.JSONDecodeError:
+                    self._drop('JSON parse error')
+                    continue
+
+                if not self._is_valid_record(j, member.name):
+                    continue
+
+                for rec in j:
+                    self.num_recs += 1
+                    yield rec
+
+    def convert(self):
+        start_time = time.time()
+        df = pd.DataFrame(self._get_recs_from_tar())
+        extract_dur = time.time() - start_time
+
+        basename = os.path.splitext(self.infilename)[0]
+        df.to_pickle(basename + ".before.pickle")
+
+        # Normalize column names
+        if 'freq' in df.columns:
+            if 'frequency' not in df.columns:
+                df = df.rename(columns={'freq': 'frequency'})
+            else:
+                df['frequency'] = df['frequency'].fillna(df['freq'])
+                df = df.drop(columns=['freq'])
+
+        # Convert numeric columns, coercing bad values (empty strings, etc.)
+        # to NaN
+        for col in NUMERIC_COLUMNS:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+
+        df['datetime'] = pd.to_datetime(
+            df['datetime'], format='ISO8601', utc=True
+        )
+
+        df.to_parquet(basename + ".parquet")
+        total_dur = time.time() - start_time
+
+        # Print summary
+        total_dropped = sum(self.drop_reasons.values())
+        print(f"\nProcessed {self.num_files:,} files -> "
+              f"{self.num_recs:,} records in {total_dur:.1f}s "
+              f"({self.num_files / extract_dur:.0f} files/sec)")
+        if total_dropped:
+            print(f"Dropped {total_dropped:,} files:")
+            for reason, count in self.drop_reasons.most_common():
+                print(f"  {count:>6,}  {reason}")
+        print(f"Output: {basename}.parquet")
 
 
 if __name__ == "__main__":
-    convert(sys.argv[1])
+    TarToParquetConverter(sys.argv[1]).convert()

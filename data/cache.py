@@ -9,7 +9,7 @@ import pandas as pd
 import subprocess
 import tempfile
 
-YEARS_AVAILABLE = (2021, 2022, 2023, 2024)
+YEARS_AVAILABLE = (2021, 2022, 2023, 2024, 2025)
 BASE_URL = "https://sondesearch.lectrobox.com/vault/sonde-summaries/parquet/"
 FILENAME_TEMPLATE = "sonde-summaries-{year}.parquet"
 

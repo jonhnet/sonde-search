@@ -51,7 +51,7 @@ you prefer to run the calendar-generator on your own computer, the code is
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
-<div style="margin-top: 30px; margin-bottom: 20px;">
+<div id="generate_row" style="margin-top: 30px; margin-bottom: 20px;">
   <button type="button" id="generate_button" class="ladda-button" data-style="slide-right" onclick="generateCalendar()">Generate Calendar</button>
   <span id="status_message" style="margin-left: 15px;"></span>
 </div>
@@ -96,7 +96,7 @@ you prefer to run the calendar-generator on your own computer, the code is
     l.start();
 
     // Hide map and clear previous results
-    $('#map').hide();
+    $('#map').css('visibility', 'hidden');
     $('#status_message').html('');
     $('#result_area').html('');
 
@@ -117,9 +117,10 @@ you prefer to run the calendar-generator on your own computer, the code is
         return response.blob();
       })
       .then(blob => {
-        // Stop the spinner and hide the generate button
+        // Stop the spinner, fully remove the map and hide the generate button
         l.stop();
-        $('#generate_button').hide();
+        $('#map').hide();
+        $('#generate_row').hide();
 
         // Create an object URL for the image
         const imageUrl = URL.createObjectURL(blob);
@@ -141,15 +142,15 @@ you prefer to run the calendar-generator on your own computer, the code is
         // Stop the spinner
         l.stop();
 
-        $('#map').show();
+        $('#map').css('visibility', 'visible');
         $('#status_message').html('<span style="color: red;">Error: ' + error.message + '</span>');
         $('#result_area').html('');
       });
   }
 
   function resetMap() {
-    $('#map').show();
-    $('#generate_button').show();
+    $('#map').css('visibility', 'visible').show();
+    $('#generate_row').show();
     $('#result_area').html('');
     $('#status_message').html('');
   }

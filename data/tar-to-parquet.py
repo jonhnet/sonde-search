@@ -123,8 +123,12 @@ class TarToParquetConverter:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
 
         df['datetime'] = pd.to_datetime(
-            df['datetime'], format='ISO8601', utc=True
+            df['datetime'], format='ISO8601', utc=True, errors='coerce'
         )
+        num_bad_dt = df['datetime'].isna().sum()
+        if num_bad_dt > 0:
+            df = df.dropna(subset=['datetime'])
+            self.drop_reasons['unparseable datetime'] = int(num_bad_dt)
 
         # Drop sonde-reuse records: files where the time span between
         # records exceeds 24 hours indicate a sonde heard again days/months

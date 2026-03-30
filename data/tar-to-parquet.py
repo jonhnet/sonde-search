@@ -80,13 +80,6 @@ class TarToParquetConverter:
 
                 self.num_files += 1
 
-                if self.num_files % 10000 == 0:
-                    dur = time.time() - start_time
-                    print(f"{self.num_files:>7,} files  "
-                          f"{self.num_recs:>7,} records  "
-                          f"{dur:>5.1f}s  "
-                          f"{self.num_files / dur:>7,.0f} files/sec")
-
                 try:
                     j = json.load(archive.extractfile(member))
                 except json.decoder.JSONDecodeError:
@@ -100,7 +93,15 @@ class TarToParquetConverter:
                     self.num_recs += 1
                     yield rec
 
+                if self.num_files % 10000 == 0:
+                    dur = time.time() - start_time
+                    print(f"{self.num_files:>7,} files  "
+                          f"{self.num_recs:>7,} records  "
+                          f"{dur:>5.1f}s  "
+                          f"{self.num_files / dur:>7,.0f} files/sec")
+
     def convert(self):
+        print(f"Converting {self.infilename}")
         start_time = time.time()
         df = pd.DataFrame(self._get_recs_from_tar())
         extract_dur = time.time() - start_time
@@ -151,5 +152,15 @@ class TarToParquetConverter:
         print(f"Output: {basename}.parquet")
 
 
+def main():
+    if len(sys.argv) < 2:
+        print(f"Usage: {sys.argv[0]} <input.tgz> [input2.tgz ...]",
+              file=sys.stderr)
+        sys.exit(1)
+
+    for infilename in sys.argv[1:]:
+        TarToParquetConverter(infilename).convert()
+
+
 if __name__ == "__main__":
-    TarToParquetConverter(sys.argv[1]).convert()
+    main()

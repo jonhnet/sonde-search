@@ -245,9 +245,7 @@ function process_config(config) {
         row.append($('<td class="text-center">').html(del_outer_button));
 
         // map
-        let link = "../map/?lat=" + this['lat'];
-        link += "&lon=" + this['lon'];
-        link += "&r=" + mi_to_m(this['max_distance_mi']);
+        let link = `../map/?lat=${this['lat']}&lon=${this['lon']}&r=${mi_to_m(this['max_distance_mi'])}`;
         let map_inner_button = $('<img src="/images/map-color.png" width="32" alt="Map" style="cursor: pointer"/>');
         map_inner_button.click(function() { window.open(link, 'Notification Area', 'width=600,height=600')})
         row.append($('<td class="text-center">').html(map_inner_button));
@@ -465,7 +463,7 @@ function subscribe() {
         },
         error: function(jqXHR, textStatus, errorThrown) {
             l.stop();
-            $('#subscribe_result').html("<p>We're sorry—there was an error trying to sign up. Please try again.</p><p>Error: <tt>" + jqXHR.responseText + "</tt></p>");
+            $('#subscribe_result').html(`<p>We're sorry—there was an error trying to sign up. Please try again.</p><p>Error: <tt>${jqXHR.responseText}</tt></p>`);
             $('#subscribe_result').css("visibility", "visible");
         }
     });

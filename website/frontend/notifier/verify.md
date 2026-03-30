@@ -26,9 +26,9 @@ function OnLoadTrigger() {
 {% endif %}
 
     if (!pending_token) {
-        statusDiv.innerHTML = '<p style="color: red;">Verification failed.</p>' +
-            '<p>This can happen if you opened the verification link in a different browser than the one you used to sign up.</p>' +
-            '<p><a href="../signup/">Please sign up again</a></p>';
+        statusDiv.innerHTML = `<p style="color: red;">Verification failed.</p>
+            <p>This can happen if you opened the verification link in a different browser than the one you used to sign up.</p>
+            <p><a href="../signup/">Please sign up again</a></p>`;
         return;
     }
 
@@ -65,14 +65,14 @@ function OnLoadTrigger() {
             // Redirect to manage page
             window.location.href = window.location.origin + window.location.pathname + '../manage/';
         } else {
-            statusDiv.innerHTML = '<p style="color: red;">Verification failed. Please try signing up again.</p>' +
-                '<p><a href="../signup/">Go to signup page</a></p>';
+            statusDiv.innerHTML = `<p style="color: red;">Verification failed. Please try signing up again.</p>
+                <p><a href="../signup/">Go to signup page</a></p>`;
         }
     }).catch(function(error) {
         console.error('Verification error:', error);
-        statusDiv.innerHTML = '<p style="color: red;">Verification failed: ' + (error.message || 'Unknown error') + '</p>' +
-            '<p>This can happen if you opened the verification link in a different browser than the one you used to sign up.</p>' +
-            '<p><a href="../signup/">Please sign up again</a></p>';
+        statusDiv.innerHTML = `<p style="color: red;">Verification failed: ${error.message || 'Unknown error'}</p>
+            <p>This can happen if you opened the verification link in a different browser than the one you used to sign up.</p>
+            <p><a href="../signup/">Please sign up again</a></p>`;
     });
 }
 </script>

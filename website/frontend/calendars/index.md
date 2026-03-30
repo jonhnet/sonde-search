@@ -143,7 +143,7 @@ you prefer to run the calendar-generator on your own computer, the code is
         l.stop();
 
         $('#map').css('visibility', 'visible');
-        $('#status_message').html('<span style="color: red;">Error: ' + error.message + '</span>');
+        $('#status_message').html(`<span style="color: red;">Error: ${error.message}</span>`);
         $('#result_area').html('');
       });
   }

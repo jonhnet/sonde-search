@@ -9,9 +9,13 @@ folium
 geocoder
 geographiclib
 geopandas
+matplotlib
+numpy
 pandas
+Pillow
 pyarrow
 pyproj
+requests
 simplekml
 rasterio
 sondehub

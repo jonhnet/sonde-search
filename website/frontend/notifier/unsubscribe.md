@@ -43,8 +43,6 @@ title: "Sonde Email Notifier — Unsubscribe"
 
 
 <script>
-let base_url = "https://api.sondesearch.lectrobox.com/api/v2/";
-
 function process_failure() {
     $('#loading').attr('hidden', true);
     $('#failure_message').attr('hidden', false);
@@ -52,7 +50,7 @@ function process_failure() {
 
 function process_success_result(result) {
     if (!result['success'] == true) {
-        process_failure_result();
+        process_failure();
         return;
     }
 
@@ -69,9 +67,9 @@ function OnLoadTrigger() {
     let searchParams = new URLSearchParams(window.location.search);
     var uuid = searchParams.get('uuid');
 
-    $.ajax({
+    SondeSearchAPI.ajax({
         method: 'POST',
-        url: base_url + 'oneclick_unsubscribe',
+        endpoint: 'oneclick_unsubscribe',
         data: {
             'uuid': uuid,
         },

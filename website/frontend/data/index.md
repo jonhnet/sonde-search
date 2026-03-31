@@ -42,8 +42,8 @@ I've broken the summary data into files per year for easier downloading:
 ## Example Usage
 
 Python's popular data science library [Pandas](https://pandas.pydata.org/) is a
-great way to explore the data. For example, to see how many launches there were
-in 2022:
+great way to explore the data. For example, to see how many unique sondes were
+reported in 2022:
 
 ```python
 In [1]: import pandas as pd
@@ -53,7 +53,10 @@ In [2]: df = pd.read_parquet("sonde-summaries-2022.parquet")
 In [3]: df['serial'].nunique()
 Out[3]: 140629
 ```
-The `datetime` column lets you see how many launches are in the dataset broken down by month:
+
+Each sonde has 3 rows in the dataset: the first, highest, and last data points
+reported to SondeHub. The `datetime` column lets you see how many launches there
+were broken down by month:
 
 ```python
 In [4]: launches = df.groupby('serial').first()
@@ -75,15 +78,92 @@ datetime
 12    12128
 Name: count, dtype: int64
 ```
-Line 4 takes just one record per serial number - recall there are at least 3
-(and possibly more) rows in the dataset per serial number giving the first,
-highest and last data points for each flight fed to SondeHub.
 
-Line 5 takes the year out of the `datetime` field, uses the Pandas
-`value_counts()` function to count how many times each year appears, then sorts
-the months numerically.
+## Python Library (optional)
 
-There are endless other ways Pandas can be used to analyze sonde data. For some
-other examples, see my code on GitHub that [draws a landing
-calendar](https://github.com/jonhnet/sonde-search/blob/main/analyzers/landings-by-season.py)
-showing where sondes tend to land each month.
+The parquet files above can be used directly with any language or tool that
+supports parquet. But if you'd like some convenience, the [sonde-search
+repo](https://github.com/jonhnet/sonde-search) includes a small Python
+library that automatically downloads, caches, and concatenates all available
+years of data for you.
+
+### Loading the data
+
+```python
+from data.cache import get_sonde_summaries_as_dataframe
+
+# Load all years, all columns
+df = get_sonde_summaries_as_dataframe()
+```
+
+The parquet files contain over 50 columns, but most analyses only need a few.
+Pass a `columns` parameter to load only what you need --- this is much faster
+and uses far less memory:
+
+```python
+# Load only the columns needed for landing analysis
+df = get_sonde_summaries_as_dataframe(
+    columns=['serial', 'frame', 'lat', 'lon', 'alt', 'datetime']
+)
+```
+
+### Filtering to real flights
+
+The raw data includes ground-based transmitters, bench tests, and other
+non-flights. The `filter_real_flights` function keeps only sondes that reached
+at least 5,000m altitude and have started descending:
+
+```python
+from lib.data_utils import filter_real_flights, get_landing_rows
+
+df = get_sonde_summaries_as_dataframe(
+    columns=['serial', 'frame', 'lat', 'lon', 'alt', 'datetime']
+)
+
+# Remove ground tests and non-flights
+df = filter_real_flights(df)
+```
+
+### Getting landing positions
+
+Each sonde has multiple rows. To get just the landing position (the last
+telemetry point received), use `get_landing_rows`:
+
+```python
+# One row per sonde: the last point received
+landings = get_landing_rows(df)
+```
+
+### Putting it all together
+
+Here's a complete example that finds all sondes that landed within 50km
+of a given location:
+
+```python
+from geographiclib.geodesic import Geodesic
+from data.cache import get_sonde_summaries_as_dataframe
+from lib.data_utils import filter_real_flights, get_landing_rows
+
+df = get_sonde_summaries_as_dataframe(
+    columns=['serial', 'frame', 'lat', 'lon', 'alt', 'datetime']
+)
+df = filter_real_flights(df)
+landings = get_landing_rows(df)
+
+# Find landings within 50km of Seattle (47.6, -122.3)
+home_lat, home_lon = 47.6, -122.3
+landings['dist_km'] = landings.apply(
+    lambda r: Geodesic.WGS84.Inverse(home_lat, home_lon, r['lat'], r['lon'])['s12'] / 1000,
+    axis=1,
+)
+nearby = landings[landings['dist_km'] < 50].sort_values('dist_km')
+print(f"{len(nearby)} sondes landed within 50km")
+print(nearby[['serial', 'datetime', 'lat', 'lon', 'dist_km']].head(10))
+```
+
+For more examples, see the
+[analyzers](https://github.com/jonhnet/sonde-search/tree/main/analyzers)
+directory on GitHub, which includes code for generating [landing
+calendars](https://github.com/jonhnet/sonde-search/blob/main/analyzers/landings-by-month.py)
+and
+[heatmaps](https://github.com/jonhnet/sonde-search/blob/main/analyzers/landings-heatmap.py).

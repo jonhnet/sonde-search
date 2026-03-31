@@ -45,7 +45,7 @@ Python's popular data science library [Pandas](https://pandas.pydata.org/) is a
 great way to explore the data. For example, to see how many launches there were
 in 2022:
 
-```
+```python
 In [1]: import pandas as pd
 
 In [2]: df = pd.read_parquet("sonde-summaries-2022.parquet")
@@ -55,7 +55,7 @@ Out[3]: 140629
 ```
 The `datetime` column lets you see how many launches are in the dataset broken down by month:
 
-```
+```python
 In [4]: launches = df.groupby('serial').first()
 
 In [5]: launches['datetime'].dt.month.value_counts().sort_index()

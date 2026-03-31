@@ -41,14 +41,22 @@ CALENDAR_ROWS = 4
 _LANDING_DATA_COLUMNS = ['serial', 'frame', 'lat', 'lon', 'alt', 'datetime']
 
 
-def _get_landing_data():
-    """Load and prepare sonde landing data.
+def _get_landing_data(bottom_lat, left_lon, top_lat, right_lon):
+    """Load and prepare sonde landing data for a geographic region.
 
-    Only reads the columns needed for calendar generation, filters to real
-    flights, and reduces to landing rows (last frame per sonde) to minimize
-    memory usage.
+    Filters geographically first (cheap) to reduce the dataset before
+    running the more expensive flight validation and landing extraction.
     """
     df = get_sonde_summaries_as_dataframe(columns=_LANDING_DATA_COLUMNS)
+
+    # Geographic filter first — much cheaper than groupby operations,
+    # and dramatically reduces the dataset for the steps that follow
+    df = df.loc[
+        (df['lat'] >= bottom_lat)
+        & (df['lat'] <= top_lat)
+        & (df['lon'] >= left_lon)
+        & (df['lon'] <= right_lon)
+    ]
 
     # Filter out ground tests and non-flights
     df = filter_real_flights(df)
@@ -88,11 +96,11 @@ def generate_calendar(bottom_lat, left_lon, top_lat, right_lon, format='png'):
     gdf = None
 
     try:
-        # Load and prepare landing data
-        df = _get_landing_data()
+        # Load landing data, already filtered to geographic bounds
+        df = _get_landing_data(bottom_lat, left_lon, top_lat, right_lon)
 
-        # Filter to landings within bounds and free the full dataset
-        gdf = _filter_and_project(df, bottom_lat, left_lon, top_lat, right_lon)
+        # Project to Web Mercator for map rendering
+        gdf = _project(df)
         df = None
 
         # Annotate with month if not already present
@@ -174,20 +182,12 @@ def _composite_grid(images, format):
     return result
 
 
-def _filter_and_project(df, bottom_lat, left_lon, top_lat, right_lon):
-    """Filter dataframe to bounds and convert to geopandas with Web Mercator projection."""
-    # Filter to geographic bounds
-    filtered = df.loc[
-        (df['lat'] >= bottom_lat)
-        & (df['lat'] <= top_lat)
-        & (df['lon'] >= left_lon)
-        & (df['lon'] <= right_lon)
-    ]
-
+def _project(df):
+    """Convert dataframe to geopandas with Web Mercator projection."""
     # Convert to geodataframe
     gdf = geopandas.GeoDataFrame(
-        filtered,
-        geometry=geopandas.points_from_xy(filtered.lon, filtered.lat)
+        df,
+        geometry=geopandas.points_from_xy(df.lon, df.lat)
     )
 
     # Reproject from WGS84 to Web Mercator

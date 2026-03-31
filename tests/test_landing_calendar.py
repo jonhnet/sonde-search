@@ -123,12 +123,12 @@ class TestGenerateCalendarToFile:
 
 class TestRenderOneMonth:
     def test_returns_pil_image(self):
-        from lib.landing_calendar import _render_one_month, _filter_and_project
+        from lib.landing_calendar import _render_one_month, _project
 
         df = _make_test_dataframe()
         df['datetime'] = pd.to_datetime(df['datetime'])
         df['month'] = df['datetime'].dt.month
-        gdf = _filter_and_project(df, 46, -123, 48, -121)
+        gdf = _project(df)
 
         month_data = gdf.loc[gdf.month == 1]
         img = _render_one_month(month_data, 'January', gdf.crs)
@@ -137,12 +137,13 @@ class TestRenderOneMonth:
         assert img.width > 0 and img.height > 0
 
     def test_empty_month_returns_image(self):
-        from lib.landing_calendar import _render_one_month, _filter_and_project
+        from lib.landing_calendar import _render_one_month, _project
 
         df = _make_test_dataframe()
         df['datetime'] = pd.to_datetime(df['datetime'])
         df['month'] = df['datetime'].dt.month
-        gdf = _filter_and_project(df, 0, 0, 1, 1)  # No data here
+        df = df.iloc[0:0]  # empty
+        gdf = _project(df)
 
         img = _render_one_month(gdf, 'January', gdf.crs)
 
@@ -180,35 +181,34 @@ class TestCompositeGrid:
         assert result.height == 100 * CALENDAR_ROWS
 
 
-class TestFilterAndProject:
-    def test_filters_to_bounds(self):
-        from lib.landing_calendar import _filter_and_project
-
-        df = _make_test_dataframe()
-        df['datetime'] = pd.to_datetime(df['datetime'])
-
-        gdf = _filter_and_project(df, 46.5, -122.5, 47.15, -121.5)
-
-        # Some points should match, but not all
-        assert len(gdf) > 0
-        assert len(gdf) < len(df)
-
-    def test_empty_result(self):
-        from lib.landing_calendar import _filter_and_project
-
-        df = _make_test_dataframe()
-        df['datetime'] = pd.to_datetime(df['datetime'])
-
-        gdf = _filter_and_project(df, 0, 0, 1, 1)
-
-        assert len(gdf) == 0
-
+class TestProject:
     def test_output_is_web_mercator(self):
-        from lib.landing_calendar import _filter_and_project
+        from lib.landing_calendar import _project
 
         df = _make_test_dataframe()
         df['datetime'] = pd.to_datetime(df['datetime'])
 
-        gdf = _filter_and_project(df, 46, -123, 48, -121)
+        gdf = _project(df)
 
         assert gdf.crs.to_epsg() == 3857
+
+    def test_preserves_rows(self):
+        from lib.landing_calendar import _project
+
+        df = _make_test_dataframe()
+        df['datetime'] = pd.to_datetime(df['datetime'])
+
+        gdf = _project(df)
+
+        assert len(gdf) == len(df)
+
+    def test_empty_dataframe(self):
+        from lib.landing_calendar import _project
+
+        df = _make_test_dataframe()
+        df['datetime'] = pd.to_datetime(df['datetime'])
+        df = df.iloc[0:0]
+
+        gdf = _project(df)
+
+        assert len(gdf) == 0

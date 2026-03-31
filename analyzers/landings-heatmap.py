@@ -23,7 +23,7 @@ EXTRA_STYLE = branca.element.Element(
 def draw_map(df, name, **kwargs):
     # Draw heatmap
     fmap = folium.Map(**kwargs)
-    hm = HeatMap(df[["lat", "lon"]])
+    hm = HeatMap(df[["lat", "lon"]], radius=10, blur=8, max_zoom=13)
     hm.add_to(fmap)
     fmap.get_root().header.add_child(EXTRA_STYLE)
     fmap.save(name)

@@ -8,6 +8,7 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from data.cache import get_sonde_summaries_as_dataframe
+from lib.data_utils import filter_real_flights, get_landing_rows
 
 pd.options.mode.copy_on_write = True
 
@@ -22,10 +23,17 @@ def get_near_pairs(df, i):
 
 
 def get_close_landings(lat_min, lat_max, lon_min, lon_max):
-    all = get_sonde_summaries_as_dataframe(columns=["serial", "frame", "datetime", "lat", "lon"])
-    landings = all.loc[all.groupby("serial")["frame"].idxmax()]
-    near = landings.loc[(landings.lat >= lat_min) & (landings.lat <= lat_max)]
-    near = near.loc[(near.lon >= lon_min) & (near.lon < lon_max)]
+    df = get_sonde_summaries_as_dataframe(
+        columns=["serial", "frame", "datetime", "lat", "lon", "alt"]
+    )
+
+    # Geographic filter first, then expensive flight validation
+    df = df.loc[
+        (df.lat >= lat_min) & (df.lat <= lat_max)
+        & (df.lon >= lon_min) & (df.lon < lon_max)
+    ]
+    df = filter_real_flights(df)
+    near = get_landing_rows(df)
 
     dfs = []
 

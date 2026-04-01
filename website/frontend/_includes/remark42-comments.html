@@ -1,8 +1,8 @@
 <script>
   var remark_config = {
     host: 'https://api.lectrobox.com/remark42',
-    site_id: 'sondesearch',
-    url: '{{ include.url | default: page.url | absolute_url }}',
+    site_id: 'lectrobox',
+    url: 'https://sondesearch.lectrobox.com{{ page.url }}',
     theme: 'light',
     components: ['embed'],
   };

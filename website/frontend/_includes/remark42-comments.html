@@ -2,7 +2,7 @@
   var remark_config = {
     host: 'https://api.lectrobox.com/remark42',
     site_id: 'lectrobox',
-    url: 'https://sondesearch.lectrobox.com{{ page.url }}',
+    url: '{{ page.url | absolute_url }}',
     theme: 'light',
     components: ['embed'],
   };

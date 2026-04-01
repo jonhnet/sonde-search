@@ -2,6 +2,7 @@
 layout: page-fullwidth
 title: "Sonde Landing Heatmaps"
 footer: true
+comments: true
 ---
 
 <div class="lec-right-image">

@@ -2,6 +2,7 @@
 layout: page-fullwidth
 title: "Radiosonde Antenna with 3D Printed Frame"
 footer: true
+comments: true
 ---
 
 Home radiosonde receive sites need a good antenna. Most hobbyists build their

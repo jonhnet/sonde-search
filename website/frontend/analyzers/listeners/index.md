@@ -2,6 +2,7 @@
 layout: page-fullwidth
 title: "Sonde Listener Analysis"
 footer: true
+comments: true
 ---
 
 This tool analyzes which sonde listening stations were able to hear a

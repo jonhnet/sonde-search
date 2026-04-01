@@ -2,6 +2,7 @@
 layout: page-fullwidth
 title: "Sonde Landing Calendars"
 footer: true
+comments: true
 ---
 
 <div class="lec-right-image">

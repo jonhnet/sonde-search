@@ -2,6 +2,7 @@
 layout: page-fullwidth
 title: "Our First Find"
 footer: true
+comments: true
 ---
 
 *December 10, 2023*

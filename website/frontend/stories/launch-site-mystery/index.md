@@ -2,6 +2,7 @@
 layout: page-fullwidth
 title: "Finding a Mystery Launch Site"
 footer: true
+comments: true
 ---
 
 *January 28, 2024*

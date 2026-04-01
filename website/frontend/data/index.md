@@ -2,6 +2,7 @@
 layout: page-fullwidth
 title: "Sonde Raw Data"
 footer: true
+comments: true
 ---
 
 The historical maps on this site, such as the [heatmaps](/heatmaps) and

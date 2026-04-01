@@ -2,6 +2,7 @@
 layout: page-fullwidth
 title: "Sonde Data KML Converter"
 footer: true
+comments: true
 ---
 
 {% include right-image.html

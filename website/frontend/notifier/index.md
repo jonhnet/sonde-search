@@ -2,6 +2,7 @@
 layout: page-fullwidth
 title: "Radiosonde (Weather Balloon) Email Notifier"
 footer: true
+comments: true
 ---
 
 [Sign up here](manage) to receive email notifications when a radiosonde

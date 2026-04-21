@@ -1,4 +1,5 @@
 AltAzRange
+aprslib
 boto3
 cherrypy
 contextily
@@ -15,6 +16,9 @@ pandas
 Pillow
 pyarrow
 pyproj
+pytest
+pytest-asyncio
+pyyaml
 requests
 simplekml
 rasterio

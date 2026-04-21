@@ -1,0 +1,18 @@
+[Unit]
+Description=APRS Backhaul - Pi RF Gateway (auto_rx to Direwolf KISS)
+After=network-online.target direwolf.service
+Wants=network-online.target
+Requires=direwolf.service
+StartLimitIntervalSec=0
+
+[Service]
+Restart=always
+RestartSec=30
+User=pi
+WorkingDirectory=/opt/aprs-backhaul
+ExecStart=/usr/bin/python3 -m pi.aprs_pi_gateway --config /etc/aprs-backhaul/pi.yaml
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

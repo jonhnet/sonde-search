@@ -1,0 +1,35 @@
+# Copy to /etc/aprs-backhaul/pi.yaml and fill in your callsign.
+
+# Amateur radio callsign of this RF gateway. Required.
+# The APRS SSID is hard-coded to -12 (one-way trackers) in aprs_pi_gateway.py.
+callsign: N0CALL
+
+# UDP port on which radiosonde_auto_rx broadcasts PAYLOAD_SUMMARY.
+# Set `payload_summary_port = 55673` in station.cfg under [oziplotter].
+udp_port: 55673
+
+# Direwolf KISS TCP interface. Default is Direwolf's out-of-the-box setting.
+kiss_host: 127.0.0.1
+kiss_port: 8001
+
+# APRS destination (tocall). The cloud-side listener filters on this.
+tocall: APZSDH
+
+# Minimum seconds between object beacons per sonde serial.
+min_interval_sec: 120
+
+# End-of-flight: after this many consecutive silent windows the per-sonde
+# task emits the final-position actions below and retires.
+idle_windows_before_eof: 3
+
+# End-of-flight actions: send this many copies of the last-known position,
+# spaced `final_spacing_sec` apart, then a killed-object packet (live=_).
+final_redundancy: 2
+final_spacing_sec: 10
+
+# APRS digipeater path. Empty list for direct, no digipeater.
+path:
+  - WIDE1-1
+  - WIDE2-1
+
+log_level: INFO

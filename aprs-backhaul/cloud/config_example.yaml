@@ -1,0 +1,30 @@
+# Copy to /etc/aprs-backhaul/cloud.yaml and fill in the required fields.
+
+# APRS-IS login. Set passcode to -1 for listener-only access.
+aprsis_callsign: N0CALL
+aprsis_passcode: -1
+aprsis_host: rotate.aprs2.net
+aprsis_port: 14580
+
+# Subscribe to packets whose AX.25 destination (tocall) matches this prefix.
+# The pi side transmits with destination APZSDH.
+aprsis_filter: u/APZSDH
+tocall: APZSDH
+
+# The uploader_callsign credited to SondeHub is derived per-packet from
+# the APRS source callsign (minus SSID) + this suffix.
+# e.g. "N3UUO-10" -> "N3UUO_APRS".
+uploader_callsign_suffix: _APRS
+
+# Optional metadata about the cloud relay host (not the RF receive site).
+# uploader_position: [47.6062, -122.3321, 50.0]
+# uploader_antenna: "Cloud relay (APRS-IS listener)"
+
+# Every successfully-parsed reception is appended here as a JSONL record,
+# regardless of whether it's forwarded to SondeHub.
+reception_log_path: /var/log/aprs-backhaul/receptions.jsonl
+
+dedup_ttl_sec: 3600
+upload_batch_max: 20
+upload_interval_sec: 2.0
+log_level: INFO

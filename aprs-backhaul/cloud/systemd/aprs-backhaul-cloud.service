@@ -1,0 +1,19 @@
+[Unit]
+Description=APRS Backhaul - Cloud Gateway (APRS-IS to SondeHub)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Restart=always
+RestartSec=30
+User=aprs-backhaul
+WorkingDirectory=/opt/aprs-backhaul
+ExecStart=/usr/bin/python3 -m cloud.aprs_cloud_gateway --config /etc/aprs-backhaul/cloud.yaml
+# To enable SondeHub uploading, change the above to:
+#   ExecStart=/usr/bin/python3 -m cloud.aprs_cloud_gateway --config /etc/aprs-backhaul/cloud.yaml --sondehub-upload
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

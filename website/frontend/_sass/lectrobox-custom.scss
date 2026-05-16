@@ -63,3 +63,14 @@ pre code {
 h2 {
     margin: 0;
 }
+
+/* Foundation zeroes the bottom margin of nested lists, which crowds
+   anything that follows a nested list inside a list item (e.g. the
+   numbered install steps under a bullet). Restore the normal gap so
+   nested UL/OL breathe like top-level lists do. */
+ul li ul,
+ul li ol,
+ol li ul,
+ol li ol {
+    margin-bottom: $list-margin-bottom;
+}

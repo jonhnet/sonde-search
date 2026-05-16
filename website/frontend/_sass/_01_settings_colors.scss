@@ -122,7 +122,12 @@ $subfooter-link-color: $grey-8;
 /* Code
 ------------------------------------------------------------------- */
 
-$code-background-color: color.scale($secondary-color, $lightness: 70%);
+// Neutral GitHub-style code surface, intentionally NOT derived from the
+// green $secondary-color (a 70%-lightened green read as muddy puke).
+// Single source of truth for inline <code>, indented <pre>, and the
+// .highlight fenced blocks (see _11_syntax-highlighting.scss).
+$code-background-color: #f0f0f0;
+$code-border-color: #d0d7de;
 
 $highlight-background: #ffffff;
 $highlight-comment: #999988;

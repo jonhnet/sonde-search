@@ -3,8 +3,8 @@
 ------------------------------------------------------------------- */
 
 .highlight {
-    background: #f0f0f0;
-    border: 1px solid #d0d7de;
+    background: $code-background-color;
+    border: 1px solid $code-border-color;
     border-radius: 6px;
     overflow-x: auto;
     margin-bottom: 1.25em;

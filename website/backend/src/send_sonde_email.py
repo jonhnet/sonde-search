@@ -384,7 +384,7 @@ class EmailNotifier:
         # Generate map filenames
         t = landing['datetime']
         map_suffix = \
-            f"{sub['uuid_subscription']}/{t.year}/{t.month}/{t.day}-{t.hour}-{landing['lat']}-{landing['lon']}.jpg"
+            f"{sub['uuid_subscription']}/{t.year}/{t.month:02d}/{t.day:02d}-{t.hour:02d}-{landing['lat']}-{landing['lon']}.jpg"
         map_url = os.path.join(EXTERNAL_IMAGES_URL) + map_suffix
         map_local_fn = os.path.join(self.args.external_images_root, map_suffix)
 
@@ -406,7 +406,7 @@ class EmailNotifier:
             if ground_points is not None and len(ground_points) > 0:
                 # Generate filename for ground reception map
                 ground_map_suffix = (
-                    f"{sub['uuid_subscription']}/{t.year}/{t.month}/{t.day}-{t.hour}-"
+                    f"{sub['uuid_subscription']}/{t.year}/{t.month:02d}/{t.day:02d}-{t.hour:02d}-"
                     f"{landing['lat']}-{landing['lon']}-groundreception.jpg"
                 )
                 ground_map_url = os.path.join(EXTERNAL_IMAGES_URL) + ground_map_suffix

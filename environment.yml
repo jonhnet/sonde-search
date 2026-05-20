@@ -69,6 +69,7 @@ dependencies:
   - gflags=2.2.2
   - giflib=5.2.2
   - glog=0.7.1
+  - gunicorn=26.0.0
   - h2=4.3.0
   - hpack=4.1.0
   - hyperframe=6.1.0

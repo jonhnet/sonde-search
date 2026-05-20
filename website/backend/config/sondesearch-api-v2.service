@@ -1,0 +1,15 @@
+[Unit]
+Description=Sondesearch API
+StartLimitIntervalSec=0
+
+[Service]
+Restart=always
+RestartSec=30
+Environment=AWS_PROFILE=sonde-notifier
+Environment=SECRET_NAME=sondesearch/notifier
+WorkingDirectory=/home/jelson/projects/sonde-search/website/backend
+ExecStart=/home/jelson/miniforge3/envs/sondesearch/bin/gunicorn --config config/gunicorn-v2.conf.py src.v2:application
+User=jelson
+
+[Install]
+WantedBy=multi-user.target

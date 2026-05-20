@@ -21,7 +21,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 # Allow running this file directly from cloud/ — add aprs-backhaul/ (the
-# parent of cloud/) to sys.path so `from lib import ...` works without
+# parent of cloud/) to sys.path so `from aprs_lib import ...` works without
 # the caller having to set PYTHONPATH.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -29,7 +29,7 @@ import aprslib  # noqa: E402
 import requests  # noqa: E402
 import yaml  # noqa: E402
 
-from lib import aprs_encoding as ae  # noqa: E402
+from aprs_lib import aprs_encoding as ae  # noqa: E402
 
 log = logging.getLogger("aprs-backhaul-cloud")
 

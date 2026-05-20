@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from lib import aprs_encoding as ae
+from aprs_lib import aprs_encoding as ae
 from helpers import parse_info
 from pi.aprs_pi_gateway import (
     AprsPiGateway,

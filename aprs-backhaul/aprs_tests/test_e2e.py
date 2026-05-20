@@ -23,8 +23,8 @@ from cloud.aprs_cloud_gateway import (
     PacketHandler,
     ReceptionLogger,
 )
-from lib import aprs_encoding as ae
-from lib.auto_rx_udp import listen as udp_listen
+from aprs_lib import aprs_encoding as ae
+from aprs_lib.auto_rx_udp import listen as udp_listen
 from pi.aprs_pi_gateway import AprsPiGateway, Config, KissTncClient
 
 # Short rate-limit so the coalescer's self-scheduling tasks fire within

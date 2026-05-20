@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from lib import aprs_encoding as ae
+from aprs_lib import aprs_encoding as ae
 from helpers import parse_info
 
 

@@ -6,7 +6,7 @@ from unittest import mock
 import pytest
 
 # Add project root to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 
 def test_kml_generator_cli_success():

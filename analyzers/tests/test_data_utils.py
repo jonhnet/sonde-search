@@ -5,7 +5,7 @@ import sys
 
 import pandas as pd
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from lib.data_utils import filter_real_flights, get_landing_rows, MIN_MAX_ALT, MIN_ALT_DROP
 

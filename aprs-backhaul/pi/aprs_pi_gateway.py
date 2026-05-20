@@ -20,14 +20,14 @@ from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Optional
 
 # Allow running this file directly from pi/ — add the aprs-backhaul/ root
-# (parent of pi/) to sys.path so `from lib import ...` works without the
+# (parent of pi/) to sys.path so `from aprs_lib import ...` works without the
 # caller having to set PYTHONPATH.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import yaml  # noqa: E402
 
-from lib import aprs_encoding as ae  # noqa: E402
-from lib.auto_rx_udp import listen as udp_listen  # noqa: E402
+from aprs_lib import aprs_encoding as ae  # noqa: E402
+from aprs_lib.auto_rx_udp import listen as udp_listen  # noqa: E402
 
 log = logging.getLogger("aprs-backhaul-pi")
 

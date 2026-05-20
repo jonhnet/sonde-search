@@ -15,7 +15,7 @@ from cloud.aprs_cloud_gateway import (
     derive_uploader_callsign,
     load_cloud_config,
 )
-from lib import aprs_encoding as ae
+from aprs_lib import aprs_encoding as ae
 
 
 def make_cfg(**overrides) -> CloudConfig:

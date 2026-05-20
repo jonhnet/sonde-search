@@ -14,6 +14,7 @@ import contextily as cx
 import gc
 import geopandas
 import io
+import logging
 import matplotlib
 import matplotlib.pyplot as plt
 import os
@@ -22,6 +23,9 @@ from PIL import Image
 import subprocess
 import sys
 import tempfile
+import time
+
+log = logging.getLogger("landing_calendar")
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from lib.map_utils import setup_contextily_cache
@@ -94,14 +98,19 @@ def generate_calendar(bottom_lat, left_lon, top_lat, right_lon, format='png'):
     """
     df = None
     gdf = None
+    t_total = time.monotonic()
 
     try:
         # Load landing data, already filtered to geographic bounds
+        t0 = time.monotonic()
         df = _get_landing_data(bottom_lat, left_lon, top_lat, right_lon)
+        log.info("load: %.2fs (%d rows)", time.monotonic() - t0, len(df))
 
         # Project to Web Mercator for map rendering
+        t0 = time.monotonic()
         gdf = _project(df)
         df = None
+        log.info("project: %.2fs", time.monotonic() - t0)
 
         # Annotate with month if not already present
         if 'month' not in gdf.columns:
@@ -111,7 +120,10 @@ def generate_calendar(bottom_lat, left_lon, top_lat, right_lon, format='png'):
         month_images = []
         for month in range(12):
             month_data = gdf.loc[gdf.month == month + 1]
+            t0 = time.monotonic()
             img = _render_one_month(month_data, calendar.month_name[month + 1], gdf.crs)
+            log.info("month %02d: %.2fs (%d points)",
+                     month + 1, time.monotonic() - t0, len(month_data))
             month_images.append(img)
 
         # Free the dataframes before compositing
@@ -120,7 +132,11 @@ def generate_calendar(bottom_lat, left_lon, top_lat, right_lon, format='png'):
         gc.collect()
 
         # Composite into a grid
-        return _composite_grid(month_images, format)
+        t0 = time.monotonic()
+        result = _composite_grid(month_images, format)
+        log.info("composite: %.2fs", time.monotonic() - t0)
+        log.info("total: %.2fs", time.monotonic() - t_total)
+        return result
 
     finally:
         df = None
@@ -205,8 +221,10 @@ def _draw_one_map(gdf, ax, title, crs):
     ax.axis('off')
     ax.set_title(title)
 
-    # Add basemap
+    # Add basemap (logged separately — usually the slowest step on cold cache)
+    t0 = time.monotonic()
     cx.add_basemap(ax, crs=crs, source=cx.providers.OpenStreetMap.Mapnik)
+    log.info("  basemap: %.2fs", time.monotonic() - t0)
 
 
 def generate_calendar_to_file(bottom_lat, left_lon, top_lat, right_lon, output_path, format='webp'):
@@ -254,9 +272,14 @@ def generate_calendar_subprocess(bottom_lat, left_lon, top_lat, right_lon, forma
         # but it's in the same conda env so python is in the same directory
         python_exe = os.path.join(os.path.dirname(sys.executable), 'python')
 
+        # Inherit parent's stdout/stderr (don't capture) so subprocess log lines
+        # stream to journald in real time -- survives a mid-render SIGKILL from
+        # gunicorn's worker timeout, where a captured buffer would be lost. `-u`
+        # forces unbuffered output so each log line flushes immediately.
         result = subprocess.run(
             [
                 python_exe,
+                '-u',
                 script_path,
                 '--bottom-lat', str(bottom_lat),
                 '--left-lon', str(left_lon),
@@ -265,13 +288,11 @@ def generate_calendar_subprocess(bottom_lat, left_lon, top_lat, right_lon, forma
                 '--output', output_path,
                 '--format', format,
             ],
-            capture_output=True,
-            text=True,
             cwd=os.path.dirname(os.path.dirname(script_path)),  # Run from repo root
         )
 
         if result.returncode != 0:
-            raise RuntimeError(f"Calendar generation failed: {result.stderr}")
+            raise RuntimeError(f"Calendar generation failed (exit {result.returncode}); see logs")
 
         # Read the result
         with open(output_path, 'rb') as f:
@@ -285,6 +306,11 @@ def generate_calendar_subprocess(bottom_lat, left_lon, top_lat, right_lon, forma
 
 def main():
     """CLI entry point for generating calendars."""
+    logging.basicConfig(
+        level=logging.INFO,
+        stream=sys.stderr,
+        format="%(asctime)s %(name)s %(message)s",
+    )
     parser = argparse.ArgumentParser(description='Generate sonde landing calendar')
     parser.add_argument('--bottom-lat', type=float, required=True, help='Southern boundary latitude')
     parser.add_argument('--left-lon', type=float, required=True, help='Western boundary longitude')

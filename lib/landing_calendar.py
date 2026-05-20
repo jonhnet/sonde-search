@@ -199,8 +199,9 @@ def _project(df):
 
 def _draw_one_map(gdf, ax, title, crs):
     """Draw a single month's map on the given axes."""
-    # Plot landing points
-    gdf.plot(ax=ax)
+    # Plot landing points (skip when empty — geopandas warns on empty plots)
+    if not gdf.empty:
+        gdf.plot(ax=ax)
     ax.axis('off')
     ax.set_title(title)
 

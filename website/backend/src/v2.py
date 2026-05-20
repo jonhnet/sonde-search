@@ -509,7 +509,7 @@ def mount_server_instance(retriever, dev_mode):
         global_config = GlobalConfig(retriever=retriever, dev_mode=dev_mode)
 
     apiserver = SondesearchAPI(global_config)
-    cherrypy.tree.mount(apiserver)
+    cherrypy.tree.mount(apiserver, '/', {'/': {}})
     return apiserver
 
 

@@ -2,7 +2,7 @@ import os
 import sys
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../.."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../.."))
 
 from lib.map_utils import get_elevation, identify_ground_points
 from website.backend.src.util import FakeSondeHub

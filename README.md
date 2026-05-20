@@ -3,7 +3,7 @@ a couple dorks trying to break into the easiest hobby ever
 
 ## Conda environment
 
-The full conda environment is pinned in `environment.yml` (Linux/x86_64).
+The conda environment is pinned in `environment.yml` (versions only, no build hashes — portable across platforms).
 
 Create a fresh env:
 ```bash
@@ -17,7 +17,7 @@ mamba env update -n sondesearch -f environment.yml --prune
 
 After changing deps locally, regenerate the lock and commit it:
 ```bash
-conda env export | sed '/^prefix:/d' > environment.yml
+conda env export --no-builds | sed '/^prefix:/d' > environment.yml
 ```
 
 ## Tests

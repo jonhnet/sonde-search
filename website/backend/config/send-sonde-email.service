@@ -6,4 +6,5 @@ Type=oneshot
 User=jelson
 Environment=AWS_PROFILE=sonde-notifier
 MemoryMax=2G
+SyslogIdentifier=send_sonde_email
 ExecStart=/home/jelson/miniforge3/envs/sondesearch/bin/python -u /home/jelson/projects/sonde-search/website/backend/src/send_sonde_email.py --really-send

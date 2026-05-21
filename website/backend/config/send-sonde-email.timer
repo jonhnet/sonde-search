@@ -1,0 +1,9 @@
+[Unit]
+Description=Hourly send_sonde_email run
+
+[Timer]
+OnCalendar=*-*-* *:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -6,3 +6,6 @@ __pycache__
 .coverage
 htmlcov/
 .pytest_cache/
+
+# local deployment/verification notes; not for the public repo
+LOCAL-STATUS.md

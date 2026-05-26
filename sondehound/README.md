@@ -54,6 +54,12 @@ position on a scrollable map with predicted landing path.
 
 ### Pi
 
+> **Automated path:** [`pi/setup.sh`](pi/README.md) does everything in
+> this section — installs a pinned auto_rx + RTL-SDR, writes the `station.cfg` knobs
+> below, and installs the BLE bridge as a systemd service — on a fresh board. The
+> manual steps below remain as reference / explanation of what the script
+> does.
+
 1. Install radiosonde_auto_rx and verify it's receiving sondes.
 
 2. In auto_rx's `station.cfg`, under `[oziplotter]`:

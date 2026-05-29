@@ -109,14 +109,14 @@ def run_iq_sweep(g: gpp4323.GPP4323, dmm: Optional[dmmlib.Keysight34465A],
         m = measure(g, inp, dmm=dmm)
         iq_ma = m.current * 1000.0
         print(f"  Vin={vin:6.2f} V  ->  Vin_meas={m.voltage:6.3f} V  "
-              f"Iq={iq_ma:8.3f} mA")
+              f"Iq={iq_ma:10.6f} mA")
         writer.writerow({
             'test': 'iq', 'timestamp': now_iso(),
             'vin_set': f'{vin:.4f}', 'iload_set_a': '',
-            'vin_meas': f'{m.voltage:.4f}', 'iin_meas_a': f'{m.current:.6f}',
-            'pin_w': f'{m.power:.6f}',
+            'vin_meas': f'{m.voltage:.6f}', 'iin_meas_a': f'{m.current:.9f}',
+            'pin_w': f'{m.power:.9f}',
             'vout_meas': '', 'iout_meas_a': '', 'pout_w': '',
-            'efficiency': '', 'iq_ma': f'{iq_ma:.4f}',
+            'efficiency': '', 'iq_ma': f'{iq_ma:.6f}',
         })
 
 
@@ -196,19 +196,19 @@ def main() -> None:
     parser.add_argument('--eff-loads', default='0.01,0.02,0.05,0.1,0.2,0.5,1.0',
                         help='Efficiency load currents in amps, comma list '
                              '(default: 0.01,0.02,0.05,0.1,0.2,0.5,1.0)')
-    parser.add_argument('--dmm-host',
+    parser.add_argument('--dmm-host', default='dmm',
                         help='Measure input current with a Keysight 34465A DMM '
                              'at this host (wired in series with the buck '
-                             'input) instead of the GPP4323 (default: GPP4323)')
+                             'input) instead of the GPP4323 (default: dmm)')
     parser.add_argument('--input-ilimit', type=float, default=2.0,
                         help='Source current limit on the input channel, A '
                              '(default: 2.0)')
     parser.add_argument('--settle', type=float, default=2.0,
                         help='Seconds to settle after a setpoint change '
                              '(default: 2.0)')
-    parser.add_argument('--dmm-aperture', type=float, default=0.25,
+    parser.add_argument('--dmm-aperture', type=float, default=0.5,
                         help='DMM integration aperture in seconds; one reading '
-                             'is taken per point (default: 0.25)')
+                             'is taken per point (default: 0.5)')
     parser.add_argument('--output', '-o', default='buck_data.csv',
                         help='Output CSV file (default: buck_data.csv)')
     parser.add_argument('--skip-iq', action='store_true',

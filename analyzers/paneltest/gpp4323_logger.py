@@ -88,6 +88,13 @@ def main():
         help='Sampling rate in Hz (default: 1.0)'
     )
     parser.add_argument(
+        '--load-voltage',
+        type=float,
+        default=12.5,
+        help='CV-load voltage to set on the channel, simulating a battery '
+             '(default: 12.5)'
+    )
+    parser.add_argument(
         '--output',
         '-o',
         help='Output CSV file (default: stdout)'
@@ -117,7 +124,8 @@ def main():
             psu=psu,
             channel=1,
             rate=args.rate,
-            callback=logger.handle_reading
+            callback=logger.handle_reading,
+            load_voltage=args.load_voltage
         )
 
         # Start collection loop (blocking)

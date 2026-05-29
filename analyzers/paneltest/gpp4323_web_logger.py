@@ -197,7 +197,8 @@ def decimate_data(df: pd.DataFrame, window_size: int) -> pd.DataFrame:
     return decimated
 
 
-def data_collection_thread(host: str, port: int, rate: float, store: DataStore) -> None:
+def data_collection_thread(host: str, port: int, rate: float, store: DataStore,
+                           load_voltage: float) -> None:
     """Background thread for data collection with automatic reconnection"""
     RETRY_DELAY = 5  # seconds between reconnection attempts
 
@@ -215,7 +216,8 @@ def data_collection_thread(host: str, port: int, rate: float, store: DataStore) 
                 psu=psu,
                 channel=1,
                 rate=rate,
-                callback=store.handle_reading
+                callback=store.handle_reading,
+                load_voltage=load_voltage
             )
 
             collector.start()
@@ -476,6 +478,13 @@ def main():
         help='Web server port (default: 14005)'
     )
     parser.add_argument(
+        '--load-voltage',
+        type=float,
+        default=12.5,
+        help='CV-load voltage to set on the channel, simulating a battery '
+             '(default: 12.5)'
+    )
+    parser.add_argument(
         '--daemon', '-d',
         action='store_true',
         help='Run as a background daemon (use kill to stop)'
@@ -502,7 +511,7 @@ def main():
     # Start data collection thread
     collection_thread = threading.Thread(
         target=data_collection_thread,
-        args=(args.host, args.port, args.rate, data_store),
+        args=(args.host, args.port, args.rate, data_store, args.load_voltage),
         daemon=True
     )
     collection_thread.start()

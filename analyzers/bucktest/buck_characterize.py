@@ -25,6 +25,8 @@ from typing import Optional, TextIO
 
 sys.path.insert(0, os.path.expanduser('~/projects/gpp4323'))
 import gpp4323
+sys.path.insert(0, os.path.expanduser('~/projects/dmm'))
+import dmmlib
 
 CSV_FIELDS = [
     'test', 'timestamp',
@@ -68,17 +70,14 @@ class Measurement:
     power: float
 
 
-def measure(g: gpp4323.GPP4323, channel: int, samples: int,
-            delay: float) -> Measurement:
-    """Average `samples` readings from one channel into a Measurement."""
-    vsum = isum = 0.0
-    for i in range(samples):
-        d = g.meas().asDict()[channel]
-        vsum += d['voltage']
-        isum += d['current']
-        if i < samples - 1:
-            time.sleep(delay)
-    v, c = vsum / samples, isum / samples
+def measure(g: gpp4323.GPP4323, channel: int,
+            dmm: Optional[dmmlib.Keysight34465A] = None) -> Measurement:
+    """One reading of a channel. Voltage comes from the GPP channel; current
+    from the DMM (in series, integrating over its configured aperture) if
+    given, else from the GPP channel."""
+    d = g.meas().asDict()[channel]
+    v = d['voltage']
+    c = dmm.read() if dmm else d['current']
     return Measurement(v, c, v * c)
 
 
@@ -92,7 +91,8 @@ def prepare(g: gpp4323.GPP4323, args: argparse.Namespace) -> None:
     g.channel(args.load_channel).disable()
 
 
-def run_iq_sweep(g: gpp4323.GPP4323, args: argparse.Namespace, writer) -> None:
+def run_iq_sweep(g: gpp4323.GPP4323, dmm: Optional[dmmlib.Keysight34465A],
+                 args: argparse.Namespace, writer) -> None:
     """Sweep input voltage with the output unloaded, recording input current."""
     print(f"\n=== Iq sweep: Vin {args.iq_vin} (no load) ===")
     inp, load = args.in_channel, args.load_channel
@@ -106,7 +106,7 @@ def run_iq_sweep(g: gpp4323.GPP4323, args: argparse.Namespace, writer) -> None:
     for vin in args.iq_vin_list:
         inp_ch.set_source(vin, args.input_ilimit)
         time.sleep(args.settle)
-        m = measure(g, inp, args.avg, args.avg_delay)
+        m = measure(g, inp, dmm=dmm)
         iq_ma = m.current * 1000.0
         print(f"  Vin={vin:6.2f} V  ->  Vin_meas={m.voltage:6.3f} V  "
               f"Iq={iq_ma:8.3f} mA")
@@ -120,7 +120,8 @@ def run_iq_sweep(g: gpp4323.GPP4323, args: argparse.Namespace, writer) -> None:
         })
 
 
-def run_efficiency_sweep(g: gpp4323.GPP4323, args: argparse.Namespace, writer) -> None:
+def run_efficiency_sweep(g: gpp4323.GPP4323, dmm: Optional[dmmlib.Keysight34465A],
+                         args: argparse.Namespace, writer) -> None:
     """For each input voltage, sweep the output load current and record
     efficiency = Pout / Pin."""
     print(f"\n=== Efficiency: Vin {args.eff_vin}, loads {args.eff_loads} A ===")
@@ -146,8 +147,8 @@ def run_efficiency_sweep(g: gpp4323.GPP4323, args: argparse.Namespace, writer) -
         for iload in args.eff_loads_list:
             load_ch.set_load(cc=iload)
             time.sleep(args.settle)
-            pin = measure(g, inp, args.avg, args.avg_delay)
-            pout = measure(g, load, args.avg, args.avg_delay)
+            pin = measure(g, inp, dmm=dmm)
+            pout = measure(g, load)
             eff = pout.power / pin.power if pin.power > 0 else 0.0
             print(f"  Vin={vin:6.2f} V  Iload={iload * 1000:7.1f} mA  ->  "
                   f"Pin={pin.power:6.3f} W  Pout={pout.power:6.3f} W  "
@@ -186,25 +187,28 @@ def main() -> None:
     parser.add_argument('--load-channel', type=int, default=2,
                         help='Channel loading the buck output, CC mode; '
                              'must be 1 or 2 (default: 2)')
-    parser.add_argument('--iq-vin', default='5:24:1',
+    parser.add_argument('--iq-vin', default='6:18:1',
                         help='Iq input-voltage sweep start:stop:step '
-                             '(default: 5:24:1)')
-    parser.add_argument('--eff-vin', default='6:18:2',
+                             '(default: 6:18:1)')
+    parser.add_argument('--eff-vin', default='8:18:2',
                         help='Efficiency family input voltages start:stop:step '
-                             '(default: 6:18:2)')
+                             '(default: 8:18:2)')
     parser.add_argument('--eff-loads', default='0.01,0.02,0.05,0.1,0.2,0.5,1.0',
                         help='Efficiency load currents in amps, comma list '
                              '(default: 0.01,0.02,0.05,0.1,0.2,0.5,1.0)')
+    parser.add_argument('--dmm-host',
+                        help='Measure input current with a Keysight 34465A DMM '
+                             'at this host (wired in series with the buck '
+                             'input) instead of the GPP4323 (default: GPP4323)')
     parser.add_argument('--input-ilimit', type=float, default=2.0,
                         help='Source current limit on the input channel, A '
                              '(default: 2.0)')
-    parser.add_argument('--settle', type=float, default=0.5,
+    parser.add_argument('--settle', type=float, default=2.0,
                         help='Seconds to settle after a setpoint change '
-                             '(default: 0.5)')
-    parser.add_argument('--avg', type=int, default=3,
-                        help='Readings averaged per measured point (default: 3)')
-    parser.add_argument('--avg-delay', type=float, default=0.05,
-                        help='Delay between averaged readings, s (default: 0.05)')
+                             '(default: 2.0)')
+    parser.add_argument('--dmm-aperture', type=float, default=0.25,
+                        help='DMM integration aperture in seconds; one reading '
+                             'is taken per point (default: 0.25)')
     parser.add_argument('--output', '-o', default='buck_data.csv',
                         help='Output CSV file (default: buck_data.csv)')
     parser.add_argument('--skip-iq', action='store_true',
@@ -225,6 +229,11 @@ def main() -> None:
     csvfile: Optional[TextIO] = None
     try:
         g = gpp4323.GPP4323(host=(args.host, args.port))
+        dmm = dmmlib.Keysight34465A(args.dmm_host) if args.dmm_host else None
+        if dmm:
+            dmm.configure_dc_current(aperture=args.dmm_aperture)
+            print(f"Measuring input current with DMM at {args.dmm_host} "
+                  f"({args.dmm_aperture * 1000:.0f} ms aperture)")
 
         csvfile = open(args.output, 'w', newline='')
         writer = csv.DictWriter(csvfile, fieldnames=CSV_FIELDS)
@@ -234,9 +243,9 @@ def main() -> None:
         prepare(g, args)
 
         if not args.skip_iq:
-            run_iq_sweep(g, args, writer)
+            run_iq_sweep(g, dmm, args, writer)
         if not args.skip_efficiency:
-            run_efficiency_sweep(g, args, writer)
+            run_efficiency_sweep(g, dmm, args, writer)
 
         print("\nDone.")
     except KeyboardInterrupt:

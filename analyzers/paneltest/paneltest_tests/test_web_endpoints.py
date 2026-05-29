@@ -8,7 +8,7 @@ import tempfile
 import os
 from datetime import datetime, timezone
 from gpp4323_web_logger import DataStore, WebServer
-from gpp4323_lib import LoadReading
+from collector import LoadReading
 
 
 @pytest.fixture

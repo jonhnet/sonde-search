@@ -4,12 +4,16 @@ GPP4323 Power Supply Load Logger
 Logs load readings from Channel 1
 """
 
-import time
 import argparse
 import csv
+import os
 import sys
+import time
 from typing import TextIO, Optional, Any
-from gpp4323_lib import GPP4323, DataCollector, LoadReading
+
+sys.path.insert(0, os.path.expanduser('~/projects/gpp4323'))
+import gpp4323
+from collector import DataCollector, LoadReading
 
 
 class SimpleLogger:
@@ -105,13 +109,11 @@ def main():
     # Create logger
     logger = SimpleLogger(output_file=args.output)
 
-    # Connect to power supply
-    psu = GPP4323(args.host, args.port)
+    # Connect to power supply (constructor connects)
+    g = gpp4323.GPP4323(host=(args.host, args.port))
     collector: Optional[DataCollector] = None
 
     try:
-        psu.connect()
-
         # Open output file
         logger.open_output()
 
@@ -121,8 +123,7 @@ def main():
 
         # Create and start collector with logger callback
         collector = DataCollector(
-            psu=psu,
-            channel=1,
+            g.channel(1),
             rate=args.rate,
             callback=logger.handle_reading,
             load_voltage=args.load_voltage
@@ -144,7 +145,6 @@ def main():
     finally:
         if collector:
             collector.stop()
-        psu.disconnect()
         logger.close_output()
 
 

@@ -9,7 +9,7 @@ import os
 from datetime import datetime, timezone
 import pandas as pd
 from gpp4323_web_logger import DataStore, decimate_data
-from gpp4323_lib import LoadReading
+from collector import LoadReading
 
 
 def test_decimate_data_no_decimation():

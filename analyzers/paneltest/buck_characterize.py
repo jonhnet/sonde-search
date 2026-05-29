@@ -16,13 +16,15 @@ Plot the result with buck_plot.py.
 
 import argparse
 import csv
+import os
 import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional, TextIO, Any
+from typing import Optional, TextIO
 
-from gpp4323_lib import GPP4323
+sys.path.insert(0, os.path.expanduser('~/projects/gpp4323'))
+import gpp4323
 
 CSV_FIELDS = [
     'test', 'timestamp',
@@ -66,17 +68,17 @@ class Measurement:
     power: float
 
 
-def measure(psu: GPP4323, channel: int, samples: int, delay: float) -> Measurement:
-    """Average a few readings from a channel into one measurement."""
+def measure(g: gpp4323.GPP4323, channel: int, samples: int,
+            delay: float) -> Measurement:
+    """Average `samples` readings from one channel into a Measurement."""
     vsum = isum = 0.0
     for i in range(samples):
-        v, c, _ = psu.get_channel_load(channel=channel)
-        vsum += v
-        isum += c
+        d = g.meas().asDict()[channel]
+        vsum += d['voltage']
+        isum += d['current']
         if i < samples - 1:
             time.sleep(delay)
-    v = vsum / samples
-    c = isum / samples
+    v, c = vsum / samples, isum / samples
     return Measurement(v, c, v * c)
 
 
@@ -84,34 +86,27 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def prepare(psu: GPP4323, args: argparse.Namespace) -> None:
-    """Put both channels into the modes this program uses: the input channel
-    as a source, the load channel off. Outputs are enabled later per sweep."""
-    psu.set_output(args.in_channel, False)
-    psu.set_output(args.load_channel, False)
-    psu.set_source_mode(args.in_channel)
-    print(f"CH{args.in_channel} mode: {psu.get_mode(args.in_channel)} (input/source)")
+def prepare(g: gpp4323.GPP4323, args: argparse.Namespace) -> None:
+    """All outputs off before anything is configured or energized."""
+    g.channel(args.in_channel).disable()
+    g.channel(args.load_channel).disable()
 
 
-def run_iq_sweep(psu: GPP4323, args: argparse.Namespace,
-                 writer: Any) -> None:
+def run_iq_sweep(g: gpp4323.GPP4323, args: argparse.Namespace, writer) -> None:
     """Sweep input voltage with the output unloaded, recording input current."""
     print(f"\n=== Iq sweep: Vin {args.iq_vin} (no load) ===")
     inp, load = args.in_channel, args.load_channel
 
-    # True no-load: take the load channel out of load mode and open its output.
-    psu.set_load_cc(load, False)
-    psu.set_output(load, False)
-
-    psu.set_current(inp, args.input_ilimit)
-    psu.set_voltage(inp, args.iq_vin_list[0])
-    psu.set_output(inp, True)
+    g.channel(load).disable()  # true no-load: output open
+    inp_ch = g.channel(inp)
+    inp_ch.set_source(args.iq_vin_list[0], args.input_ilimit)
+    inp_ch.enable()
     time.sleep(args.settle)
 
     for vin in args.iq_vin_list:
-        psu.set_voltage(inp, vin)
+        inp_ch.set_source(vin, args.input_ilimit)
         time.sleep(args.settle)
-        m = measure(psu, inp, args.avg, args.avg_delay)
+        m = measure(g, inp, args.avg, args.avg_delay)
         iq_ma = m.current * 1000.0
         print(f"  Vin={vin:6.2f} V  ->  Vin_meas={m.voltage:6.3f} V  "
               f"Iq={iq_ma:8.3f} mA")
@@ -125,38 +120,34 @@ def run_iq_sweep(psu: GPP4323, args: argparse.Namespace,
         })
 
 
-def run_efficiency_sweep(psu: GPP4323, args: argparse.Namespace,
-                         writer: Any) -> None:
+def run_efficiency_sweep(g: gpp4323.GPP4323, args: argparse.Namespace, writer) -> None:
     """For each input voltage, sweep the output load current and record
     efficiency = Pout / Pin."""
     print(f"\n=== Efficiency: Vin {args.eff_vin}, loads {args.eff_loads} A ===")
     inp, load = args.in_channel, args.load_channel
+    inp_ch, load_ch = g.channel(inp), g.channel(load)
 
-    # Configure both channels with all outputs OFF, then energize. This is
-    # safer (no live mode transitions) and avoids the GPP4323 constraint that a
-    # channel won't switch into load mode while the other channel is sourcing.
-    psu.set_output(inp, False)
-    psu.set_output(load, False)
-    psu.set_load_cc(load, True)
-    print(f"  CH{load} mode: {psu.get_mode(load)}")
-    psu.set_current(load, args.eff_loads_list[0])
-    psu.set_current(inp, args.input_ilimit)
-    psu.set_voltage(inp, args.eff_vin_list[0])
+    # Configure both channels with all outputs OFF, then energize. Safer (no
+    # live mode transitions) and avoids the constraint that a channel won't
+    # switch into load mode while the other channel is sourcing.
+    inp_ch.disable()
+    load_ch.disable()
+    load_ch.set_load(cc=args.eff_loads_list[0])
+    print(f"  CH{load} mode: {load_ch.get_mode()}")
+    inp_ch.set_source(args.eff_vin_list[0], args.input_ilimit)
 
-    # Everything configured; now energize and let the load run for the whole
-    # sweep, varying only the sink current per point.
-    psu.set_output(inp, True)
-    psu.set_output(load, True)
+    inp_ch.enable()
+    load_ch.enable()
     time.sleep(args.settle)
 
     for vin in args.eff_vin_list:
-        psu.set_voltage(inp, vin)
+        inp_ch.set_source(vin, args.input_ilimit)
         time.sleep(args.settle)
         for iload in args.eff_loads_list:
-            psu.set_current(load, iload)
+            load_ch.set_load(cc=iload)
             time.sleep(args.settle)
-            pin = measure(psu, inp, args.avg, args.avg_delay)
-            pout = measure(psu, load, args.avg, args.avg_delay)
+            pin = measure(g, inp, args.avg, args.avg_delay)
+            pout = measure(g, load, args.avg, args.avg_delay)
             eff = pout.power / pin.power if pin.power > 0 else 0.0
             print(f"  Vin={vin:6.2f} V  Iload={iload * 1000:7.1f} mA  ->  "
                   f"Pin={pin.power:6.3f} W  Pout={pout.power:6.3f} W  "
@@ -173,13 +164,11 @@ def run_efficiency_sweep(psu: GPP4323, args: argparse.Namespace,
             })
 
 
-def safe_shutdown(psu: GPP4323, args: argparse.Namespace) -> None:
-    """Leave the supply in a safe state: outputs off, load mode cleared."""
+def safe_shutdown(g: gpp4323.GPP4323, args: argparse.Namespace) -> None:
+    """Leave the supply safe: both outputs off."""
     try:
-        psu.set_output(args.load_channel, False)
-        psu.set_output(args.in_channel, False)
-        psu.set_load_cc(args.load_channel, False)
-        psu.set_voltage(args.in_channel, 0.0)
+        g.channel(args.load_channel).disable()
+        g.channel(args.in_channel).disable()
     except Exception as e:  # best-effort cleanup
         print(f"Warning: shutdown command failed: {e}", file=sys.stderr)
 
@@ -203,9 +192,9 @@ def main() -> None:
     parser.add_argument('--eff-vin', default='6:18:2',
                         help='Efficiency family input voltages start:stop:step '
                              '(default: 6:18:2)')
-    parser.add_argument('--eff-loads', default='0.01,0.03,0.1,0.3,1.0',
+    parser.add_argument('--eff-loads', default='0.01,0.02,0.05,0.1,0.2,0.5,1.0',
                         help='Efficiency load currents in amps, comma list '
-                             '(default: 0.01,0.03,0.1,0.3,1.0)')
+                             '(default: 0.01,0.02,0.05,0.1,0.2,0.5,1.0)')
     parser.add_argument('--input-ilimit', type=float, default=2.0,
                         help='Source current limit on the input channel, A '
                              '(default: 2.0)')
@@ -232,30 +221,29 @@ def main() -> None:
     args.eff_vin_list = parse_range(args.eff_vin)
     args.eff_loads_list = parse_list(args.eff_loads)
 
-    psu = GPP4323(args.host, args.port)
+    g = None
     csvfile: Optional[TextIO] = None
     try:
-        psu.connect()
-        print(f"Instrument: {psu.get_idn()}")
+        g = gpp4323.GPP4323(host=(args.host, args.port))
 
         csvfile = open(args.output, 'w', newline='')
         writer = csv.DictWriter(csvfile, fieldnames=CSV_FIELDS)
         writer.writeheader()
         print(f"Writing to {args.output}")
 
-        prepare(psu, args)
+        prepare(g, args)
 
         if not args.skip_iq:
-            run_iq_sweep(psu, args, writer)
+            run_iq_sweep(g, args, writer)
         if not args.skip_efficiency:
-            run_efficiency_sweep(psu, args, writer)
+            run_efficiency_sweep(g, args, writer)
 
         print("\nDone.")
     except KeyboardInterrupt:
         print("\nInterrupted by user.", file=sys.stderr)
     finally:
-        safe_shutdown(psu, args)
-        psu.disconnect()
+        if g is not None:
+            safe_shutdown(g, args)
         if csvfile:
             csvfile.close()
 

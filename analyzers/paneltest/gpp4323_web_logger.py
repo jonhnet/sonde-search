@@ -16,7 +16,10 @@ import pandas as pd
 import numpy as np
 from zoneinfo import ZoneInfo
 from flask import Flask, render_template, Response, request, send_file, jsonify
-from gpp4323_lib import GPP4323, DataCollector, LoadReading
+
+sys.path.insert(0, os.path.expanduser('~/projects/gpp4323'))
+import gpp4323
+from collector import DataCollector, LoadReading
 
 
 class DataStore:
@@ -206,15 +209,14 @@ def data_collection_thread(host: str, port: int, rate: float, store: DataStore,
     store.open_log_file()
 
     while True:
-        psu = GPP4323(host, port)
+        g = None
         collector: Optional[DataCollector] = None
 
         try:
-            psu.connect()
+            g = gpp4323.GPP4323(host=(host, port))
 
             collector = DataCollector(
-                psu=psu,
-                channel=1,
+                g.channel(1),
                 rate=rate,
                 callback=store.handle_reading,
                 load_voltage=load_voltage
@@ -227,7 +229,8 @@ def data_collection_thread(host: str, port: int, rate: float, store: DataStore,
         finally:
             if collector:
                 collector.stop()
-            psu.disconnect()
+            if g is not None:
+                g.s.close()
 
         time.sleep(RETRY_DELAY)
 

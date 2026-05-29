@@ -209,8 +209,8 @@ def main() -> None:
     parser.add_argument('--dmm-aperture', type=float, default=0.5,
                         help='DMM integration aperture in seconds; one reading '
                              'is taken per point (default: 0.5)')
-    parser.add_argument('--output', '-o', default='buck_data.csv',
-                        help='Output CSV file (default: buck_data.csv)')
+    parser.add_argument('output',
+                        help='Output CSV file')
     parser.add_argument('--skip-iq', action='store_true',
                         help='Skip the Iq sweep')
     parser.add_argument('--skip-efficiency', action='store_true',

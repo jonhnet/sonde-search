@@ -8,6 +8,7 @@ Generates two Plotly charts:
 """
 
 import argparse
+from pathlib import Path
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -60,13 +61,14 @@ def plot_efficiency(df: pd.DataFrame, min_load_ma: float = 0.0) -> go.Figure:
 def main() -> None:
     parser = argparse.ArgumentParser(
         description='Plot buck characterization CSV with Plotly.')
-    parser.add_argument('--input', '-i', default='buck_data.csv',
-                        help='Input CSV (default: buck_data.csv)')
-    parser.add_argument('--iq-out', default='buck_iq.png',
-                        help='Iq plot PNG output (default: buck_iq.png)')
-    parser.add_argument('--eff-out', default='buck_efficiency.png',
+    parser.add_argument('input',
+                        help='Input CSV')
+    parser.add_argument('--iq-out',
+                        help='Iq plot PNG output '
+                             '(default: <input basename>_iq.png)')
+    parser.add_argument('--eff-out',
                         help='Efficiency plot PNG output '
-                             '(default: buck_efficiency.png)')
+                             '(default: <input basename>_efficiency.png)')
     parser.add_argument('--show', action='store_true',
                         help='Open plots in a browser instead of only writing '
                              'HTML files')
@@ -75,12 +77,17 @@ def main() -> None:
                              'mA (default: 0, plot all)')
     args = parser.parse_args()
 
-    df = pd.read_csv(args.input)
+    input_path = Path(args.input)
+    iq_out = args.iq_out or input_path.with_name(f'{input_path.stem}_iq.png')
+    eff_out = args.eff_out or input_path.with_name(
+        f'{input_path.stem}_efficiency.png')
+
+    df = pd.read_csv(input_path)
 
     if (df['test'] == 'iq').any():
         fig = plot_iq(df)
-        fig.write_image(args.iq_out, width=1000, height=600, scale=2)
-        print(f"Wrote {args.iq_out}")
+        fig.write_image(iq_out, width=1000, height=600, scale=2)
+        print(f"Wrote {iq_out}")
         if args.show:
             fig.show()
     else:
@@ -88,8 +95,8 @@ def main() -> None:
 
     if (df['test'] == 'efficiency').any():
         fig = plot_efficiency(df, min_load_ma=args.min_load_ma)
-        fig.write_image(args.eff_out, width=1000, height=600, scale=2)
-        print(f"Wrote {args.eff_out}")
+        fig.write_image(eff_out, width=1000, height=600, scale=2)
+        print(f"Wrote {eff_out}")
         if args.show:
             fig.show()
     else:

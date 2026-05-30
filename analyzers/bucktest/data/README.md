@@ -27,3 +27,11 @@ input voltage and heavier load, averaging about 87.4% over the same range.
 Output voltage stayed near 5 V in normal use. At 1 A load, the measured output
 voltage across all boards ranged from about 4.79 V to 5.20 V. One board ran
 noticeably high at high input voltage, so there is some unit-to-unit variation.
+
+## Plots
+
+| Efficiency | Iq |
+|------------|----|
+| ![buck1 efficiency](buck1_efficiency.png) | ![buck1 Iq](buck1_iq.png) |
+| ![buck2 efficiency](buck2_efficiency.png) | ![buck2 Iq](buck2_iq.png) |
+| ![buck3 efficiency](buck3_efficiency.png) | ![buck3 Iq](buck3_iq.png) |

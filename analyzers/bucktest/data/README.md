@@ -5,18 +5,18 @@ These notes summarize measurements from three samples of this Amazon module:
 https://www.amazon.com/dp/B0B779ZYN1
 
 The listing describes it as a fixed 5V MP1584EN buck converter board sold in a
-5-pack, with a nominal 5-30V input range and up to 1.8 A output.
+5-pack, with a nominal 5-30V input range and up to 1.8A output.
 
 ## Test Summary
 
-Three boards from the same batch were tested from 6-18 V input. No-load input
+Three boards from the same batch were tested from 6-18V input. No-load input
 current was measured with a Keysight 34465A DMM, and loaded efficiency was
 measured from 10mA to 1A output load.
 
 Iq is in the low hundreds of microamps. Across the three boards it was about
-217-230uA with 6V input, falling to about 78-142 uA by 18V. The input current is
+217-230uA with 6V input, falling to about 78-142uA by 18V. The input current is
 pulsed, as you'd expect; high-rate DMM captures showed narrow peaks as high as
-40 mA for <2ms.
+40mA for <2ms.
 
 Efficiency is generally good for a tiny inexpensive module. Above 50mA load,
 the boards were usually in the high 80% range. Two of the three boards matched

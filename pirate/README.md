@@ -1,10 +1,11 @@
 # pirate — ka9q-radio + radiosonde_auto_rx receiver setup
 
-A generic installer that turns a Raspberry Pi 4 (or any Debian box) into
-a [radiosonde_auto_rx](https://github.com/projecthorus/radiosonde_auto_rx) receiver
-fed by [ka9q-radio](https://github.com/ka9q/ka9q-radio) with an Airspy SDR. Nothing
-site-specific is baked in — you pass a station name and either provide station
-identity variables or answer the setup prompts.
+A generic installer that turns a Raspberry Pi 4 (or any Debian box) into an
+off-grid, solar-powered
+[radiosonde_auto_rx](https://github.com/projecthorus/radiosonde_auto_rx) receiver
+fed by [ka9q-radio](https://github.com/ka9q/ka9q-radio) with an Airspy SDR.
+Nothing site-specific is baked in — you pass a station name and either provide
+station identity variables or answer the setup prompts.
 
 ## Usage
 ```
@@ -82,3 +83,8 @@ Scanner (KA9Q <station>.local) - Running frequency scan.
 - **Expected Pi 4 load:** with an Airspy Mini at 12 MS/s, the tested Pi 4 sat
   around load `0.5-0.8`, with `radiod` using roughly a third of one core while
   auto_rx scanned through KA9Q.
+- **Power budget matters:** Pirate is intended to run from an off-grid solar
+  power system. The Pi does not expose reliable total input-power telemetry, so
+  measure the complete deployed power path externally when sizing the panel,
+  battery, regulator, and any powered USB hub. Include the Airspy and any
+  networking/backhaul hardware in that measurement.

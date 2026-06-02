@@ -5,14 +5,18 @@
 #            nothing site-specific is baked in.
 #
 #   sudo ./setup.sh <station-name>
+#   sudo STATION_LAT=12.345 STATION_LON=-123.456 \
+#        UPLOADER_CALLSIGN=N0CALL SONDEHUB_CONTACT_EMAIL=you@example.com \
+#        ./setup.sh <station-name>
 #
 # <station-name> is a short, lowercase, DNS-safe label for THIS receiver (e.g.
 # "pirate"). It namespaces radiod's mDNS streams (<name>.local / <name>-pcm.local)
 # and the radiod systemd instance (radiod@<name>), so multiple receivers can
 # coexist on one LAN without colliding on a shared name like "sonde.local".
 #
-# After it runs you must edit the auto_rx station config (lat/lon/callsign) - the
-# script prints the path - then restart auto_rx. See README.md.
+# Station identity can be supplied with the environment variables above. Keep
+# site-specific values out of this repo; pass them at setup time or answer the
+# prompts on a fresh interactive run.
 #
 # Idempotent: completed steps leave markers in /var/lib/sonde-rx and are skipped
 # on re-run (handy on slow boards where the build + FFTW wisdom take a long time).
@@ -43,74 +47,56 @@ warn() { printf '\033[1;33m[!]\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31m[FATAL]\033[0m %s\n' "$*" >&2; exit 1; }
 done_already() { [[ -f "$STATE_DIR/$1.done" && "${FORCE:-0}" != 1 ]]; }
 mark_done()    { mkdir -p "$STATE_DIR"; date -Is > "$STATE_DIR/$1.done"; }
+station_identity_supplied() {
+    [[ -n "${STATION_LAT:-}${STATION_LON:-}${UPLOADER_CALLSIGN:-}${SONDEHUB_CONTACT_EMAIL:-}" ]]
+}
+prompt_if_missing() {
+    local var="$1" label="$2" answer
+    [[ -n "${!var:-}" ]] && return 0
+    [[ -t 0 ]] || return 0
+    read -r -p "$label: " answer
+    printf -v "$var" '%s' "$answer"
+    export "$var"
+}
+cfg_set() {
+    local cfg="$1" key="$2" value="$3" escaped
+    [[ -n "$value" ]] || return 0
+    escaped="${value//\\/\\\\}"
+    escaped="${escaped//&/\\&}"
+    if grep -Eq "^[[:space:]]*${key}[[:space:]]*=" "$cfg"; then
+        sed -i -E "s|^[[:space:]]*${key}[[:space:]]*=.*|${key} = ${escaped}|" "$cfg"
+    else
+        printf '\n%s = %s\n' "$key" "$value" >> "$cfg"
+    fi
+}
+cfg_get() {
+    local cfg="$1" key="$2"
+    sed -n -E "s/^[[:space:]]*${key}[[:space:]]*=[[:space:]]*(.*[^[:space:]])[[:space:]]*$/\1/p" "$cfg" | tail -n 1
+}
+configure_autorx_station_cfg() {
+    local cfg="$1" prompt="$2" missing=()
+    if [[ "$prompt" == 1 ]]; then
+        prompt_if_missing STATION_LAT "Station latitude"
+        prompt_if_missing STATION_LON "Station longitude"
+        prompt_if_missing UPLOADER_CALLSIGN "Uploader callsign"
+        prompt_if_missing SONDEHUB_CONTACT_EMAIL "SondeHub contact email"
+    fi
 
-# ---- args -----------------------------------------------------------------------
-[[ $# -eq 1 ]] || die "usage: sudo $0 <station-name>   (short, lowercase, e.g. 'pirate')"
-STATION="$1"
-[[ "$STATION" =~ ^[a-z0-9][a-z0-9-]*$ ]] || die "station name must be lowercase letters/digits/hyphens, e.g. 'pirate'"
-[[ $EUID -eq 0 ]] || exec sudo --preserve-env=FORCE,SKIP_WISDOM -- "$0" "$@"
-# the unprivileged user auto_rx will run as (the invoker of sudo, else 'pi')
-RUN_USER="${SUDO_USER:-pi}"
-id "$RUN_USER" >/dev/null 2>&1 || die "run user '$RUN_USER' does not exist"
+    cfg_set "$cfg" sdr_type KA9Q
+    cfg_set "$cfg" sdr_hostname "$MDNS_STATUS"
+    cfg_set "$cfg" web_control False
+    cfg_set "$cfg" station_lat "${STATION_LAT:-}"
+    cfg_set "$cfg" station_lon "${STATION_LON:-}"
+    cfg_set "$cfg" uploader_callsign "${UPLOADER_CALLSIGN:-}"
+    cfg_set "$cfg" sondehub_contact_email "${SONDEHUB_CONTACT_EMAIL:-}"
 
-MDNS_STATUS="${STATION}.local"
-MDNS_DATA="${STATION}-pcm.local"
-# Limit build parallelism on low-RAM boards: 4 parallel gcc can OOM a 512MB Pi Zero.
-JOBS=$(nproc); [[ $(free -m | awk '/^Mem:/{print $2}') -lt 1024 ]] && JOBS=2
-export DEBIAN_FRONTEND=noninteractive
-log "Setting up sonde receiver '$STATION' (radiod@$STATION, mDNS $MDNS_STATUS/$MDNS_DATA), auto_rx as user '$RUN_USER'"
-
-# =================================================================================
-# 1. Headless (this is a 24/7 appliance; never boot a desktop)
-# =================================================================================
-if ! done_already 1-headless; then
-    log "[1/5] headless"
-    systemctl set-default multi-user.target >/dev/null 2>&1 || true
-    systemctl disable --now lightdm 2>/dev/null || true
-    mark_done 1-headless
-fi
-
-# =================================================================================
-# 2. Packages
-# =================================================================================
-if ! done_already 2-packages; then
-    log "[2/5] packages"
-    apt-get update -qq
-    # ka9q-radio build deps (per the auto_rx wiki) + auto_rx build/runtime deps
-    apt-get install -y --no-install-recommends \
-        git rsync time avahi-daemon avahi-utils build-essential make gcc \
-        libairspy-dev libairspyhf-dev libavahi-client-dev libbsd-dev libfftw3-dev \
-        libhackrf-dev libiniparser-dev libncurses5-dev libopus-dev librtlsdr-dev \
-        libusb-1.0-0-dev libusb-dev portaudio19-dev libasound2-dev libogg-dev \
-        uuid-dev libsamplerate-dev \
-        python3-venv python3-pip cmake libsamplerate0 libusb-1.0-0 sox
-    systemctl enable --now avahi-daemon 2>/dev/null || true
-    mark_done 2-packages
-fi
-
-# =================================================================================
-# 3. ka9q-radio (pinned). `make install` also creates the 'radio' user, installs
-#    sysctls (multicast tuning), udev rules, service units, set_lo_multicast, etc.
-# =================================================================================
-if ! done_already 3-ka9q; then
-    log "[3/5] ka9q-radio @ $KA9Q_COMMIT"
-    [[ -d "$KA9Q_SRC/.git" ]] || git clone "$KA9Q_REPO" "$KA9Q_SRC"
-    git -C "$KA9Q_SRC" fetch --all --tags --prune
-    git -C "$KA9Q_SRC" checkout "$KA9Q_COMMIT"
-    make -C "$KA9Q_SRC" clean
-    make -C "$KA9Q_SRC" -j"$JOBS"
-    make -C "$KA9Q_SRC" install
-    udevadm control --reload-rules && udevadm trigger
-    sysctl --system >/dev/null
-    usermod -aG radio "$RUN_USER"
-    mark_done 3-ka9q
-fi
-
-# =================================================================================
-# 4. radiod config (Airspy -> auto_rx over loopback multicast), wisdom, enable
-# =================================================================================
-if ! done_already 4-radiod; then
-    log "[4/5] radiod config + wisdom + enable"
+    [[ -n "$(cfg_get "$cfg" station_lat)" ]] || missing+=(STATION_LAT)
+    [[ -n "$(cfg_get "$cfg" station_lon)" ]] || missing+=(STATION_LON)
+    [[ -n "$(cfg_get "$cfg" uploader_callsign)" ]] || missing+=(UPLOADER_CALLSIGN)
+    [[ -n "$(cfg_get "$cfg" sondehub_contact_email)" ]] || missing+=(SONDEHUB_CONTACT_EMAIL)
+    STATION_CFG_MISSING="${missing[*]:-}"
+}
+write_radiod_config() {
     install -d -o root -g radio -m 2775 /etc/radio
     cat > "/etc/radio/radiod@${STATION}.conf" <<EOF
 # Managed by sonde-search/pirate/setup.sh for station '$STATION'.
@@ -149,6 +135,102 @@ EOF
 After=set_lo_multicast.service
 Wants=set_lo_multicast.service
 EOF
+}
+write_autorx_service() {
+    local cfg="$1"
+    cat > /etc/systemd/system/auto_rx.service <<EOF
+[Unit]
+Description=radiosonde_auto_rx ($STATION)
+After=network-online.target radiod@${STATION}.service
+Wants=network-online.target
+
+[Service]
+User=$RUN_USER
+WorkingDirectory=$AUTORX_DIR/auto_rx
+ExecStart=$AUTORX_VENV/bin/python3 $AUTORX_DIR/auto_rx/auto_rx.py -t 0 -c $cfg
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
+# ---- args -----------------------------------------------------------------------
+[[ $# -eq 1 ]] || die "usage: sudo $0 <station-name>   (short, lowercase, e.g. 'pirate')"
+STATION="$1"
+[[ "$STATION" =~ ^[a-z0-9][a-z0-9-]*$ ]] || die "station name must be lowercase letters/digits/hyphens, e.g. 'pirate'"
+[[ $EUID -eq 0 ]] || exec sudo --preserve-env=FORCE,SKIP_WISDOM,STATION_LAT,STATION_LON,UPLOADER_CALLSIGN,SONDEHUB_CONTACT_EMAIL -- "$0" "$@"
+# the unprivileged user auto_rx will run as (the invoker of sudo, else 'pi')
+RUN_USER="${SUDO_USER:-pi}"
+id "$RUN_USER" >/dev/null 2>&1 || die "run user '$RUN_USER' does not exist"
+
+MDNS_STATUS="${STATION}.local"
+MDNS_DATA="${STATION}-pcm.local"
+# Limit build parallelism on low-RAM boards: 4 parallel gcc can OOM a 512MB Pi Zero.
+JOBS=$(nproc); [[ $(free -m | awk '/^Mem:/{print $2}') -lt 1024 ]] && JOBS=2
+export DEBIAN_FRONTEND=noninteractive
+log "Setting up sonde receiver '$STATION' (radiod@$STATION, mDNS $MDNS_STATUS/$MDNS_DATA), auto_rx as user '$RUN_USER'"
+
+# =================================================================================
+# 1. Headless (this is a 24/7 appliance; never boot a desktop)
+# =================================================================================
+if ! done_already 1-headless; then
+    log "[1/5] headless"
+    systemctl set-default multi-user.target >/dev/null 2>&1 || true
+    systemctl disable --now lightdm 2>/dev/null || true
+    mark_done 1-headless
+fi
+
+# =================================================================================
+# 2. Packages
+# =================================================================================
+if ! done_already 2-packages; then
+    log "[2/5] packages"
+    apt-get update -qq
+    # ka9q-radio build deps (per the auto_rx wiki) + auto_rx build/runtime deps
+    apt-get install -y --no-install-recommends \
+        git rsync time avahi-daemon avahi-utils build-essential make gcc \
+        airspy libairspy-dev libairspyhf-dev libavahi-client-dev libbsd-dev libfftw3-dev \
+        libhackrf-dev libiniparser-dev libncurses5-dev libopus-dev librtlsdr-dev \
+        libusb-1.0-0-dev libusb-dev portaudio19-dev libasound2-dev libogg-dev \
+        uuid-dev libsamplerate-dev \
+        python3-venv python3-pip cmake libsamplerate0 libusb-1.0-0 sox
+    systemctl enable --now avahi-daemon 2>/dev/null || true
+    mark_done 2-packages
+fi
+if ! done_already 2-airspy-tools; then
+    log "[2b/5] Airspy CLI tools"
+    apt-get update -qq
+    apt-get install -y --no-install-recommends airspy
+    mark_done 2-airspy-tools
+fi
+
+# =================================================================================
+# 3. ka9q-radio (pinned). `make install` also creates the 'radio' user, installs
+#    sysctls (multicast tuning), udev rules, service units, set_lo_multicast, etc.
+# =================================================================================
+if ! done_already 3-ka9q; then
+    log "[3/5] ka9q-radio @ $KA9Q_COMMIT"
+    [[ -d "$KA9Q_SRC/.git" ]] || git clone "$KA9Q_REPO" "$KA9Q_SRC"
+    git -C "$KA9Q_SRC" fetch --all --tags --prune
+    git -C "$KA9Q_SRC" checkout "$KA9Q_COMMIT"
+    make -C "$KA9Q_SRC" clean
+    make -C "$KA9Q_SRC" -j"$JOBS"
+    make -C "$KA9Q_SRC" install
+    udevadm control --reload-rules && udevadm trigger
+    sysctl --system >/dev/null
+    usermod -aG radio "$RUN_USER"
+    mark_done 3-ka9q
+fi
+
+# =================================================================================
+# 4. radiod config (Airspy -> auto_rx over loopback multicast), wisdom, enable
+# =================================================================================
+if ! done_already 4-radiod; then
+    RADIOD_STEP_RAN=1
+    log "[4/5] radiod config + wisdom + enable"
+    write_radiod_config
 
     # FFTW wisdom: radiod reads /etc/fftw/wisdomf. Slow to build (HOURS on a Pi Zero);
     # radiod still runs without it, just with higher CPU / slow startup.
@@ -172,11 +254,20 @@ EOF
         || warn "radiod@${STATION} not running yet - check 'journalctl -u radiod@${STATION}' (Airspy attached?)"
     mark_done 4-radiod
 fi
+if done_already 4-radiod && [[ "${RADIOD_STEP_RAN:-0}" != 1 ]]; then
+    log "Reconciling radiod config + service"
+    write_radiod_config
+    systemctl daemon-reload
+    systemctl enable "radiod@${STATION}"
+    systemctl restart "radiod@${STATION}" \
+        || warn "radiod@${STATION} not running yet - check 'journalctl -u radiod@${STATION}' (Airspy attached?)"
+fi
 
 # =================================================================================
 # 5. radiosonde_auto_rx (pinned): venv, build demods, deploy unit + station config
 # =================================================================================
 if ! done_already 5-autorx; then
+    AUTORX_STEP_RAN=1
     log "[5/5] radiosonde_auto_rx @ $AUTORX_COMMIT"
     [[ -d "$AUTORX_DIR/.git" ]] || git clone "$AUTORX_REPO" "$AUTORX_DIR"
     git -C "$AUTORX_DIR" fetch --all --tags --prune
@@ -193,50 +284,47 @@ if ! done_already 5-autorx; then
     sudo -u "$RUN_USER" bash -c "cd '$AUTORX_DIR/auto_rx' && ./build.sh"
 
     # station config: start from upstream's example, point it at THIS station's
-    # KA9Q mDNS stream, and turn the local web UI off (headless node). The user
-    # still must fill in lat/lon/callsign (left as upstream placeholders).
+    # KA9Q mDNS stream, and apply station identity from setup inputs/prompts.
     CFG="$AUTORX_DIR/auto_rx/station.cfg"
     if [[ ! -f "$CFG" ]]; then
         cp "$AUTORX_DIR/auto_rx/station.cfg.example" "$CFG"
-        sed -i \
-            -e "s/^sdr_type *=.*/sdr_type = KA9Q/" \
-            -e "s/^sdr_hostname *=.*/sdr_hostname = ${MDNS_STATUS}/" \
-            -e "s/^web_control *=.*/web_control = False/" \
-            "$CFG"
-        chown "$RUN_USER":"$RUN_USER" "$CFG"
         STATION_CFG_IS_NEW=1
     fi
+    configure_autorx_station_cfg "$CFG" "${STATION_CFG_IS_NEW:-0}"
+    chown "$RUN_USER":"$RUN_USER" "$CFG"
 
     # systemd unit: run under the venv python, after radiod
-    cat > /etc/systemd/system/auto_rx.service <<EOF
-[Unit]
-Description=radiosonde_auto_rx ($STATION)
-After=network-online.target radiod@${STATION}.service
-Wants=network-online.target
-
-[Service]
-User=$RUN_USER
-WorkingDirectory=$AUTORX_DIR/auto_rx
-ExecStart=$AUTORX_VENV/bin/python3 $AUTORX_DIR/auto_rx/auto_rx.py -t 0 -c $CFG
-Restart=always
-RestartSec=30
-
-[Install]
-WantedBy=multi-user.target
-EOF
+    write_autorx_service "$CFG"
     systemctl daemon-reload
     systemctl enable auto_rx.service
     mark_done 5-autorx
 fi
 
+CFG="$AUTORX_DIR/auto_rx/station.cfg"
+if [[ "${AUTORX_STEP_RAN:-0}" != 1 && -f "$CFG" ]]; then
+    if station_identity_supplied; then
+        log "Updating station config from setup environment"
+    else
+        log "Reconciling auto_rx config + service"
+    fi
+    configure_autorx_station_cfg "$CFG" 0
+    write_autorx_service "$CFG"
+    systemctl daemon-reload
+    systemctl enable auto_rx.service
+    chown "$RUN_USER":"$RUN_USER" "$CFG"
+    STATION_CFG_UPDATED=1
+fi
+
 echo
 log "Base install complete for station '$STATION'."
-if [[ "${STATION_CFG_IS_NEW:-0}" == 1 ]]; then
-    warn "EDIT YOUR STATION CONFIG before auto_rx will upload correctly:"
-    sub "  $AUTORX_DIR/auto_rx/station.cfg   (set station_lat, station_lon, uploader_callsign, sondehub_contact_email)"
-    sub "then: sudo systemctl restart auto_rx"
+if [[ -n "${STATION_CFG_MISSING:-}" ]]; then
+    warn "Station config still needs values before auto_rx will upload correctly:"
+    sub "  missing: $STATION_CFG_MISSING"
+    sub "  re-run with STATION_LAT, STATION_LON, UPLOADER_CALLSIGN, SONDEHUB_CONTACT_EMAIL or edit:"
+    sub "  $AUTORX_DIR/auto_rx/station.cfg"
 else
     systemctl restart auto_rx.service || true
+    [[ "${STATION_CFG_IS_NEW:-0}${STATION_CFG_UPDATED:-0}" == "" ]] || sub "station config populated: $AUTORX_DIR/auto_rx/station.cfg"
 fi
 sub "radiod:  systemctl status radiod@${STATION}    |  control ${MDNS_STATUS}"
 sub "auto_rx: journalctl -u auto_rx -f"

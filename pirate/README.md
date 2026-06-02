@@ -7,6 +7,33 @@ fed by [ka9q-radio](https://github.com/ka9q/ka9q-radio) with an Airspy SDR.
 Nothing site-specific is baked in — you pass a station name and either provide
 station identity variables or answer the setup prompts.
 
+## Goal: an off-grid, solar-powered receive site
+
+The pirate station is meant to live somewhere with no grid power and no
+backhaul beyond what we bring with us — picture a hilltop with a clear sky
+view of the launch site. The whole site runs on the sun:
+
+```
+solar panel  →  LiFePO4 battery  →  buck converter  →  PiDog2 v0.7  →  Pi 4 + Airspy
+```
+
+Sondes launch on a fixed schedule (typically twice a day, around 00 Z and
+12 Z), which opens up a tradeoff between coverage and survivability. We could
+oversize the panel and battery and run always-on for maximum coverage, but
+we'd rather give up a little coverage so the site rides out long stretches of
+poor solar irradiance. The plan is to use the
+[**PiDog2 v0.7**](https://github.com/djacobow/pidog2) (a Pi power-manager HAT
+that gates the 5 V rail with a MOSFET driven by an onboard MCU) as a scheduled
+power gate, programmed to bring the Pi up for a window around each expected
+launch and cut power in between. A modest panel and a sensible LiFePO4 pack
+can then carry the site through bad weather where an always-on receiver with
+the same hardware budget would brown out.
+
+**Scope of this repo:** the installer here brings up the radiosonde reception
+software stack on the Pi 4 side of that chain (ka9q-radio, `radiod`, auto_rx,
+mDNS, multicast, services). Power scheduling lives in the PiDog2 firmware,
+not here.
+
 ## Usage
 ```
 sudo ./setup.sh <station-name>
@@ -66,8 +93,8 @@ Scanner (KA9Q <station>.local) - Running frequency scan.
 ```
 
 ## Hardware notes
-- **Pi 4 is the intended target** for the Airspy+ka9q path. A Pi Zero 2 W is
-  marginal; use the SondeHound RTL-SDR setup there unless you are experimenting.
+- **Pi 4 is the minimum recommended target** for the Airspy + ka9q-radio path.
+  See the Pi Zero 2 W test result below for why a smaller board isn't viable here.
 - **Attaching the Airspy:** boards without a USB-A port (Pi Zero 2 W) need a
   **micro-USB OTG adapter** on the data port, ideally via a **powered USB hub** —
   the Airspy draws ~0.5 A and will brown out a Zero if powered through the board.
@@ -76,15 +103,24 @@ Scanner (KA9Q <station>.local) - Running frequency scan.
   minutes** and produced `/etc/fftw/wisdomf`. Use `SKIP_WISDOM=1` for a first
   pass if needed (radiod runs without it, just slower), then generate wisdom once
   you've confirmed the receiver works.
-- **Zero 2 W is marginal for the Airspy+ka9q path:** RAM fits (~110 MB stack in
-  512 MB), but radiod's FFT needs ~1 of the 4 weak cores in real time. Watch
-  `journalctl -u radiod@<name>` for overruns under live decode. If it can't keep
-  up, lower the Airspy sample rate / narrow the band in the radiod config.
+- **Pi Zero 2 W test result:** we ran this exact installer on a Zero 2 W and
+  the receiver never came up. `radiod` started and held the Airspy, but
+  `auto_rx`'s tune handshake — the control-channel RPC that asks `radiod` to
+  allocate a frequency slot for a sonde decoder — **timed out even at a 30 s
+  timeout**, meaning `radiod` was too CPU-bound to service the request. RAM was
+  fine (~110 MB resident in 512 MB); the bottleneck is CPU. `radiod` has to FFT
+  the full Airspy stream in real time, and the Zero's 4× Cortex-A53 cores at
+  1 GHz aren't enough headroom alongside the Airspy USB stream and `auto_rx`'s
+  demodulators. The Pi 4's A72 cores handle the same workload comfortably (see
+  the Pi 4 load figures below). If you only have a Zero-class board, use the
+  RTL-SDR path in [`../sondehound/`](../sondehound/) — it feeds `auto_rx`
+  directly from the dongle, skips `radiod` and its wideband FFT entirely, and
+  runs comfortably on a Zero 2 W.
 - **Expected Pi 4 load:** with an Airspy Mini at 12 MS/s, the tested Pi 4 sat
   around load `0.5-0.8`, with `radiod` using roughly a third of one core while
   auto_rx scanned through KA9Q.
-- **Power budget matters:** Pirate is intended to run from an off-grid solar
-  power system. The Pi does not expose reliable total input-power telemetry, so
-  measure the complete deployed power path externally when sizing the panel,
-  battery, regulator, and any powered USB hub. Include the Airspy and any
-  networking/backhaul hardware in that measurement.
+- **Sizing the power path** (see the Goal section above): the Pi does not
+  expose reliable total input-power telemetry, so measure the complete deployed
+  power path externally when sizing the panel, battery, regulator, and any
+  powered USB hub. Include the Airspy and any networking/backhaul hardware in
+  that measurement.

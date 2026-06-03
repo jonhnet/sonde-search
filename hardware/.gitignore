@@ -1,0 +1,15 @@
+# KiCad automatic backup archives, recursively for all hardware subprojects.
+*-backups/
+
+# KiCad autosave / backup scratch files.
+*.bak
+*.kicad_pcb-bak
+*.kicad_sch-bak
+*.kicad_pro-bak
+*-save.pro
+*~
+
+# KiCad local cache / UI state.
+fp-info-cache
+*.lck
+*.kicad_prl

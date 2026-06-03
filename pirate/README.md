@@ -79,6 +79,9 @@ or reuse the peer, then installs the returned client config on the Pi over SSH.
   up the multicast sysctls, udev rules, the `radio` user, and `set_lo_multicast`.
 - **radiosonde_auto_rx** at `578836…` (v1.8.2), in a Python venv (PEP 668-clean),
   with its C demodulators built.
+- An auto_rx `station.cfg` with the station identity, KA9Q receiver settings,
+  and SondeHub batch upload cadence. `sondehub_upload_rate` defaults to 60
+  seconds; override with `SONDEHUB_UPLOAD_RATE=<seconds>` if needed.
 - A radiod config (`/etc/radio/radiod@<name>.conf`) for an Airspy covering the
   400–406 MHz sonde band, publishing to auto_rx over **loopback multicast**.
 - Headless boot, FFTW wisdom, and both services enabled.

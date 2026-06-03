@@ -22,6 +22,7 @@
 # Idempotent: completed steps leave markers in /var/lib/sonde-rx and are skipped
 # on re-run (handy on slow boards where the build + FFTW wisdom take a long time).
 # Env knobs:  FORCE=1 redo a step;  SKIP_WISDOM=1 skip the (very slow) FFTW tuning.
+#             SONDEHUB_UPLOAD_RATE controls SondeHub batch upload cadence.
 #             LTE_APN/LTE_USERNAME/LTE_PASSWORD/LTE_PIN configure cellular backhaul.
 
 set -euo pipefail
@@ -91,6 +92,7 @@ configure_autorx_station_cfg() {
     cfg_set "$cfg" station_lon "${STATION_LON:-}"
     cfg_set "$cfg" uploader_callsign "${UPLOADER_CALLSIGN:-}"
     cfg_set "$cfg" sondehub_contact_email "${SONDEHUB_CONTACT_EMAIL:-}"
+    cfg_set "$cfg" sondehub_upload_rate "${SONDEHUB_UPLOAD_RATE:-60}"
 
     [[ -n "$(cfg_get "$cfg" station_lat)" ]] || missing+=(STATION_LAT)
     [[ -n "$(cfg_get "$cfg" station_lon)" ]] || missing+=(STATION_LON)
@@ -241,7 +243,7 @@ EOF
 [[ $# -eq 1 ]] || die "usage: sudo $0 <station-name>   (short, lowercase, e.g. 'pirate')"
 STATION="$1"
 [[ "$STATION" =~ ^[a-z0-9][a-z0-9-]*$ ]] || die "station name must be lowercase letters/digits/hyphens, e.g. 'pirate'"
-[[ $EUID -eq 0 ]] || exec sudo --preserve-env=FORCE,SKIP_WISDOM,STATION_LAT,STATION_LON,UPLOADER_CALLSIGN,SONDEHUB_CONTACT_EMAIL,LTE_APN,LTE_USERNAME,LTE_PASSWORD,LTE_PIN,LTE_CONNECTION_NAME -- "$0" "$@"
+[[ $EUID -eq 0 ]] || exec sudo --preserve-env=FORCE,SKIP_WISDOM,STATION_LAT,STATION_LON,UPLOADER_CALLSIGN,SONDEHUB_CONTACT_EMAIL,SONDEHUB_UPLOAD_RATE,LTE_APN,LTE_USERNAME,LTE_PASSWORD,LTE_PIN,LTE_CONNECTION_NAME -- "$0" "$@"
 # the unprivileged user auto_rx will run as (the invoker of sudo, else 'pi')
 RUN_USER="${SUDO_USER:-pi}"
 id "$RUN_USER" >/dev/null 2>&1 || die "run user '$RUN_USER' does not exist"

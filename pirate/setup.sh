@@ -179,6 +179,145 @@ APT::Update::Pre-Invoke { "/usr/local/sbin/pirate-apt-backhaul-guard"; };
 DPkg::Pre-Invoke { "/usr/local/sbin/pirate-apt-backhaul-guard"; };
 EOF
 }
+configure_avahi_backhaul_policy() {
+    log "Reconciling Avahi backhaul policy"
+
+    [[ -f /etc/avahi/avahi-daemon.conf ]] || return 0
+
+    if grep -Eq '^[#[:space:]]*allow-interfaces=' /etc/avahi/avahi-daemon.conf; then
+        sed -i -E 's|^[#[:space:]]*allow-interfaces=.*|allow-interfaces=lo,wlan0|' /etc/avahi/avahi-daemon.conf
+    else
+        sed -i '/^\[server\]/a allow-interfaces=lo,wlan0' /etc/avahi/avahi-daemon.conf
+    fi
+
+    if grep -Eq '^[#[:space:]]*enable-wide-area=' /etc/avahi/avahi-daemon.conf; then
+        sed -i -E 's|^[#[:space:]]*enable-wide-area=.*|enable-wide-area=no|' /etc/avahi/avahi-daemon.conf
+    else
+        sed -i '/^\[wide-area\]/a enable-wide-area=no' /etc/avahi/avahi-daemon.conf
+    fi
+
+    systemctl enable --now avahi-daemon.service 2>/dev/null || true
+    systemctl restart avahi-daemon.service 2>/dev/null || true
+}
+configure_mdns_resolver_policy() {
+    log "Reconciling mDNS resolver policy"
+
+    cat > /etc/mdns.allow <<'EOF'
+.local.
+.local
+EOF
+
+    if [[ -f /etc/nsswitch.conf ]] && grep -Eq '^hosts:' /etc/nsswitch.conf; then
+        # mdns4_minimal checks unicast DNS for "SOA local" before .local lookups.
+        # mdns4 honors /etc/mdns.allow, which lets .local stay local-only.
+        sed -i -E '/^hosts:/ s/\bmdns4_minimal\b/mdns4/g' /etc/nsswitch.conf
+    fi
+}
+configure_multicast_backhaul_policy() {
+    log "Reconciling cellular multicast policy"
+
+    cat > /usr/local/sbin/pirate-multicast-policy <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Generic multicast policy for a remote sensor:
+# - WiFi may carry multicast/mDNS when available.
+# - Loopback is the fallback for local-only multicast.
+# - Cellular/WWAN must never be eligible for multicast egress.
+
+ip link set lo multicast on 2>/dev/null || true
+ip route replace 224.0.0.0/4 dev lo src 127.0.0.1 metric 1000
+ip -6 route replace ff00::/8 dev lo metric 1000 2>/dev/null || true
+
+for dev in /sys/class/net/wlan*; do
+    [[ -e "$dev" ]] || continue
+    ifname=${dev##*/}
+    ip link show dev "$ifname" >/dev/null 2>&1 || continue
+    ip route replace 224.0.0.0/4 dev "$ifname" metric 100 2>/dev/null || true
+    ip -6 route replace ff00::/8 dev "$ifname" metric 100 2>/dev/null || true
+done
+
+for dev in /sys/class/net/wwan* /sys/class/net/ppp*; do
+    [[ -e "$dev" ]] || continue
+    ifname=${dev##*/}
+    ip link set dev "$ifname" multicast off 2>/dev/null || true
+done
+EOF
+    chmod 0755 /usr/local/sbin/pirate-multicast-policy
+
+    install -d -m 0755 /etc/NetworkManager/dispatcher.d
+    cat > /etc/NetworkManager/dispatcher.d/90-pirate-multicast-policy <<'EOF'
+#!/usr/bin/env bash
+exec /usr/local/sbin/pirate-multicast-policy
+EOF
+    chmod 0755 /etc/NetworkManager/dispatcher.d/90-pirate-multicast-policy
+
+    cat > /usr/local/sbin/pirate-backhaul-firewall <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+command -v nft >/dev/null 2>&1 || {
+    echo "nft not installed; cannot enforce cellular multicast firewall" >&2
+    exit 1
+}
+
+nft delete table inet pirate_backhaul 2>/dev/null || true
+nft -f - <<'NFT'
+table inet pirate_backhaul {
+    chain output {
+        type filter hook output priority filter; policy accept;
+
+        # Cellular backhaul is expensive and multicast is not useful there.
+        # Keep multicast/mDNS usable on WiFi/loopback, but never emit IPv4/IPv6
+        # multicast on cellular point-to-point interfaces.
+        oifname "wwan*" ip daddr 224.0.0.0/4 counter drop
+        oifname "ppp*" ip daddr 224.0.0.0/4 counter drop
+        oifname "wwan*" ip6 daddr ff00::/8 counter drop
+        oifname "ppp*" ip6 daddr ff00::/8 counter drop
+    }
+}
+NFT
+EOF
+    chmod 0755 /usr/local/sbin/pirate-backhaul-firewall
+
+    cat > /etc/systemd/system/pirate-multicast-policy.service <<'EOF'
+[Unit]
+Description=Pirate multicast route policy
+After=network-pre.target NetworkManager.service
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/pirate-multicast-policy
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    cat > /etc/systemd/system/pirate-backhaul-firewall.service <<'EOF'
+[Unit]
+Description=Pirate cellular backhaul firewall
+After=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/pirate-backhaul-firewall
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable --now pirate-multicast-policy.service
+    if command -v nft >/dev/null 2>&1; then
+        systemctl enable --now pirate-backhaul-firewall.service
+    else
+        warn "nft not installed yet; cellular multicast firewall will be enabled after package install"
+    fi
+}
 write_radiod_config() {
     install -d -o root -g radio -m 2775 /etc/radio
     cat > "/etc/radio/radiod@${STATION}.conf" <<EOF
@@ -286,11 +425,19 @@ fi
 if ! done_already 2-cellular; then
     log "[2c/5] cellular backhaul tools"
     apt-get update -qq
-    apt-get install -y --no-install-recommends modemmanager libqmi-utils
+    apt-get install -y --no-install-recommends modemmanager libqmi-utils nftables
     mark_done 2-cellular
+fi
+if ! command -v nft >/dev/null 2>&1; then
+    log "Reconciling nftables package"
+    apt-get update -qq
+    apt-get install -y --no-install-recommends nftables
 fi
 log "Reconciling cellular backhaul support"
 configure_lte_backhaul
+configure_avahi_backhaul_policy
+configure_mdns_resolver_policy
+configure_multicast_backhaul_policy
 if ! done_already 2-airspy-tools; then
     log "[2b/5] Airspy CLI tools"
     apt-get update -qq

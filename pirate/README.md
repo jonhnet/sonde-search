@@ -84,12 +84,46 @@ or reuse the peer, then installs the returned client config on the Pi over SSH.
   seconds; override with `SONDEHUB_UPLOAD_RATE=<seconds>` if needed.
 - A radiod config (`/etc/radio/radiod@<name>.conf`) for an Airspy covering the
   400–406 MHz sonde band, publishing to auto_rx over **loopback multicast**.
+- Cellular backhaul cost controls: disable unattended APT activity, mark the LTE
+  NetworkManager connection metered, keep mDNS/multicast usable on WiFi/loopback,
+  keep Avahi and `.local` resolver probes off cellular, and block IPv4/IPv6
+  multicast egress on cellular interfaces (`wwan*`, `ppp*`).
 - Headless boot, FFTW wisdom, and both services enabled.
 
 Idempotent (markers in `/var/lib/sonde-rx`). On rerun, expensive build/wisdom
 steps are skipped unless forced, while generated radiod/auto_rx config and
 systemd units are reconciled from the script. Env knobs: `FORCE=1` redo a step,
 `SKIP_WISDOM=1` skip the slow FFTW tuning.
+
+## Cellular Backhaul Notes
+
+Pirate is designed as a remote sensor. The cellular link should carry only
+traffic that is useful off-site: inbound administration via WireGuard/SSH,
+SondeHub uploads, and occasional time/DNS traffic. LAN discovery protocols are
+kept off the cellular interface because mDNS and multicast do not help on a
+cell network and metered data is expensive.
+
+The installer enforces this with several generic policies:
+
+- Avahi is bound to `lo,wlan0` and wide-area DNS support is disabled, so `.local`
+  service discovery stays on loopback/WiFi.
+- `nsswitch.conf` uses `mdns4` with `/etc/mdns.allow` restricted to `.local`.
+  This avoids the `mdns4_minimal` module's unicast DNS `SOA local` checks during
+  repeated `.local` lookups.
+- A NetworkManager dispatcher script prefers WiFi for multicast when WiFi is
+  present and leaves loopback as the local fallback.
+- An nftables output rule drops IPv4 multicast (`224.0.0.0/4`) and IPv6
+  multicast (`ff00::/8`) on cellular-style interfaces (`wwan*`, `ppp*`).
+
+This is deliberately interface-based, not KA9Q-specific or mDNS-specific. In a
+test before the NSS resolver change, the remaining traffic was dominated by
+unicast DNS `SOA? local.` checks from `mdns4_minimal`; those are handled by the
+`mdns4`/`mdns.allow` policy above. After the full policy, a 15-minute
+WiFi-disabled capture on Pirate saw only one NTP request/reply on `wwan0`.
+Interface counters increased by **76 bytes RX + 76 bytes TX** in that window,
+with no `.local`, multicast, IGMP, or WireGuard tunnel payload in the capture.
+That extrapolates to about **15 kB/day** of idle basal cellular traffic, before
+SondeHub uploads or admin sessions.
 
 ## Verify
 ```

@@ -35,6 +35,8 @@ mDNS, multicast, services). Power scheduling lives in the PiDog2 firmware,
 not here.
 
 ## Usage
+Run the main installer on the Pi itself:
+
 ```
 sudo ./setup.sh <station-name>
 ```
@@ -50,9 +52,26 @@ sudo STATION_LAT=12.345 STATION_LON=-123.456 \
   UPLOADER_CALLSIGN=N0CALL SONDEHUB_CONTACT_EMAIL=you@example.com \
   ./setup.sh pirate
 ```
+If a cellular modem is part of the deployment, pass its APN as well:
+```
+sudo LTE_APN=your.apn ./setup.sh pirate
+```
+Optional variables: `LTE_USERNAME`, `LTE_PASSWORD`, `LTE_PIN`, and
+`LTE_CONNECTION_NAME` (default `pirate-lte`).
+
 Keep station-specific values as invocation-time environment variables or local
 Pi config. Do not hard-code callsigns, email addresses, or coordinates in the
 repo.
+
+WireGuard provisioning is a separate workstation-side step because it needs SSH
+access to both the VPN server and the Pi:
+
+```
+VPN_PEER_NAME=pirate VPN_SERVER_HOST=vpn.example.org ./setup-wireguard.sh
+```
+
+Do not run `setup-wireguard.sh` on the Pi. It asks the VPN server to allocate
+or reuse the peer, then installs the returned client config on the Pi over SSH.
 
 ## What it installs (pinned)
 - **ka9q-radio** at commit `e1224dcd…` (the commit auto_rx is tested against — do
@@ -215,6 +234,20 @@ A [**Waveshare SIM7600G-H 4G dongle**](https://www.amazon.com/dp/B09VFKCXHX)
 ModemManager (QMI/ECM mode), providing a full IP stack — WireGuard, SSH, and
 normal networking all work.
 
+Linux should see the SIM7600G-H as a SimTech `1e0e:9001` USB device with
+`option` serial ports, `/dev/cdc-wdm0`, and a `wwan0` data path. The installer
+installs `modemmanager` and `libqmi-utils`, enables ModemManager, and retriggers
+the modem's udev devices so an already-plugged-in dongle is discovered. With no
+SIM inserted, ModemManager still detects the modem, but it reports
+`failed reason: sim-missing` and NetworkManager leaves the GSM device
+unavailable; insert a SIM and provide `LTE_APN` to create the data connection.
+
+The LTE connection is treated as metered backhaul for remote access, not as a
+general-purpose cheap Internet pipe. The installer purges `unattended-upgrades`,
+disables apt periodic timers/config, and installs an apt guard that blocks
+package update/install operations while cellular is the active backhaul unless
+you explicitly run with `ALLOW_EXPENSIVE_BACKHAUL=1`.
+
 The SIM7600G-H uses a SIMCom module with a Qualcomm MDM9x07 baseband. It was
 chosen over the Quectel EC25 (used by the Sixfab Pi ecosystem) primarily for
 retail availability: SIMCom modules ship in ready-to-use USB form factors from
@@ -226,14 +259,30 @@ The dongle includes an external LTE antenna and has a connector for a
 higher-gain antenna — important because the modem will be inside a sealed
 weatherproof enclosure.
 
-**Data plan:** [Hologram](https://hologram.io) IoT SIM at $0.03/MB +
-$1/month per SIM. Auto_rx uploads are a few KB/sec per active sonde.
+**Data plan:** use a low-volume IoT data SIM with the provider APN passed to
+the installer via `LTE_APN`. Auto_rx uploads are a few KB/sec per active sonde.
 WireGuard keepalives (`PersistentKeepalive=25`) add ~2 MB/month during the
-4 h/day active window. Total monthly data is well under 100 MB. Expected
-operating cost: **~$3–5/month**.
+4 h/day active window. Total monthly data is well under 100 MB.
 
 **Remote access:** a persistent WireGuard tunnel to a VPS provides inbound
 SSH without dealing with carrier NAT or port forwarding.
+
+The VPN server side is intentionally handled by a one-shot helper on the VPN
+host, rather than by editing `wg0.conf` from this repo. The local source copy
+of that helper lives outside this project at `~/projects/vpn/wireguard/`.
+Install it on the VPN server as `/usr/local/sbin/get-vpn-key.py`, with a
+`/usr/local/bin/get-vpn-key.py` wrapper that runs it via passwordless sudo. The
+helper writes per-peer fragments under `/etc/wireguard/wg0.conf.d/`, applies
+them with `wg set`, and emits the client keys/config material as JSON.
+
+Provision Pirate's WireGuard client from the workstation, not from the Pi:
+```
+VPN_PEER_NAME=pirate VPN_SERVER_HOST=vpn.example.org ./setup-wireguard.sh
+```
+`setup-wireguard.sh` calls `ssh "$VPN_SERVER_HOST" get-vpn-key.py ...`,
+installs `wireguard-tools` on the Pi, writes `/etc/wireguard/wg0.conf`, and
+enables `wg-quick@wg0`. Use `REUSE_WIREGUARD=1` only when intentionally
+rotating the peer keys while keeping the existing VPN addresses.
 
 ## Bill of materials
 

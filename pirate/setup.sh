@@ -8,6 +8,7 @@
 #   sudo STATION_LAT=12.345 STATION_LON=-123.456 \
 #        UPLOADER_CALLSIGN=N0CALL SONDEHUB_CONTACT_EMAIL=you@example.com \
 #        ./setup.sh <station-name>
+#   sudo LTE_APN=your.apn ./setup.sh <station-name>
 #
 # <station-name> is a short, lowercase, DNS-safe label for THIS receiver (e.g.
 # "pirate"). It namespaces radiod's mDNS streams (<name>.local / <name>-pcm.local)
@@ -21,6 +22,7 @@
 # Idempotent: completed steps leave markers in /var/lib/sonde-rx and are skipped
 # on re-run (handy on slow boards where the build + FFTW wisdom take a long time).
 # Env knobs:  FORCE=1 redo a step;  SKIP_WISDOM=1 skip the (very slow) FFTW tuning.
+#             LTE_APN/LTE_USERNAME/LTE_PASSWORD/LTE_PIN configure cellular backhaul.
 
 set -euo pipefail
 
@@ -96,6 +98,85 @@ configure_autorx_station_cfg() {
     [[ -n "$(cfg_get "$cfg" sondehub_contact_email)" ]] || missing+=(SONDEHUB_CONTACT_EMAIL)
     STATION_CFG_MISSING="${missing[*]:-}"
 }
+configure_lte_backhaul() {
+    local name="${LTE_CONNECTION_NAME:-pirate-lte}"
+
+    systemctl enable --now ModemManager.service 2>/dev/null || true
+    udevadm control --reload-rules
+
+    # If the modem was already plugged in before ModemManager's udev rules were
+    # installed, retrigger the actual child devices so MM sees the QMI/AT ports.
+    local sys
+    for sys in /sys/class/tty/ttyUSB* /sys/class/usbmisc/cdc-wdm* /sys/class/net/wwan*; do
+        [[ -e "$sys" ]] || continue
+        udevadm trigger --action=change "$sys" 2>/dev/null || true
+    done
+    udevadm settle 2>/dev/null || true
+
+    [[ -n "${LTE_APN:-}" ]] || {
+        sub "cellular modem support installed; set LTE_APN to create a NetworkManager GSM connection"
+        return 0
+    }
+
+    command -v nmcli >/dev/null 2>&1 || {
+        warn "nmcli not found; LTE_APN was set but NetworkManager is not available"
+        return 0
+    }
+
+    if nmcli -t -f NAME connection show | grep -Fxq "$name"; then
+        nmcli connection modify "$name" gsm.apn "$LTE_APN"
+    else
+        nmcli connection add type gsm ifname "*" con-name "$name" apn "$LTE_APN"
+    fi
+    nmcli connection modify "$name" connection.autoconnect yes connection.metered yes ipv4.method auto ipv6.method auto
+    [[ -z "${LTE_USERNAME:-}" ]] || nmcli connection modify "$name" gsm.username "$LTE_USERNAME"
+    [[ -z "${LTE_PASSWORD:-}" ]] || nmcli connection modify "$name" gsm.password "$LTE_PASSWORD"
+    [[ -z "${LTE_PIN:-}" ]] || nmcli connection modify "$name" gsm.pin "$LTE_PIN"
+
+    # SIM7600 can retain an unrelated initial EPS bearer APN in modem firmware
+    # (e.g. CMNET). LTE registration/data attach may not complete until this
+    # matches the SIM provider APN.
+    if command -v mmcli >/dev/null 2>&1 && mmcli -m any >/dev/null 2>&1; then
+        mmcli -m any --3gpp-set-initial-eps-bearer-settings="apn=${LTE_APN},ip-type=ipv4" \
+            || warn "could not set initial EPS bearer APN; NetworkManager APN is still configured"
+    fi
+    sub "cellular NetworkManager connection configured: $name"
+}
+configure_backhaul_cost_controls() {
+    log "Reconciling backhaul cost controls"
+    apt-get purge -y unattended-upgrades 2>/dev/null || true
+    apt-get autoremove -y 2>/dev/null || true
+    systemctl disable --now apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
+    systemctl disable --now apt-daily.service apt-daily-upgrade.service 2>/dev/null || true
+
+    cat > /etc/apt/apt.conf.d/10pirate-no-periodic <<'EOF'
+APT::Periodic::Enable "0";
+APT::Periodic::Update-Package-Lists "0";
+APT::Periodic::Unattended-Upgrade "0";
+APT::Periodic::AutocleanInterval "0";
+EOF
+
+    cat > /usr/local/sbin/pirate-apt-backhaul-guard <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+[[ "${ALLOW_EXPENSIVE_BACKHAUL:-0}" == 1 ]] && exit 0
+
+default_dev="$(ip -o route show default 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i == "dev") {print $(i+1); exit}}')"
+case "$default_dev" in
+    wwan*|cdc-wdm*|ppp*)
+        printf '%s\n' "APT blocked: default route is on $default_dev. Set ALLOW_EXPENSIVE_BACKHAUL=1 to override." >&2
+        exit 100
+        ;;
+esac
+EOF
+    chmod 0755 /usr/local/sbin/pirate-apt-backhaul-guard
+
+    cat > /etc/apt/apt.conf.d/99pirate-backhaul-guard <<'EOF'
+APT::Update::Pre-Invoke { "/usr/local/sbin/pirate-apt-backhaul-guard"; };
+DPkg::Pre-Invoke { "/usr/local/sbin/pirate-apt-backhaul-guard"; };
+EOF
+}
 write_radiod_config() {
     install -d -o root -g radio -m 2775 /etc/radio
     cat > "/etc/radio/radiod@${STATION}.conf" <<EOF
@@ -160,7 +241,7 @@ EOF
 [[ $# -eq 1 ]] || die "usage: sudo $0 <station-name>   (short, lowercase, e.g. 'pirate')"
 STATION="$1"
 [[ "$STATION" =~ ^[a-z0-9][a-z0-9-]*$ ]] || die "station name must be lowercase letters/digits/hyphens, e.g. 'pirate'"
-[[ $EUID -eq 0 ]] || exec sudo --preserve-env=FORCE,SKIP_WISDOM,STATION_LAT,STATION_LON,UPLOADER_CALLSIGN,SONDEHUB_CONTACT_EMAIL -- "$0" "$@"
+[[ $EUID -eq 0 ]] || exec sudo --preserve-env=FORCE,SKIP_WISDOM,STATION_LAT,STATION_LON,UPLOADER_CALLSIGN,SONDEHUB_CONTACT_EMAIL,LTE_APN,LTE_USERNAME,LTE_PASSWORD,LTE_PIN,LTE_CONNECTION_NAME -- "$0" "$@"
 # the unprivileged user auto_rx will run as (the invoker of sudo, else 'pi')
 RUN_USER="${SUDO_USER:-pi}"
 id "$RUN_USER" >/dev/null 2>&1 || die "run user '$RUN_USER' does not exist"
@@ -171,6 +252,7 @@ MDNS_DATA="${STATION}-pcm.local"
 JOBS=$(nproc); [[ $(free -m | awk '/^Mem:/{print $2}') -lt 1024 ]] && JOBS=2
 export DEBIAN_FRONTEND=noninteractive
 log "Setting up sonde receiver '$STATION' (radiod@$STATION, mDNS $MDNS_STATUS/$MDNS_DATA), auto_rx as user '$RUN_USER'"
+configure_backhaul_cost_controls
 
 # =================================================================================
 # 1. Headless (this is a 24/7 appliance; never boot a desktop)
@@ -199,6 +281,14 @@ if ! done_already 2-packages; then
     systemctl enable --now avahi-daemon 2>/dev/null || true
     mark_done 2-packages
 fi
+if ! done_already 2-cellular; then
+    log "[2c/5] cellular backhaul tools"
+    apt-get update -qq
+    apt-get install -y --no-install-recommends modemmanager libqmi-utils
+    mark_done 2-cellular
+fi
+log "Reconciling cellular backhaul support"
+configure_lte_backhaul
 if ! done_already 2-airspy-tools; then
     log "[2b/5] Airspy CLI tools"
     apt-get update -qq

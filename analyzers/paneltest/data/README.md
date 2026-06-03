@@ -5,16 +5,22 @@ March 22-April 7, 2026. The goal was to get a realistic, weather-exposed energy
 profile for a small off-grid receiver site rather than relying only on panel
 nameplate power.
 
-The test used a nominal 50 W solar panel on a south-facing balcony, tilted up at
-about 45 degrees. The panel output passed through the panel's attached charging
-circuit and into a GW Instek GPP-4323 bench supply/electronic load in load mode.
-The active samples show the load held almost entirely at **12.5 V**
-(`12.504-12.505 V` for the bulk of the run), so the archived power and energy
-numbers should be read as harvested output into an approximately 12.5 V load.
+The test used a [SOLPERK 50 W 12 V solar battery maintainer kit][panel] on a
+south-facing balcony, tilted up at about 45 degrees. This is a small rigid
+off-grid/trickle-charging kit: a nominal 50 W monocrystalline PV panel paired
+with a waterproof 10 A MPPT charge controller and an adjustable mounting bracket,
+sold for maintaining 12 V vehicle, RV, marine, and similar batteries. The panel
+output passed through that included charge controller and into a GW Instek
+GPP-4323 bench supply/electronic load in load mode. The active samples show the
+load held almost entirely at **12.5 V** (`12.504-12.505 V` for the bulk of the
+run), so the archived power and energy numbers should be read as harvested
+output from the kit's controller into an approximately 12.5 V load.
 
 Timestamps below are shown in `America/Los_Angeles`. The solar-elevation overlay
 in the figures uses Seattle-ish coordinates, `47.6, -122.33`, matching the live
 paneltest web logger. The raw logger data is stored as gzip-compressed CSV.
+
+[panel]: https://www.amazon.com/dp/B0DBQGQYFS
 
 ## Archived Run
 

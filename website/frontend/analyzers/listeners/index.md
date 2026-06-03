@@ -17,6 +17,8 @@ including:
 
 To see the analysis, enter a sonde serial number and click "Analyze".
 
+<script src="https://cdn.jsdelivr.net/npm/@upsetjs/bundle@1.11.0/dist/upsetjs.umd.production.min.js" integrity="sha512-P53bOndyDaFYKoYwZA6olCphZAMuLSpvoOd4IWqsLJmB9EOoitPiMixW4z8vjl1aMup5gD7V/oOb8j+4vhdtKg==" crossorigin="anonymous"></script>
+
 <script>
 
   function formatTable(stats) {
@@ -58,28 +60,156 @@ To see the analysis, enter a sonde serial number and click "Analyze".
     return html;
   }
 
-  function formatCoverage(coverage) {
+  // Number of combination classes (bars) shown per page.
+  let PAGE_SIZE = 40;
+
+  // Remembered so we can re-render the plot at the new width on window resize.
+  let lastCoverage = null;
+  // Which page of combination classes is currently shown, plus the data needed
+  // to redraw it when paging or resizing.
+  let currentPage = 0;
+  let pageState = null;
+
+  function renderCoverage(coverage, container) {
+    // Reset to the first page when a brand-new dataset is rendered (resize
+    // re-renders pass the same coverage object, and should keep the page).
+    if (coverage !== lastCoverage) {
+      currentPage = 0;
+    }
+    lastCoverage = coverage;
+
     if (!coverage || Object.keys(coverage).length === 0) {
-      return '';
+      container.innerHTML = '<p>No coverage data available.</p>';
+      return;
     }
 
-    let html = '<h3>Number of Points Heard By:</h3>';
-    html += '<table class="table table-sm"><thead><tr>';
-    html += '<th>Listeners</th><th>Points</th>';
-    html += '</tr></thead><tbody>';
-
-    // Sort by count (descending)
-    let entries = Object.entries(coverage).sort((a, b) => b[1] - a[1]);
-
-    for (let [listeners, count] of entries) {
-      html += '<tr>';
-      html += `<td>${listeners}</td>`;
-      html += `<td>${count}</td>`;
-      html += '</tr>';
+    // The backend gives us, for each exact combination of listeners, the
+    // number of points (frames) that exactly that set of listeners heard.
+    // Reconstruct synthetic "point" elements so UpSet.js can derive the sets
+    // and their intersections.
+    let elems = [];
+    let id = 0;
+    for (let [listeners, count] of Object.entries(coverage)) {
+      let sets = listeners.split(',');
+      for (let i = 0; i < count; i++) {
+        elems.push({ name: 'p' + (id++), sets: sets });
+      }
     }
 
-    html += '</tbody></table>';
-    return html;
+    // Sort the combinations (x-axis) and the rows (listeners) by number of
+    // points heard, descending.
+    let extracted = UpSetJS.extractCombinations(elems, {
+      combinationOrder: 'cardinality',
+      setOrder: 'cardinality:asc',
+    });
+
+    // Give each listener its own color (tints its set bar and matrix dots).
+    let palette = ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f'];
+    extracted.sets.forEach((s, i) => {
+      s.color = palette[i % palette.length];
+    });
+
+    let width = container.clientWidth || 800;
+    let height = Math.max(350, 250 + extracted.sets.length * 25);
+
+    // Too many combination classes are unreadable in a single chart. Stash the
+    // (sorted) combinations and render one page at a time, with next/prev
+    // buttons to flip through the tail. All pages share the same sorted rows.
+    pageState = {
+      sets: extracted.sets,
+      combos: extracted.combinations,
+      container: container,
+      width: width,
+      height: height,
+    };
+    renderPage();
+  }
+
+  function renderPage() {
+    if (!pageState) return;
+
+    let combos = pageState.combos;
+    let container = pageState.container;
+    let totalPages = Math.max(1, Math.ceil(combos.length / PAGE_SIZE));
+    if (currentPage < 0) currentPage = 0;
+    if (currentPage > totalPages - 1) currentPage = totalPages - 1;
+
+    container.innerHTML = '';
+
+    let chart = document.createElement('div');
+    container.appendChild(chart);
+
+    // Paging controls below the plot, centered (only needed when there's more
+    // than one page).
+    if (totalPages > 1) {
+      let nav = document.createElement('div');
+      nav.style.margin = '10px 0';
+      nav.style.textAlign = 'center';
+
+      let prev = document.createElement('button');
+      prev.type = 'button';
+      prev.className = 'button tiny';
+      prev.textContent = '← Prev';
+      prev.disabled = currentPage === 0;
+      prev.onclick = function () {
+        currentPage--;
+        renderPage();
+      };
+
+      let label = document.createElement('span');
+      label.style.margin = '0 12px';
+      label.textContent =
+        'Combination classes page ' + (currentPage + 1) + ' of ' + totalPages;
+
+      let next = document.createElement('button');
+      next.type = 'button';
+      next.className = 'button tiny';
+      next.textContent = 'Next →';
+      next.disabled = currentPage >= totalPages - 1;
+      next.onclick = function () {
+        currentPage++;
+        renderPage();
+      };
+
+      nav.appendChild(prev);
+      nav.appendChild(label);
+      nav.appendChild(next);
+      container.appendChild(nav);
+    }
+
+    let start = currentPage * PAGE_SIZE;
+    UpSetJS.render(chart, {
+      sets: pageState.sets,
+      combinations: combos.slice(start, start + PAGE_SIZE),
+      width: pageState.width,
+      height: pageState.height,
+      setName: 'Points heard',
+      combinationName: 'Points heard by listeners',
+      color: '#5a4fcf',
+      selectionColor: '#e15759',
+      hasSelectionOpacity: 0.4,
+      // Shrink the set-size bar chart, but give the set labels enough room for
+      // full callsigns.
+      widthRatios: [0.1, 0.15],
+    });
+
+    // UpSet.js draws the per-bar count labels horizontally, so with many
+    // combinations they overlap. Rotate them to vertical after render.
+    requestAnimationFrame(function () {
+      let labels = container.querySelectorAll('text[class^="cBarTextStyle-"]');
+      labels.forEach(function (label) {
+        let bb = label.getBBox();
+        let cx = bb.x + bb.width / 2;
+        let cy = bb.y + bb.height / 2;
+        // Rotate to vertical, then shift up so the (now vertical) label sits
+        // fully above the bar it labels instead of overlapping it.
+        let lift = bb.width / 2 + 4;
+        label.setAttribute(
+          'transform',
+          'translate(0,' + -lift + ') rotate(-90 ' + cx + ' ' + cy + ')'
+        );
+      });
+    });
   }
 
   function analyze() {
@@ -110,9 +240,12 @@ To see the analysis, enter a sonde serial number and click "Analyze".
 
         html += '<h2>Listener Statistics</h2>';
         html += formatTable(data.stats);
-        html += formatCoverage(data.coverage);
+        html += '<h3>Number of Points Heard By:</h3>';
+        html += '<div id="coverage_plot" style="margin-top: 15px;"></div>';
 
         $('#result_area').html(html);
+
+        renderCoverage(data.coverage, document.getElementById('coverage_plot'));
       })
       .catch(function(error) {
         l.stop();
@@ -121,6 +254,19 @@ To see the analysis, enter a sonde serial number and click "Analyze".
 
     return false;
   }
+
+  // UpSet.js renders at a fixed pixel width, so re-render it when the window
+  // resizes (debounced).
+  let resizeTimer = null;
+  window.addEventListener('resize', function () {
+    if (resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      let container = document.getElementById('coverage_plot');
+      if (container && lastCoverage) {
+        renderCoverage(lastCoverage, container);
+      }
+    }, 150);
+  });
 </script>
 
 <div class="form-group" style="clear:both">

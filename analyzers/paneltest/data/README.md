@@ -11,10 +11,10 @@ off-grid/trickle-charging kit: a nominal 50 W monocrystalline PV panel paired
 with a waterproof 10 A MPPT charge controller and an adjustable mounting bracket,
 sold for maintaining 12 V vehicle, RV, marine, and similar batteries. The panel
 output passed through that included charge controller and into a GW Instek
-GPP-4323 bench supply/electronic load in load mode. The active samples show the
-load held almost entirely at **12.5 V** (`12.504-12.505 V` for the bulk of the
-run), so the archived power and energy numbers should be read as harvested
-output from the kit's controller into an approximately 12.5 V load.
+GPP-4323 bench supply/electronic load in load mode. The load voltage was set to
+**12.5 V** because that appeared to be near the best-power point for this panel
+kit in this setup, so the archived power and energy numbers should be read as
+harvested output from the kit's controller into that selected load voltage.
 
 Timestamps below are shown in `America/Los_Angeles`. The solar-elevation overlay
 in the figures uses Seattle-ish coordinates, `47.6, -122.33`, matching the live

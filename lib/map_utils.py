@@ -43,6 +43,13 @@ from pyproj import Transformer
 # Whitespace padding around map boundaries (20%)
 DEFAULT_MAP_WHITESPACE = 0.2
 
+# Minimum lat/lon span (in degrees) for a map. Degenerate point sets -- a
+# single point, or several points that all share a latitude or longitude --
+# would otherwise produce a zero-size extent and a divide-by-zero in the zoom
+# calculation, so the extent is expanded around its center to at least this
+# span. ~0.01 deg is roughly 1 km.
+MIN_MAP_SPAN_DEG = 0.01
+
 
 @dataclass
 class GroundReceptionStats:
@@ -71,6 +78,17 @@ class MapUtils:
     def to_mercator_xy(self, lat, lon):
         return self.wgs84_to_mercator.transform(lat, lon)
 
+    # Expand a [lo, hi] range symmetrically so it spans at least
+    # MIN_MAP_SPAN_DEG degrees, preventing zero-size extents (and the resulting
+    # divide-by-zero in the zoom calculation) for degenerate point sets.
+    @staticmethod
+    def _ensure_min_span(lo: float, hi: float) -> Tuple[float, float]:
+        if hi - lo < MIN_MAP_SPAN_DEG:
+            center = (lo + hi) / 2.0
+            lo = center - MIN_MAP_SPAN_DEG / 2.0
+            hi = center + MIN_MAP_SPAN_DEG / 2.0
+        return lo, hi
+
     # Calculate map boundaries and zoom level for given points
     def get_map_limits(
         self, points, map_whitespace: float = DEFAULT_MAP_WHITESPACE
@@ -79,6 +97,9 @@ class MapUtils:
         max_lat = max([point[0] for point in points])
         min_lon = min([point[1] for point in points])
         max_lon = max([point[1] for point in points])
+        # Guard against degenerate (single-point or zero-spread) inputs.
+        min_lat, max_lat = self._ensure_min_span(min_lat, max_lat)
+        min_lon, max_lon = self._ensure_min_span(min_lon, max_lon)
         min_x, min_y = self.to_mercator_xy(min_lat, min_lon)
         max_x, max_y = self.to_mercator_xy(max_lat, max_lon)
         x_pad = (max_x - min_x) * map_whitespace

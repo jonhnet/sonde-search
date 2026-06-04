@@ -4,7 +4,9 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../.."))
 
-from lib.map_utils import get_elevation, identify_ground_points
+import numpy as np
+
+from lib.map_utils import MapUtils, get_elevation, identify_ground_points
 from website.backend.src.util import FakeSondeHub
 
 
@@ -56,3 +58,35 @@ class Test_GroundPoints:
             f"Found ground points with |vel_v| >= 1: {ground_points[ground_points['vel_v'].abs() >= 1]}"
         assert (ground_points['vel_h'].abs() < 1).all(), \
             f"Found ground points with |vel_h| >= 1: {ground_points[ground_points['vel_h'].abs() >= 1]}"
+
+
+class Test_GetMapLimits:
+    """Tests for map boundary/zoom calculation, including degenerate inputs."""
+
+    def setup_method(self):
+        self.mu = MapUtils()
+
+    @pytest.mark.parametrize("points,description", [
+        ([(47.5, -122.3)], "single point"),
+        ([(47.5, -122.3), (47.5, -122.3), (47.5, -122.3)], "identical points"),
+        ([(47.5, -122.3), (47.5, -121.9)], "same latitude, different longitude"),
+        ([(47.5, -122.3), (47.9, -122.3)], "same longitude, different latitude"),
+    ])
+    def test_degenerate_extents(self, points, description):
+        """Degenerate point sets must not divide by zero and must yield sane bounds."""
+        min_x, min_y, max_x, max_y, zoom = self.mu.get_map_limits(points)
+
+        assert min_x < max_x, f"Empty x-extent for {description}"
+        assert min_y < max_y, f"Empty y-extent for {description}"
+        assert all(np.isfinite(v) for v in (min_x, min_y, max_x, max_y)), \
+            f"Non-finite bounds for {description}"
+        assert isinstance(zoom, int), f"Zoom not an int for {description}"
+        assert 1 <= zoom <= 18, f"Zoom {zoom} out of range for {description}"
+
+    def test_normal_extent(self):
+        """A well-spread set of points should still produce sane bounds and zoom."""
+        points = [(47.0, -123.0), (48.0, -121.0)]
+        min_x, min_y, max_x, max_y, zoom = self.mu.get_map_limits(points)
+
+        assert min_x < max_x and min_y < max_y
+        assert 1 <= zoom <= 18

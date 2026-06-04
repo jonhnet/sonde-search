@@ -17,6 +17,14 @@ including:
 
 To see the analysis, enter a sonde serial number and click "Analyze".
 
+<style>
+  /* UpSet.js has no option to disable the vertical lines that connect the
+     matrix dots within a combination, so hide them by their generated class. */
+  #coverage_plot [class^="upsetLine-"] {
+    display: none;
+  }
+</style>
+
 <script src="https://cdn.jsdelivr.net/npm/@upsetjs/bundle@1.11.0/dist/upsetjs.umd.production.min.js" integrity="sha512-P53bOndyDaFYKoYwZA6olCphZAMuLSpvoOd4IWqsLJmB9EOoitPiMixW4z8vjl1aMup5gD7V/oOb8j+4vhdtKg==" crossorigin="anonymous"></script>
 
 <script>

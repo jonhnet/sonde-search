@@ -12,7 +12,6 @@ from typing import Optional
 import argparse
 import boto3
 import html
-import contextily as cx  # type: ignore
 import geocoder
 import matplotlib
 import matplotlib.figure
@@ -136,15 +135,7 @@ class EmailNotifier:
         ax.set_ylim(min_y, max_y)
         print(f"{sub['email']}: downloading at zoomlevel {zoom}")
 
-        cx.add_basemap(
-            ax,
-            zoom=zoom,  # type: ignore[arg-type]
-            crs='EPSG:3857',
-            source=cx.providers.OpenStreetMap.Mapnik,  # type: ignore[attr-defined]
-            #source=cx.providers.CyclOSM,
-            #source=cx.providers.Stamen.Terrain,
-            #source=cx.providers.Stamen.TopOSMFeatures,
-        )
+        map_utils.add_basemap(ax, zoom)
         fig.tight_layout()
 
         return fig

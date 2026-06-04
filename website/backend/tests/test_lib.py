@@ -6,6 +6,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../.."))
 
 import numpy as np
 
+import lib.map_utils as map_utils
 from lib.map_utils import MapUtils, get_elevation, identify_ground_points
 from website.backend.src.util import FakeSondeHub
 
@@ -90,3 +91,40 @@ class Test_GetMapLimits:
 
         assert min_x < max_x and min_y < max_y
         assert 1 <= zoom <= 18
+
+
+class Test_AddBasemap:
+    """Tests for the basemap helper's tolerance of tile-download failures."""
+
+    def test_success_first_try(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(map_utils.cx, "add_basemap",
+                            lambda *a, **k: calls.append(1))
+        assert map_utils.add_basemap(ax=None, zoom=10) is True
+        assert len(calls) == 1
+
+    def test_retries_then_succeeds(self, monkeypatch):
+        monkeypatch.setattr(map_utils.time, "sleep", lambda s: None)
+        calls = []
+
+        def flaky(*a, **k):
+            calls.append(1)
+            if len(calls) < 3:
+                raise TypeError("int() argument must be ..., not 'NoneType'")
+
+        monkeypatch.setattr(map_utils.cx, "add_basemap", flaky)
+        assert map_utils.add_basemap(ax=None, zoom=10, attempts=3) is True
+        assert len(calls) == 3
+
+    def test_gives_up_without_raising(self, monkeypatch):
+        monkeypatch.setattr(map_utils.time, "sleep", lambda s: None)
+        calls = []
+
+        def always_fails(*a, **k):
+            calls.append(1)
+            raise TypeError("int() argument must be ..., not 'NoneType'")
+
+        monkeypatch.setattr(map_utils.cx, "add_basemap", always_fails)
+        # Must not raise -- a tile failure should not abort the whole run.
+        assert map_utils.add_basemap(ax=None, zoom=10, attempts=3) is False
+        assert len(calls) == 3

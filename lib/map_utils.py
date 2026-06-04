@@ -122,6 +122,32 @@ class MapUtils:
         return min_x, min_y, max_x, max_y, zoom
 
 
+def add_basemap(ax, zoom, attempts: int = 3) -> bool:
+    """Add OSM map tiles to an axis, tolerating transient tile-download errors.
+
+    Tile servers occasionally return a missing/None tile, which makes
+    contextily's _merge_tiles() raise (e.g. "int() argument ... not
+    'NoneType'"). Retry a few times; if it still fails, leave the plot without
+    a basemap rather than aborting the whole map render.
+
+    Returns True if the basemap was added, False if it was skipped.
+    """
+    for attempt in range(attempts):
+        try:
+            cx.add_basemap(
+                ax,
+                zoom=zoom,
+                crs='EPSG:3857',
+                source=cx.providers.OpenStreetMap.Mapnik,
+            )
+            return True
+        except Exception as e:
+            print(f"Basemap download failed (attempt {attempt + 1}/{attempts}): {e}")
+            time.sleep(1)
+    print("Giving up on basemap tiles; rendering map without them")
+    return False
+
+
 def get_elevation(lat: float, lon: float) -> Optional[float]:
     """Get ground elevation in meters at a given lat/lon.
 
@@ -333,12 +359,7 @@ def draw_ground_reception_map(ground_points: pd.DataFrame,
     ax.set_xticks(x_ticks)
     ax.set_yticks(y_ticks)
 
-    cx.add_basemap(
-        ax,
-        zoom=zoom,
-        crs='EPSG:3857',
-        source=cx.providers.OpenStreetMap.Mapnik,
-    )
+    add_basemap(ax, zoom)
 
     # Set up axes with tick marks in meters
     # Use the weighted average as the origin point for relative distances

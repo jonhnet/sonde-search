@@ -27,7 +27,12 @@ def filter_real_flights(df):
     if df.empty:
         return df
 
-    grouped = df.groupby('serial')
+    # Drop NA frame/alt rows; an all-NA 'frame' group would crash idxmax().
+    usable = df.dropna(subset=['frame', 'alt'])
+    if usable.empty:
+        return df.iloc[:0]
+
+    grouped = usable.groupby('serial')
     max_alt = grouped['alt'].max()
     final_alt = grouped.apply(
         lambda g: g.loc[g['frame'].idxmax(), 'alt'], include_groups=False
@@ -54,4 +59,9 @@ def get_landing_rows(df):
     if df.empty:
         return df
 
-    return df.loc[df.groupby('serial')['frame'].idxmax()]
+    # Drop NA-frame rows; an all-NA 'frame' group would crash idxmax().
+    usable = df.dropna(subset=['frame'])
+    if usable.empty:
+        return df.iloc[:0]
+
+    return df.loc[usable.groupby('serial')['frame'].idxmax()]

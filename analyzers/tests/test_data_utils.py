@@ -3,6 +3,7 @@
 import os
 import sys
 
+import numpy as np
 import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -81,6 +82,40 @@ def test_empty_dataframe():
     assert len(result) == 0
 
 
+def test_all_na_frame_does_not_crash():
+    """A sonde whose 'frame' is entirely NA must be skipped, not crash idxmax()."""
+    records = (
+        _make_sonde('GOOD', 20000, 500) +
+        [
+            {'serial': 'NAFRAME', 'frame': np.nan, 'alt': 20000},
+            {'serial': 'NAFRAME', 'frame': np.nan, 'alt': 500},
+        ]
+    )
+    df = pd.DataFrame(records)
+    result = filter_real_flights(df)
+    assert set(result['serial']) == {'GOOD'}
+
+
+def test_all_na_alt_rejected():
+    """A sonde whose 'alt' is entirely NA can't be a real flight and is dropped."""
+    df = pd.DataFrame([
+        {'serial': 'NAALT', 'frame': 100, 'alt': np.nan},
+        {'serial': 'NAALT', 'frame': 200, 'alt': np.nan},
+    ])
+    result = filter_real_flights(df)
+    assert len(result) == 0
+
+
+def test_all_na_everything_returns_empty():
+    """A DataFrame with no usable frame/alt rows should return empty, not crash."""
+    df = pd.DataFrame([
+        {'serial': 'X', 'frame': np.nan, 'alt': np.nan},
+        {'serial': 'Y', 'frame': np.nan, 'alt': np.nan},
+    ])
+    result = filter_real_flights(df)
+    assert len(result) == 0
+
+
 # --- get_landing_rows tests ---
 
 def test_get_landing_rows_picks_last_frame():
@@ -113,3 +148,15 @@ def test_get_landing_rows_empty():
     df = pd.DataFrame(columns=['serial', 'frame'])
     result = get_landing_rows(df)
     assert len(result) == 0
+
+
+def test_get_landing_rows_all_na_frame():
+    """A serial whose 'frame' is entirely NA must be skipped, not crash idxmax()."""
+    df = pd.DataFrame([
+        {'serial': 'A', 'frame': 100, 'lat': 1.0},
+        {'serial': 'A', 'frame': 200, 'lat': 2.0},
+        {'serial': 'NAFRAME', 'frame': np.nan, 'lat': 9.0},
+    ])
+    result = get_landing_rows(df)
+    assert set(result['serial']) == {'A'}
+    assert result.loc[result['serial'] == 'A', 'frame'].iloc[0] == 200

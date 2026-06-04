@@ -125,6 +125,23 @@ with no `.local`, multicast, IGMP, or WireGuard tunnel payload in the capture.
 That extrapolates to about **15 kB/day** of idle basal cellular traffic, before
 SondeHub uploads or admin sessions.
 
+With the WireGuard DNS re-resolution timer enabled, a post-reboot one-hour
+WiFi-disabled capture showed the tunnel recovering over LTE: one A/AAAA lookup
+for `vpn.circlemud.org`, WireGuard handshakes/rekeys,
+`PersistentKeepalive=25` traffic, and NTP. `wwan0` counters increased by
+**4702 bytes RX + 15650 bytes TX**, or about **0.49 MB/day** if the tunnel
+stays up continuously.
+
+| Class | Packets | RX bytes | TX bytes | Total |
+|---|---:|---:|---:|---:|
+| DNS for `vpn.circlemud.org` | 4 | 170 | 126 | 296 |
+| NTP | 34 | 1292 | 1292 | 2584 |
+| WireGuard handshake/rekey tx | 27 | 0 | 4752 | 4752 |
+| WireGuard handshake/rekey rx | 27 | 3240 | 0 | 3240 |
+| WireGuard keepalive tx | 158 | 0 | 9480 | 9480 |
+| Other | 0 | 0 | 0 | 0 |
+| **Total** | **250** | **4702** | **15650** | **20352** |
+
 ## Verify
 ```
 systemctl status radiod@<station> auto_rx
@@ -298,8 +315,9 @@ weatherproof enclosure.
 
 **Data plan:** use a low-volume IoT data SIM with the provider APN passed to
 the installer via `LTE_APN`. Auto_rx uploads are a few KB/sec per active sonde.
-WireGuard keepalives (`PersistentKeepalive=25`) add ~2 MB/month during the
-4 h/day active window. Total monthly data is well under 100 MB.
+WireGuard keepalives (`PersistentKeepalive=25`) add about 0.5 MB/day if active
+continuously, or about 2.4 MB/month during a 4 h/day active window. Total
+monthly data is well under 100 MB.
 
 **Remote access:** a persistent WireGuard tunnel to a VPS provides inbound
 SSH without dealing with carrier NAT or port forwarding.
@@ -318,8 +336,12 @@ VPN_PEER_NAME=pirate VPN_SERVER_HOST=vpn.example.org ./setup-wireguard.sh
 ```
 `setup-wireguard.sh` calls `ssh "$VPN_SERVER_HOST" get-vpn-key.py ...`,
 installs `wireguard-tools` on the Pi, writes `/etc/wireguard/wg0.conf`, and
-enables `wg-quick@wg0`. Use `REUSE_WIREGUARD=1` only when intentionally
-rotating the peer keys while keeping the existing VPN addresses.
+enables `wg-quick@wg0`. It also installs the packaged WireGuard
+`reresolve-dns.sh` helper as a one-minute systemd timer. The client config keeps
+the VPN endpoint as a hostname; if the latest handshake is older than 135
+seconds, the helper re-resolves that hostname and updates the live peer endpoint
+with `wg set`. Use `REUSE_WIREGUARD=1` only when intentionally rotating the peer
+keys while keeping the existing VPN addresses.
 
 ## Bill of materials
 

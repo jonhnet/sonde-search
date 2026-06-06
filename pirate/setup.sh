@@ -179,6 +179,146 @@ APT::Update::Pre-Invoke { "/usr/local/sbin/pirate-apt-backhaul-guard"; };
 DPkg::Pre-Invoke { "/usr/local/sbin/pirate-apt-backhaul-guard"; };
 EOF
 }
+configure_diagnostics() {
+    log "Reconciling diagnostic logging"
+
+    install -d -m 2755 -o root -g systemd-journal /var/log/journal
+    if [[ -f /etc/systemd/journald.conf ]]; then
+        if grep -Eq '^[#[:space:]]*Storage=' /etc/systemd/journald.conf; then
+            sed -i -E 's/^[#[:space:]]*Storage=.*/Storage=persistent/' /etc/systemd/journald.conf
+        else
+            sed -i '/^\[Journal\]/a Storage=persistent' /etc/systemd/journald.conf
+        fi
+    fi
+    systemctl restart systemd-journald.service 2>/dev/null || true
+}
+configure_power_savings() {
+    log "Reconciling power savings"
+
+    local wifi_grace_seconds="${WIFI_RESCUE_WINDOW_SECONDS:-240}"
+    local login_user="${PIRATE_LOGIN_USER:-${SUDO_USER:-jelson}}"
+    local login_home=""
+    local boot_config=""
+    for candidate in /boot/firmware/config.txt /boot/config.txt; do
+        if [[ -f "$candidate" ]]; then
+            boot_config="$candidate"
+            break
+        fi
+    done
+    if [[ -n "$boot_config" ]]; then
+        if grep -Eq '^dtoverlay=vc4-kms-v3d([,[:space:]]|$)' "$boot_config"; then
+            for param in nohdmi noaudio; do
+                if ! grep -Eq "^dtoverlay=vc4-kms-v3d([^[:space:]]*,)?${param}([,[:space:]]|$)" "$boot_config"; then
+                    sed -i -E "/^dtoverlay=vc4-kms-v3d([,[:space:]]|$)/ s/$/,${param}/" "$boot_config"
+                fi
+            done
+        else
+            cat >> "$boot_config" <<'EOF'
+
+# Pirate headless power savings: disable HDMI output/audio.
+dtoverlay=vc4-kms-v3d,nohdmi,noaudio
+EOF
+        fi
+    fi
+
+    cat > /usr/local/sbin/pirate-power-savings <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Keep the bench/deployment defaults lean without touching WiFi. WiFi is useful
+# for local setup and can be disabled separately once LTE failover is verified.
+if command -v vcgencmd >/dev/null 2>&1; then
+    vcgencmd display_power 0 >/dev/null 2>&1 || true
+fi
+
+rfkill block bluetooth 2>/dev/null || true
+EOF
+    chmod 0755 /usr/local/sbin/pirate-power-savings
+
+    cat > /etc/systemd/system/pirate-power-savings.service <<'EOF'
+[Unit]
+Description=Pirate runtime power savings
+After=multi-user.target NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/pirate-power-savings
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl disable --now bluetooth.service hciuart.service 2>/dev/null || true
+    systemctl daemon-reload
+    systemctl enable --now pirate-power-savings.service
+
+    login_home="$(getent passwd "$login_user" | cut -d: -f6 || true)"
+    if [[ -n "$login_home" && -d "$login_home" ]]; then
+        cat > "${login_home}/keep-wifi-on" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+sudo systemctl stop pirate-wifi-rescue-off.timer
+sudo systemctl stop pirate-wifi-rescue-off.service 2>/dev/null || true
+sudo nmcli radio wifi on
+nmcli radio
+EOF
+        chown "${login_user}:${login_user}" "${login_home}/keep-wifi-on" 2>/dev/null || true
+        chmod 0755 "${login_home}/keep-wifi-on"
+    fi
+
+    if [[ "$wifi_grace_seconds" =~ ^[0-9]+$ ]] && (( wifi_grace_seconds > 0 )); then
+        cat > /etc/systemd/system/pirate-wifi-rescue-on.service <<'EOF'
+[Unit]
+Description=Enable WiFi rescue window at boot
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/nmcli radio wifi on
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+        cat > /etc/systemd/system/pirate-wifi-rescue-off.service <<'EOF'
+[Unit]
+Description=End WiFi rescue window
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/nmcli radio wifi off
+EOF
+
+        cat > /etc/systemd/system/pirate-wifi-rescue-off.timer <<EOF
+[Unit]
+Description=Turn off WiFi after the boot rescue window
+
+[Timer]
+OnBootSec=${wifi_grace_seconds}s
+AccuracySec=10s
+Unit=pirate-wifi-rescue-off.service
+
+[Install]
+WantedBy=timers.target
+EOF
+
+        systemctl daemon-reload
+        systemctl enable --now pirate-wifi-rescue-on.service
+        # Do not start the off-timer during setup; if OnBootSec has already
+        # elapsed, systemd would fire it immediately and cut off this session.
+        systemctl enable pirate-wifi-rescue-off.timer
+    else
+        systemctl disable --now pirate-wifi-rescue-on.service pirate-wifi-rescue-off.timer 2>/dev/null || true
+        systemctl daemon-reload
+    fi
+}
 configure_avahi_backhaul_policy() {
     log "Reconciling Avahi backhaul policy"
 
@@ -438,6 +578,8 @@ configure_lte_backhaul
 configure_avahi_backhaul_policy
 configure_mdns_resolver_policy
 configure_multicast_backhaul_policy
+configure_diagnostics
+configure_power_savings
 if ! done_already 2-airspy-tools; then
     log "[2b/5] Airspy CLI tools"
     apt-get update -qq

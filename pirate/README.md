@@ -142,6 +142,41 @@ stays up continuously.
 | Other | 0 | 0 | 0 | 0 |
 | **Total** | **250** | **4702** | **15650** | **20352** |
 
+## Power Notes
+
+Pirate's initial bench baseline with the Raspberry Pi 4, Airspy, LTE dongle,
+WiFi, Ethernet, Bluetooth, and HDMI display power all left enabled was about
+**930 mA average over 60 seconds** at the 5 V input rail.
+
+Stopping Bluetooth, disabling HDMI at boot, and dropping Ethernet did not show
+a measurable improvement on the bench; the post-reboot reading was about
+**940 mA**. A five-minute WiFi-off test dropped current to about **910 mA**, so
+WiFi is a real but modest savings: roughly **30 mA / 150 mW**.
+
+The installer reconciles a small power-savings service that leaves Ethernet
+available for setup/debugging/rescue access but turns off obvious unused
+subsystems:
+
+- stop/disable Bluetooth services and rfkill-block Bluetooth
+- request HDMI display power off with `vcgencmd display_power 0`
+- add `nohdmi,noaudio` to the `vc4-kms-v3d` boot overlay so HDMI output/audio
+  are not bound after reboot
+
+WiFi is handled as a rescue window rather than left on continuously. At boot,
+the installer-managed services force WiFi on, then a timer turns it off after
+`WIFI_RESCUE_WINDOW_SECONDS` seconds. The default is **240 seconds**. This keeps
+steady-state field power lower while preserving a simple recovery path: power
+cycle the station and connect during the boot window. Run setup with
+`WIFI_RESCUE_WINDOW_SECONDS=0` to disable the timer and leave WiFi on.
+
+During the boot rescue window, run this from the Pi login shell to keep WiFi on:
+```
+~/keep-wifi-on
+```
+That stops the WiFi-off timer and turns WiFi on immediately.
+It only affects the current boot; after the next reboot, the normal boot rescue
+window runs again and WiFi turns off after the configured delay.
+
 ## Verify
 ```
 systemctl status radiod@<station> auto_rx

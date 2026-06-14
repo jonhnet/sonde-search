@@ -1,0 +1,3 @@
+# Local APRS-IS config with real callsign/passcode. Use config_example.yaml as
+# the template; the deployed copy lives at /etc/aprs-backhaul/cloud.yaml.
+config.yaml

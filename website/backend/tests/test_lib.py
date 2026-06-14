@@ -5,6 +5,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../.."))
 
 import numpy as np
+import pandas as pd
 
 import lib.map_utils as map_utils
 from lib.map_utils import MapUtils, get_elevation, identify_ground_points
@@ -64,6 +65,58 @@ class Test_GroundPoints:
         assert (
             ground_points["vel_h"].abs() < 1
         ).all(), f"Found ground points with |vel_h| >= 1: {ground_points[ground_points['vel_h'].abs() >= 1]}"
+
+    @staticmethod
+    def _flight(velocities):
+        """Build a minimal flight DataFrame from a list of (vel_v, vel_h) tuples."""
+        return pd.DataFrame(
+            {
+                "frame": range(len(velocities)),
+                "alt": [200.0] * len(velocities),
+                "lat": [47.5] * len(velocities),
+                "lon": [-122.3] * len(velocities),
+                "vel_v": [v[0] for v in velocities],
+                "vel_h": [v[1] for v in velocities],
+            }
+        )
+
+    def test_nan_velocity_counted_as_ground_not_truncating_run(self):
+        """NaN velocities (synthetic velocity not computed for a frame) must count
+        as zero, not chop the trailing ground run. A grounded sonde with NaN
+        frames sprinkled through its on-ground period yields the whole run."""
+        nan = float("nan")
+        # 1 airborne frame, then 6 on-ground frames, two of which have NaN velocity.
+        flight = self._flight(
+            [(5.0, 8.0), (0.1, 0.2), (nan, 0.1), (0.0, 0.3), (0.2, nan), (0.1, 0.1), (0.0, 0.2)]
+        )
+        ground = identify_ground_points(flight)
+        assert ground is not None
+        # All 6 trailing frames are on the ground, NaN ones included.
+        assert len(ground) == 6, f"NaN frames wrongly excluded from run: got {len(ground)}"
+
+    def test_trailing_nan_velocity_still_detects_ground(self):
+        """If the very last received frame has NaN velocity, the sonde must still
+        be recognized as grounded (this was the 503-2-02485 bug: the block and
+        map were suppressed because the last frame's NaN read looked airborne)."""
+        nan = float("nan")
+        flight = self._flight([(5.0, 8.0), (0.1, 0.2), (0.0, 0.1), (nan, nan)])
+        ground = identify_ground_points(flight)
+        assert ground is not None, "Trailing NaN-velocity frame wrongly suppressed ground detection"
+        assert len(ground) == 3
+
+    def test_all_nan_velocity_is_not_ground_reception(self):
+        """A data error where velocity is entirely NaN must NOT be read as a long
+        ground reception (zero-filling alone would make the whole flight 'ground')."""
+        nan = float("nan")
+        flight = self._flight([(nan, nan), (nan, nan), (nan, nan)])
+        assert identify_ground_points(flight) is None
+
+    def test_airborne_with_trailing_nan_is_not_ground(self):
+        """A still-airborne sonde whose only ground-looking frame is a trailing NaN
+        must not be reported as grounded -- the run has no measured velocity."""
+        nan = float("nan")
+        flight = self._flight([(5.0, 8.0), (6.0, 7.0), (nan, nan)])
+        assert identify_ground_points(flight) is None
 
 
 class Test_GetMapLimits:

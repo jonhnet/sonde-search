@@ -92,6 +92,31 @@ class Test_GetMapLimits:
         assert min_x < max_x and min_y < max_y
         assert 1 <= zoom <= 18
 
+    def test_min_span_zero_keeps_tiny_extent(self):
+        """min_span=0 must not inflate a few-meters-wide cluster to the default floor.
+
+        The ground reception map relies on this: its points span only meters, and
+        the default ~1 km floor would zoom it uselessly far out.
+        """
+        # Two points ~3 m apart in latitude.
+        points = [(47.5, -122.3), (47.5 + 3e-5, -122.3)]
+
+        floored = self.mu.get_map_limits(points)
+        tight = self.mu.get_map_limits(points, map_whitespace=0, min_span=0)
+
+        # The default floor blows the extent up; min_span=0 keeps it tight.
+        assert (floored[2] - floored[0]) > (tight[2] - tight[0])
+        assert (tight[2] - tight[0]) < 100, "few-meters cluster should stay under 100 m wide"
+        assert tight[4] == 18, "a meters-wide map should be at max zoom"
+
+    def test_min_span_zero_single_point(self):
+        """min_span=0 with a single point must not divide by zero; zoom caps at 18."""
+        min_x, min_y, max_x, max_y, zoom = self.mu.get_map_limits(
+            [(47.5, -122.3)], map_whitespace=0, min_span=0)
+
+        assert all(np.isfinite(v) for v in (min_x, min_y, max_x, max_y))
+        assert zoom == 18
+
 
 class Test_AddBasemap:
     """Tests for the basemap helper's tolerance of tile-download failures."""

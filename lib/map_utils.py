@@ -43,11 +43,11 @@ from pyproj import Transformer
 # Whitespace padding around map boundaries (20%)
 DEFAULT_MAP_WHITESPACE = 0.2
 
-# Minimum lat/lon span (in degrees) for a map. Degenerate point sets -- a
-# single point, or several points that all share a latitude or longitude --
-# would otherwise produce a zero-size extent and a divide-by-zero in the zoom
-# calculation, so the extent is expanded around its center to at least this
-# span. ~0.01 deg is roughly 1 km.
+# Default minimum lat/lon span (in degrees) for a map. Degenerate point sets --
+# a single point, or several points that all share a latitude or longitude --
+# would otherwise produce a tiny/zero-size extent. Callers that want a usable
+# minimum extent (rather than maximally zoomed in) get this floor by default;
+# callers that genuinely want any size can pass min_span=0. ~0.01 deg is ~1 km.
 MIN_MAP_SPAN_DEG = 0.01
 
 
@@ -78,28 +78,29 @@ class MapUtils:
     def to_mercator_xy(self, lat, lon):
         return self.wgs84_to_mercator.transform(lat, lon)
 
-    # Expand a [lo, hi] range symmetrically so it spans at least
-    # MIN_MAP_SPAN_DEG degrees, preventing zero-size extents (and the resulting
-    # divide-by-zero in the zoom calculation) for degenerate point sets.
+    # Expand a [lo, hi] range symmetrically so it spans at least min_span
+    # degrees, preventing zero-size extents (and the resulting divide-by-zero in
+    # the zoom calculation) for degenerate point sets.
     @staticmethod
-    def _ensure_min_span(lo: float, hi: float) -> Tuple[float, float]:
-        if hi - lo < MIN_MAP_SPAN_DEG:
+    def _ensure_min_span(lo: float, hi: float, min_span: float) -> Tuple[float, float]:
+        if hi - lo < min_span:
             center = (lo + hi) / 2.0
-            lo = center - MIN_MAP_SPAN_DEG / 2.0
-            hi = center + MIN_MAP_SPAN_DEG / 2.0
+            lo = center - min_span / 2.0
+            hi = center + min_span / 2.0
         return lo, hi
 
     # Calculate map boundaries and zoom level for given points
     def get_map_limits(
-        self, points, map_whitespace: float = DEFAULT_MAP_WHITESPACE
+        self, points, map_whitespace: float = DEFAULT_MAP_WHITESPACE,
+        min_span: float = MIN_MAP_SPAN_DEG
     ) -> Tuple[float, float, float, float, float]:
         min_lat = min([point[0] for point in points])
         max_lat = max([point[0] for point in points])
         min_lon = min([point[1] for point in points])
         max_lon = max([point[1] for point in points])
         # Guard against degenerate (single-point or zero-spread) inputs.
-        min_lat, max_lat = self._ensure_min_span(min_lat, max_lat)
-        min_lon, max_lon = self._ensure_min_span(min_lon, max_lon)
+        min_lat, max_lat = self._ensure_min_span(min_lat, max_lat, min_span)
+        min_lon, max_lon = self._ensure_min_span(min_lon, max_lon, min_span)
         min_x, min_y = self.to_mercator_xy(min_lat, min_lon)
         max_x, max_y = self.to_mercator_xy(max_lat, max_lon)
         x_pad = (max_x - min_x) * map_whitespace
@@ -110,14 +111,15 @@ class MapUtils:
         min_y -= max_pad
         max_y += max_pad
 
-        # Calculate the zoom
+        # Calculate the zoom. A zero span (a single point, or min_span=0 with
+        # coincident points) means maximally zoomed in, so guard the log against
+        # divide-by-zero and let the cap below clamp it.
         lat_length = max_lat - min_lat
         lon_length = max_lon - min_lon
-        zoom_lat = np.ceil(np.log2(360 * 2.0 / lat_length))
-        zoom_lon = np.ceil(np.log2(360 * 2.0 / lon_length))
-        zoom = np.min([zoom_lon, zoom_lat])
-        zoom = int(zoom) + 1
-        zoom = min(zoom, 18)  # limit to max zoom level of tiles
+        zoom_lat = np.log2(360 * 2.0 / lat_length) if lat_length > 0 else np.inf
+        zoom_lon = np.log2(360 * 2.0 / lon_length) if lon_length > 0 else np.inf
+        zoom = min(zoom_lon, zoom_lat)
+        zoom = 18 if not np.isfinite(zoom) else min(int(np.ceil(zoom)) + 1, 18)
 
         return min_x, min_y, max_x, max_y, zoom
 
@@ -249,45 +251,27 @@ def identify_ground_points(flight_df: pd.DataFrame) -> Optional[pd.DataFrame]:
     return flight_df.iloc[first_ground_idx:]
 
 
-def draw_ground_reception_map(ground_points: pd.DataFrame,
-                              map_utils: Optional['MapUtils'] = None,
-                              size: int = 10) -> Tuple[matplotlib.figure.Figure, GroundReceptionStats]:
-    """Draw a map showing ground reception points with statistics.
+def compute_ground_reception_stats(ground_points: pd.DataFrame,
+                                   map_utils: Optional['MapUtils'] = None) -> GroundReceptionStats:
+    """Compute statistics (average position, spread, altitude) for ground points.
 
-    Creates a map with:
-    - All ground reception points plotted as red dots
-    - Weighted average position as a blue star
-    - Statistics including standard deviation and altitude info
-    - Axes showing distance from average point in meters
+    Split out from draw_ground_reception_map so callers can report the stats even
+    when there are too few points to draw a meaningful map.
 
     Args:
         ground_points: DataFrame with 'lat', 'lon', and 'alt' columns
         map_utils: MapUtils instance (creates one if not provided)
-        size: Figure size in inches
-
-    Returns:
-        Tuple of (matplotlib Figure object, GroundReceptionStats)
     """
     if map_utils is None:
         map_utils = MapUtils()
 
-    fig, ax = plt.subplots(figsize=(size, size))
-    ax.set_aspect('equal')
-
     # Convert all ground points to mercator coordinates
     ground_x, ground_y = map_utils.to_mercator_xy(ground_points['lat'].values, ground_points['lon'].values)
-
-    # Plot all ground points
-    ax.scatter(ground_x, ground_y, color='red', s=50, alpha=0.6, marker='o', label='Ground points')
 
     # Calculate weighted average of lat/lon (equal weights for now)
     avg_lat = ground_points['lat'].mean()
     avg_lon = ground_points['lon'].mean()
     avg_x, avg_y = map_utils.to_mercator_xy(avg_lat, avg_lon)
-
-    # Plot the weighted average point
-    ax.scatter(avg_x, avg_y, color='blue', s=200, alpha=0.8, marker='*',
-               label='Weighted average', edgecolors='black', linewidths=2, zorder=5)
 
     # Calculate standard deviation in both degrees and meters
     std_dev_lat = ground_points['lat'].std()
@@ -308,8 +292,7 @@ def draw_ground_reception_map(ground_points: pd.DataFrame,
     # Get ground elevation at the weighted average position
     ground_elev = get_elevation(avg_lat, avg_lon)
 
-    # Create statistics object
-    stats = GroundReceptionStats(
+    return GroundReceptionStats(
         avg_lat=avg_lat,
         avg_lon=avg_lon,
         num_points=len(ground_points),
@@ -323,11 +306,54 @@ def draw_ground_reception_map(ground_points: pd.DataFrame,
         ground_elev=ground_elev
     )
 
+
+def draw_ground_reception_map(ground_points: pd.DataFrame,
+                              stats: GroundReceptionStats,
+                              map_utils: Optional['MapUtils'] = None,
+                              size: int = 10) -> matplotlib.figure.Figure:
+    """Draw a map showing ground reception points with statistics.
+
+    Creates a map with:
+    - All ground reception points plotted as red dots
+    - Weighted average position as a blue star
+    - Statistics including standard deviation and altitude info
+    - Axes showing distance from average point in meters
+
+    Args:
+        ground_points: DataFrame with 'lat', 'lon', and 'alt' columns
+        stats: Precomputed stats from compute_ground_reception_stats()
+        map_utils: MapUtils instance (creates one if not provided)
+        size: Figure size in inches
+
+    Returns:
+        The matplotlib Figure object
+    """
+    if map_utils is None:
+        map_utils = MapUtils()
+
+    fig, ax = plt.subplots(figsize=(size, size))
+    ax.set_aspect('equal')
+
+    # Convert all ground points to mercator coordinates
+    ground_x, ground_y = map_utils.to_mercator_xy(ground_points['lat'].values, ground_points['lon'].values)
+
+    # Plot all ground points
+    ax.scatter(ground_x, ground_y, color='red', s=50, alpha=0.6, marker='o', label='Ground points')
+
+    avg_x, avg_y = map_utils.to_mercator_xy(stats.avg_lat, stats.avg_lon)
+
+    # Plot the weighted average point
+    ax.scatter(avg_x, avg_y, color='blue', s=200, alpha=0.8, marker='*',
+               label='Weighted average', edgecolors='black', linewidths=2, zorder=5)
+
     # Prepare list of points for map limits calculation
     map_limits = [[lat, lon] for lat, lon in zip(ground_points['lat'], ground_points['lon'])]
 
-    # Find the limits of the map (no whitespace - ticks define the boundary)
-    min_x, min_y, max_x, max_y, zoom = map_utils.get_map_limits(map_limits, map_whitespace=0)
+    # Find the limits of the map (no whitespace - ticks define the boundary).
+    # This map is meant to show an extent of just a few meters, so allow any
+    # size span rather than the default ~1 km floor.
+    min_x, min_y, max_x, max_y, zoom = map_utils.get_map_limits(
+        map_limits, map_whitespace=0, min_span=0)
 
     # Calculate tick interval to get regular spacing including 0
     # The range in meters from the average point
@@ -383,12 +409,13 @@ def draw_ground_reception_map(ground_points: pd.DataFrame,
     ax.grid(True, color='grey', linestyle='--', linewidth=1.0)
 
     # Add text box at the top with statistics
-    stats_text = f"Weighted Avg ({len(ground_points)} points): {avg_lat:.6f}, {avg_lon:.6f}\n"
-    stats_text += f"Std Dev: E-W {std_dev_x:.1f}m, N-S {std_dev_y:.1f}m, Combined {std_dev_combined:.1f}m\n"
-    stats_text += f"Altitude: {avg_alt:.1f}m (±{std_dev_alt:.1f}m)"
-    if ground_elev is not None:
-        height_agl = avg_alt - ground_elev
-        stats_text += f", Ground: {ground_elev:.1f}m, AGL: {height_agl:.1f}m"
+    stats_text = f"Weighted Avg ({len(ground_points)} points): {stats.avg_lat:.6f}, {stats.avg_lon:.6f}\n"
+    stats_text += (f"Std Dev: E-W {stats.std_dev_x:.1f}m, N-S {stats.std_dev_y:.1f}m, "
+                   f"Combined {stats.std_dev_combined:.1f}m\n")
+    stats_text += f"Altitude: {stats.avg_alt:.1f}m (±{stats.std_dev_alt:.1f}m)"
+    if stats.ground_elev is not None:
+        height_agl = stats.avg_alt - stats.ground_elev
+        stats_text += f", Ground: {stats.ground_elev:.1f}m, AGL: {height_agl:.1f}m"
     ax.text(0.5, 0.98, stats_text,
             transform=ax.transAxes,
             fontsize=9,
@@ -401,4 +428,4 @@ def draw_ground_reception_map(ground_points: pd.DataFrame,
 
     fig.tight_layout()
 
-    return fig, stats
+    return fig

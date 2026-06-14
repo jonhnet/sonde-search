@@ -395,19 +395,26 @@ class EmailNotifier:
             '''
             ground_points = map_utils.identify_ground_points(flight)
             if ground_points is not None and len(ground_points) > 0:
-                # Generate filename for ground reception map
-                ground_map_suffix = (
-                    f"{sub['uuid_subscription']}/{t.year}/{t.month:02d}/{t.day:02d}-{t.hour:02d}-"
-                    f"{landing['lat']}-{landing['lon']}-groundreception.jpg"
-                )
-                ground_map_url = os.path.join(EXTERNAL_IMAGES_URL) + ground_map_suffix
-                ground_map_local_fn = os.path.join(self.args.external_images_root, ground_map_suffix)
+                ground_stats = map_utils.compute_ground_reception_stats(ground_points, self.map_utils)
 
-                # Generate and save the ground reception map
-                print(f"{sub['email']}: generating ground reception map with {len(ground_points)} points")
-                ground_fig, ground_stats = map_utils.draw_ground_reception_map(ground_points, self.map_utils, size=22)
-                ground_fig.savefig(ground_map_local_fn, bbox_inches='tight')
-                plt.close('all')
+                # A single point has no meaningful extent, so draw the map only
+                # when there are at least 2 points; the stats below are shown
+                # either way.
+                if len(ground_points) >= 2:
+                    # Generate filename for ground reception map
+                    ground_map_suffix = (
+                        f"{sub['uuid_subscription']}/{t.year}/{t.month:02d}/{t.day:02d}-{t.hour:02d}-"
+                        f"{landing['lat']}-{landing['lon']}-groundreception.jpg"
+                    )
+                    ground_map_url = os.path.join(EXTERNAL_IMAGES_URL) + ground_map_suffix
+                    ground_map_local_fn = os.path.join(self.args.external_images_root, ground_map_suffix)
+
+                    # Generate and save the ground reception map
+                    print(f"{sub['email']}: generating ground reception map with {len(ground_points)} points")
+                    ground_fig = map_utils.draw_ground_reception_map(
+                        ground_points, ground_stats, self.map_utils, size=22)
+                    ground_fig.savefig(ground_map_local_fn, bbox_inches='tight')
+                    plt.close('all')
 
         # Add ground reception statistics to the table if we have them
         if ground_stats is not None:

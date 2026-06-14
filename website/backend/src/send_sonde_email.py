@@ -284,11 +284,12 @@ class EmailNotifier:
             subj = "GROUND RECEPTION! " + subj
 
         # body
-        # Handle uploaders field which may not always be present
-        if "uploaders" in landing:
-            uploaders_text = ", ".join(
-                [html.escape(u["uploader_callsign"]) for u in landing["uploaders"]]
-            )
+        # The station that received the last-heard frame. The full-rate trace
+        # carries one uploader_callsign per frame (the decimated summary feed
+        # used to carry an aggregated "uploaders" list, which we no longer see).
+        last_callsign = landing.get("uploader_callsign", None)
+        if last_callsign is not None and not pd.isna(last_callsign):
+            uploaders_text = html.escape(last_callsign)
         else:
             uploaders_text = "unknown"
 

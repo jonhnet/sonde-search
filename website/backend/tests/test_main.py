@@ -1187,6 +1187,13 @@ class Test_EmailNotifier:
         # Verify landing information is present (not airborne)
         assert "land" in body.lower() or "ground" in body.lower()
 
+        # Verify the last-heard listener's callsign is reported. Regression: when
+        # the landing started being derived from the per-frame trace (which has a
+        # singular uploader_callsign, not an aggregated "uploaders" list), this
+        # was always rendered as "unknown".
+        assert "n0nhj" in body
+        assert "by unknown" not in body
+
     def test_notification_unit_preferences_in_email(self, tmp_path: Path):
         # Test that distances in emails are displayed in user's preferred units
 

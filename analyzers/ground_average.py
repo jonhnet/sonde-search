@@ -29,8 +29,8 @@ def get_listeners(sondeid):
 
     # Draw a map of all ground points using the common library
     mu = map_utils.MapUtils()
-    stats = map_utils.compute_ground_reception_stats(ground_points, mu)
-    fig = map_utils.draw_ground_reception_map(ground_points, stats, mu)
+    stats = mu.compute_ground_reception_stats(ground_points)
+    fig = mu.draw_ground_reception_map(ground_points, stats)
     output_filename = f"ground_points_{sondeid}.png"
     fig.savefig(output_filename, bbox_inches='tight', dpi=150)
     plt.close('all')

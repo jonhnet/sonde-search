@@ -395,7 +395,7 @@ class EmailNotifier:
             '''
             ground_points = map_utils.identify_ground_points(flight)
             if ground_points is not None and len(ground_points) > 0:
-                ground_stats = map_utils.compute_ground_reception_stats(ground_points, self.map_utils)
+                ground_stats = self.map_utils.compute_ground_reception_stats(ground_points)
 
                 # A single point has no meaningful extent, so draw the map only
                 # when there are at least 2 points; the stats below are shown
@@ -411,8 +411,8 @@ class EmailNotifier:
 
                     # Generate and save the ground reception map
                     print(f"{sub['email']}: generating ground reception map with {len(ground_points)} points")
-                    ground_fig = map_utils.draw_ground_reception_map(
-                        ground_points, ground_stats, self.map_utils, size=22)
+                    ground_fig = self.map_utils.draw_ground_reception_map(
+                        ground_points, ground_stats, size=22)
                     ground_fig.savefig(ground_map_local_fn, bbox_inches='tight')
                     plt.close('all')
 

@@ -123,6 +123,174 @@ class MapUtils:
 
         return min_x, min_y, max_x, max_y, zoom
 
+    def compute_ground_reception_stats(self, ground_points: pd.DataFrame) -> GroundReceptionStats:
+        """Compute statistics (average position, spread, altitude) for ground points.
+
+        Split out from draw_ground_reception_map so callers can report the stats
+        even when there are too few points to draw a meaningful map.
+
+        Args:
+            ground_points: DataFrame with 'lat', 'lon', and 'alt' columns
+        """
+        # Convert all ground points to mercator coordinates
+        ground_x, ground_y = self.to_mercator_xy(ground_points['lat'].values, ground_points['lon'].values)
+
+        # Calculate weighted average of lat/lon (equal weights for now)
+        avg_lat = ground_points['lat'].mean()
+        avg_lon = ground_points['lon'].mean()
+        avg_x, avg_y = self.to_mercator_xy(avg_lat, avg_lon)
+
+        # Calculate standard deviation in both degrees and meters
+        std_dev_lat = ground_points['lat'].std()
+        std_dev_lon = ground_points['lon'].std()
+
+        # Calculate standard deviation in meters
+        # Since we're in mercator (meters), we can calculate std dev directly from distances
+        mercator_points_x = ground_x - avg_x  # distances from average in meters
+        mercator_points_y = ground_y - avg_y
+        std_dev_x = np.std(mercator_points_x)
+        std_dev_y = np.std(mercator_points_y)
+        std_dev_combined = np.sqrt(std_dev_x**2 + std_dev_y**2)
+
+        # Calculate altitude statistics
+        avg_alt = ground_points['alt'].mean()
+        std_dev_alt = ground_points['alt'].std()
+
+        # Get ground elevation at the weighted average position
+        ground_elev = get_elevation(avg_lat, avg_lon)
+
+        return GroundReceptionStats(
+            avg_lat=avg_lat,
+            avg_lon=avg_lon,
+            num_points=len(ground_points),
+            std_dev_lat=std_dev_lat,
+            std_dev_lon=std_dev_lon,
+            std_dev_x=std_dev_x,
+            std_dev_y=std_dev_y,
+            std_dev_combined=std_dev_combined,
+            avg_alt=avg_alt,
+            std_dev_alt=std_dev_alt,
+            ground_elev=ground_elev
+        )
+
+    def draw_ground_reception_map(self, ground_points: pd.DataFrame,
+                                  stats: GroundReceptionStats,
+                                  size: int = 10) -> matplotlib.figure.Figure:
+        """Draw a map showing ground reception points with statistics.
+
+        Creates a map with:
+        - All ground reception points plotted as red dots
+        - Weighted average position as a blue star
+        - Statistics including standard deviation and altitude info
+        - Axes showing distance from average point in meters
+
+        Args:
+            ground_points: DataFrame with 'lat', 'lon', and 'alt' columns
+            stats: Precomputed stats from compute_ground_reception_stats()
+            size: Figure size in inches
+
+        Returns:
+            The matplotlib Figure object
+        """
+        fig, ax = plt.subplots(figsize=(size, size))
+        ax.set_aspect('equal')
+
+        # Convert all ground points to mercator coordinates
+        ground_x, ground_y = self.to_mercator_xy(ground_points['lat'].values, ground_points['lon'].values)
+
+        # Plot all ground points
+        ax.scatter(ground_x, ground_y, color='red', s=50, alpha=0.6, marker='o', label='Ground points')
+
+        avg_x, avg_y = self.to_mercator_xy(stats.avg_lat, stats.avg_lon)
+
+        # Plot the weighted average point
+        ax.scatter(avg_x, avg_y, color='blue', s=200, alpha=0.8, marker='*',
+                   label='Weighted average', edgecolors='black', linewidths=2, zorder=5)
+
+        # Prepare list of points for map limits calculation
+        map_limits = [[lat, lon] for lat, lon in zip(ground_points['lat'], ground_points['lon'])]
+
+        # Find the limits of the map (no whitespace - ticks define the boundary).
+        # This map is meant to show an extent of just a few meters, so allow any
+        # size span rather than the default ~1 km floor.
+        min_x, min_y, max_x, max_y, zoom = self.get_map_limits(
+            map_limits, map_whitespace=0, min_span=0)
+
+        # Calculate tick interval to get regular spacing including 0
+        # The range in meters from the average point
+        x_range = max(abs(max_x - avg_x), abs(min_x - avg_x))
+        y_range = max(abs(max_y - avg_y), abs(min_y - avg_y))
+        max_range = max(x_range, y_range)
+
+        # Pick a nice tick interval (aim for ~5-8 ticks across the range)
+        nice_intervals = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000]
+        tick_interval = nice_intervals[0]
+        for interval in nice_intervals:
+            if max_range / interval <= 8:
+                tick_interval = interval
+                break
+
+        # Generate tick positions centered on avg_x/avg_y (so 0 is always a tick)
+        # Use ceil to ensure ticks extend to cover all data points
+        n_ticks_neg_x = ceil((avg_x - min_x) / tick_interval)
+        n_ticks_pos_x = ceil((max_x - avg_x) / tick_interval)
+        n_ticks_neg_y = ceil((avg_y - min_y) / tick_interval)
+        n_ticks_pos_y = ceil((max_y - avg_y) / tick_interval)
+
+        x_ticks = [avg_x + i * tick_interval for i in range(-n_ticks_neg_x, n_ticks_pos_x + 1)]
+        y_ticks = [avg_y + i * tick_interval for i in range(-n_ticks_neg_y, n_ticks_pos_y + 1)]
+
+        # Set axis limits to match the tick range (no extra whitespace)
+        ax.set_xlim(x_ticks[0], x_ticks[-1])
+        ax.set_ylim(y_ticks[0], y_ticks[-1])
+        ax.set_xticks(x_ticks)
+        ax.set_yticks(y_ticks)
+
+        add_basemap(ax, zoom)
+
+        # Set up axes with tick marks in meters
+        # Use the weighted average as the origin point for relative distances
+        def mercator_to_meters_x(x, p):
+            """Convert mercator x coordinate to meters from average point."""
+            return int(x - avg_x)
+
+        def mercator_to_meters_y(y, p):
+            """Convert mercator y coordinate to meters from average point."""
+            return int(y - avg_y)
+
+        # Create secondary axes showing distances in meters
+        ax.set_xlabel('East-West distance from average (m)', fontsize=10)
+        ax.set_ylabel('North-South distance from average (m)', fontsize=10)
+
+        # Format the tick labels to show meters
+        ax.xaxis.set_major_formatter(FuncFormatter(mercator_to_meters_x))
+        ax.yaxis.set_major_formatter(FuncFormatter(mercator_to_meters_y))
+
+        # Add grid for easier reading
+        ax.grid(True, color='grey', linestyle='--', linewidth=1.0)
+
+        # Add text box at the top with statistics
+        stats_text = f"Weighted Avg ({len(ground_points)} points): {stats.avg_lat:.6f}, {stats.avg_lon:.6f}\n"
+        stats_text += (f"Std Dev: E-W {stats.std_dev_x:.1f}m, N-S {stats.std_dev_y:.1f}m, "
+                       f"Combined {stats.std_dev_combined:.1f}m\n")
+        stats_text += f"Altitude: {stats.avg_alt:.1f}m (±{stats.std_dev_alt:.1f}m)"
+        if stats.ground_elev is not None:
+            height_agl = stats.avg_alt - stats.ground_elev
+            stats_text += f", Ground: {stats.ground_elev:.1f}m, AGL: {height_agl:.1f}m"
+        ax.text(0.5, 0.98, stats_text,
+                transform=ax.transAxes,
+                fontsize=9,
+                verticalalignment='top',
+                horizontalalignment='center',
+                bbox=dict(boxstyle='round,pad=0.5', facecolor='yellow', alpha=0.8))
+
+        # Add legend
+        ax.legend(loc='lower left', framealpha=0.9)
+
+        fig.tight_layout()
+
+        return fig
+
 
 def add_basemap(ax, zoom, attempts: int = 3) -> bool:
     """Add OSM map tiles to an axis, tolerating transient tile-download errors.
@@ -249,183 +417,3 @@ def identify_ground_points(flight_df: pd.DataFrame) -> Optional[pd.DataFrame]:
     first_ground_idx = transitions[::-1].idxmax()  # last True in transitions
 
     return flight_df.iloc[first_ground_idx:]
-
-
-def compute_ground_reception_stats(ground_points: pd.DataFrame,
-                                   map_utils: Optional['MapUtils'] = None) -> GroundReceptionStats:
-    """Compute statistics (average position, spread, altitude) for ground points.
-
-    Split out from draw_ground_reception_map so callers can report the stats even
-    when there are too few points to draw a meaningful map.
-
-    Args:
-        ground_points: DataFrame with 'lat', 'lon', and 'alt' columns
-        map_utils: MapUtils instance (creates one if not provided)
-    """
-    if map_utils is None:
-        map_utils = MapUtils()
-
-    # Convert all ground points to mercator coordinates
-    ground_x, ground_y = map_utils.to_mercator_xy(ground_points['lat'].values, ground_points['lon'].values)
-
-    # Calculate weighted average of lat/lon (equal weights for now)
-    avg_lat = ground_points['lat'].mean()
-    avg_lon = ground_points['lon'].mean()
-    avg_x, avg_y = map_utils.to_mercator_xy(avg_lat, avg_lon)
-
-    # Calculate standard deviation in both degrees and meters
-    std_dev_lat = ground_points['lat'].std()
-    std_dev_lon = ground_points['lon'].std()
-
-    # Calculate standard deviation in meters
-    # Since we're in mercator (meters), we can calculate std dev directly from distances
-    mercator_points_x = ground_x - avg_x  # distances from average in meters
-    mercator_points_y = ground_y - avg_y
-    std_dev_x = np.std(mercator_points_x)
-    std_dev_y = np.std(mercator_points_y)
-    std_dev_combined = np.sqrt(std_dev_x**2 + std_dev_y**2)
-
-    # Calculate altitude statistics
-    avg_alt = ground_points['alt'].mean()
-    std_dev_alt = ground_points['alt'].std()
-
-    # Get ground elevation at the weighted average position
-    ground_elev = get_elevation(avg_lat, avg_lon)
-
-    return GroundReceptionStats(
-        avg_lat=avg_lat,
-        avg_lon=avg_lon,
-        num_points=len(ground_points),
-        std_dev_lat=std_dev_lat,
-        std_dev_lon=std_dev_lon,
-        std_dev_x=std_dev_x,
-        std_dev_y=std_dev_y,
-        std_dev_combined=std_dev_combined,
-        avg_alt=avg_alt,
-        std_dev_alt=std_dev_alt,
-        ground_elev=ground_elev
-    )
-
-
-def draw_ground_reception_map(ground_points: pd.DataFrame,
-                              stats: GroundReceptionStats,
-                              map_utils: Optional['MapUtils'] = None,
-                              size: int = 10) -> matplotlib.figure.Figure:
-    """Draw a map showing ground reception points with statistics.
-
-    Creates a map with:
-    - All ground reception points plotted as red dots
-    - Weighted average position as a blue star
-    - Statistics including standard deviation and altitude info
-    - Axes showing distance from average point in meters
-
-    Args:
-        ground_points: DataFrame with 'lat', 'lon', and 'alt' columns
-        stats: Precomputed stats from compute_ground_reception_stats()
-        map_utils: MapUtils instance (creates one if not provided)
-        size: Figure size in inches
-
-    Returns:
-        The matplotlib Figure object
-    """
-    if map_utils is None:
-        map_utils = MapUtils()
-
-    fig, ax = plt.subplots(figsize=(size, size))
-    ax.set_aspect('equal')
-
-    # Convert all ground points to mercator coordinates
-    ground_x, ground_y = map_utils.to_mercator_xy(ground_points['lat'].values, ground_points['lon'].values)
-
-    # Plot all ground points
-    ax.scatter(ground_x, ground_y, color='red', s=50, alpha=0.6, marker='o', label='Ground points')
-
-    avg_x, avg_y = map_utils.to_mercator_xy(stats.avg_lat, stats.avg_lon)
-
-    # Plot the weighted average point
-    ax.scatter(avg_x, avg_y, color='blue', s=200, alpha=0.8, marker='*',
-               label='Weighted average', edgecolors='black', linewidths=2, zorder=5)
-
-    # Prepare list of points for map limits calculation
-    map_limits = [[lat, lon] for lat, lon in zip(ground_points['lat'], ground_points['lon'])]
-
-    # Find the limits of the map (no whitespace - ticks define the boundary).
-    # This map is meant to show an extent of just a few meters, so allow any
-    # size span rather than the default ~1 km floor.
-    min_x, min_y, max_x, max_y, zoom = map_utils.get_map_limits(
-        map_limits, map_whitespace=0, min_span=0)
-
-    # Calculate tick interval to get regular spacing including 0
-    # The range in meters from the average point
-    x_range = max(abs(max_x - avg_x), abs(min_x - avg_x))
-    y_range = max(abs(max_y - avg_y), abs(min_y - avg_y))
-    max_range = max(x_range, y_range)
-
-    # Pick a nice tick interval (aim for ~5-8 ticks across the range)
-    nice_intervals = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000]
-    tick_interval = nice_intervals[0]
-    for interval in nice_intervals:
-        if max_range / interval <= 8:
-            tick_interval = interval
-            break
-
-    # Generate tick positions centered on avg_x/avg_y (so 0 is always a tick)
-    # Use ceil to ensure ticks extend to cover all data points
-    n_ticks_neg_x = ceil((avg_x - min_x) / tick_interval)
-    n_ticks_pos_x = ceil((max_x - avg_x) / tick_interval)
-    n_ticks_neg_y = ceil((avg_y - min_y) / tick_interval)
-    n_ticks_pos_y = ceil((max_y - avg_y) / tick_interval)
-
-    x_ticks = [avg_x + i * tick_interval for i in range(-n_ticks_neg_x, n_ticks_pos_x + 1)]
-    y_ticks = [avg_y + i * tick_interval for i in range(-n_ticks_neg_y, n_ticks_pos_y + 1)]
-
-    # Set axis limits to match the tick range (no extra whitespace)
-    ax.set_xlim(x_ticks[0], x_ticks[-1])
-    ax.set_ylim(y_ticks[0], y_ticks[-1])
-    ax.set_xticks(x_ticks)
-    ax.set_yticks(y_ticks)
-
-    add_basemap(ax, zoom)
-
-    # Set up axes with tick marks in meters
-    # Use the weighted average as the origin point for relative distances
-    def mercator_to_meters_x(x, p):
-        """Convert mercator x coordinate to meters from average point."""
-        return int(x - avg_x)
-
-    def mercator_to_meters_y(y, p):
-        """Convert mercator y coordinate to meters from average point."""
-        return int(y - avg_y)
-
-    # Create secondary axes showing distances in meters
-    ax.set_xlabel('East-West distance from average (m)', fontsize=10)
-    ax.set_ylabel('North-South distance from average (m)', fontsize=10)
-
-    # Format the tick labels to show meters
-    ax.xaxis.set_major_formatter(FuncFormatter(mercator_to_meters_x))
-    ax.yaxis.set_major_formatter(FuncFormatter(mercator_to_meters_y))
-
-    # Add grid for easier reading
-    ax.grid(True, color='grey', linestyle='--', linewidth=1.0)
-
-    # Add text box at the top with statistics
-    stats_text = f"Weighted Avg ({len(ground_points)} points): {stats.avg_lat:.6f}, {stats.avg_lon:.6f}\n"
-    stats_text += (f"Std Dev: E-W {stats.std_dev_x:.1f}m, N-S {stats.std_dev_y:.1f}m, "
-                   f"Combined {stats.std_dev_combined:.1f}m\n")
-    stats_text += f"Altitude: {stats.avg_alt:.1f}m (±{stats.std_dev_alt:.1f}m)"
-    if stats.ground_elev is not None:
-        height_agl = stats.avg_alt - stats.ground_elev
-        stats_text += f", Ground: {stats.ground_elev:.1f}m, AGL: {height_agl:.1f}m"
-    ax.text(0.5, 0.98, stats_text,
-            transform=ax.transAxes,
-            fontsize=9,
-            verticalalignment='top',
-            horizontalalignment='center',
-            bbox=dict(boxstyle='round,pad=0.5', facecolor='yellow', alpha=0.8))
-
-    # Add legend
-    ax.legend(loc='lower left', framealpha=0.9)
-
-    fig.tight_layout()
-
-    return fig

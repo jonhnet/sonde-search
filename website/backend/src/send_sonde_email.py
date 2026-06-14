@@ -4,9 +4,11 @@ EXTERNAL_IMAGES_ROOT = "/mnt/storage/sondemaps"
 EXTERNAL_IMAGES_URL = "https://maps.sondesearch.lectrobox.com/"
 
 from boto3.dynamodb.conditions import Key, Attr
+from dataclasses import dataclass
 from decimal import Decimal
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from functools import lru_cache
 from geographiclib.geodesic import Geodesic
 from typing import Optional
 import argparse
@@ -48,6 +50,39 @@ GMAP_URL = "https://www.google.com/maps/search/?api=1&query={lat},{lon}"
 # random other constants
 DEV_EMAIL = "jelson@gmail.com"
 SONDE_HISTORY_LOOKBACK_TIME_SEC = 86400
+
+
+@dataclass(frozen=True)
+class GeocodedPlace:
+    """A reverse-geocoded landing location."""
+
+    # short "Town, City, County" summary, used in the subject line
+    place: str
+    # the geocoder's full address string, used in the body
+    address: str
+
+
+@lru_cache(maxsize=1000)
+def reverse_geocode_place(lat: float, lon: float) -> GeocodedPlace:
+    """Reverse-geocode a landing position.
+
+    Cached by exact coordinates: a popular sonde matches many subscriptions and
+    its landing position is byte-identical for all of them (it comes from the
+    same cached trace), so this collapses what would be repeated identical
+    OSM/Nominatim lookups into a single request. We don't round the coordinates:
+    rounding would only help distinct sondes that landed near each other, at the
+    risk of shifting the point to a neighboring address.
+    """
+    geo = geocoder.osm([lat, lon], method="reverse", headers={"User-Agent": DEV_EMAIL})
+    if not (geo and geo.county):
+        return GeocodedPlace(place="", address="")
+    place = ""
+    if geo.town:
+        place += geo.town + ", "
+    if geo.city:
+        place += geo.city + ", "
+    place += geo.county
+    return GeocodedPlace(place=place, address=geo.address or "")
 
 
 class EmailNotifier:
@@ -167,13 +202,17 @@ class EmailNotifier:
     def get_email_text(
         self, sub: pd.Series, landing: pd.Series, is_ground_reception: bool
     ) -> tuple[str, str, str]:
-        # attempt a geocode and DEM lookup
-        geo = geocoder.osm(
-            [landing["lat"], landing["lon"]],
-            method="reverse",
-            headers={"User-Agent": "jelson@gmail.com"},
-        )
-        elev = self.get_elevation(float(landing["lat"]), float(landing["lon"]))
+        # Reverse-geocode the landing (cached by rounded coordinates so the same
+        # sonde isn't looked up once per matching subscription).
+        geocoded = reverse_geocode_place(float(landing["lat"]), float(landing["lon"]))
+
+        # The landing elevation is only used for the time-to-landing / search-
+        # radius estimate, which we don't show for ground receptions -- so skip
+        # the DEM lookup entirely in that case.
+        elev = None
+        if not is_ground_reception:
+            elev = self.get_elevation(float(landing["lat"]), float(landing["lon"]))
+
         vel_v: Optional[float] = None
         vel_h: Optional[float] = None
         raw_vel_v = landing.get("vel_v", None)
@@ -187,14 +226,6 @@ class EmailNotifier:
             vel_v = float(raw_vel_v)
             vel_h = float(raw_vel_h)
 
-        place = ""
-        if geo and geo.county:
-            if geo.town:
-                place += geo.town + ", "
-            if geo.city:
-                place += geo.city + ", "
-            place += geo.county
-
         # get landing time in the subscriber's timezone
         try:
             landing_localtime = landing["datetime"].tz_convert(sub["tzname"])
@@ -205,7 +236,7 @@ class EmailNotifier:
         # Calculate landing estimation parameters (used in subject line and body)
         subj_lest_text: str = ""
         body_lest_text: str = ""
-        if elev is not None and not is_ground_reception:
+        if elev is not None:
             body_lest_text += f"""
                 <tr>
                     <td>Ground Elev</td>
@@ -247,8 +278,8 @@ class EmailNotifier:
         subj += " away"
         subj += subj_lest_text
         subj += f", bearing {round(landing['bearing_from_home'])}°"
-        if place:
-            subj += f" ({place})"
+        if geocoded.place:
+            subj += f" ({geocoded.place})"
         if is_ground_reception:
             subj = "GROUND RECEPTION! " + subj
 
@@ -307,10 +338,10 @@ class EmailNotifier:
                 </tr>
         """
 
-        if place:
-            nearest_addr = html.escape(place)
-            if geo and geo.address:
-                nearest_addr += f"<br>{html.escape(geo.address)}"
+        if geocoded.place:
+            nearest_addr = html.escape(geocoded.place)
+            if geocoded.address:
+                nearest_addr += f"<br>{html.escape(geocoded.address)}"
             body += f"""
                 <tr>
                     <td>Address</td>

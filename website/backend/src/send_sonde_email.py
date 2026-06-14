@@ -73,9 +73,6 @@ class EmailNotifier:
             get_path, axis=1, result_type="expand"
         )
 
-        # sonde still in contact from the ground?
-        sondes["ground_reception"] = (sondes["vel_v"].abs() < 1) & (sondes["vel_h"].abs() < 1)
-
         return sondes
 
     ####
@@ -167,7 +164,9 @@ class EmailNotifier:
             else:
                 return f"{round(meters):,}m"
 
-    def get_email_text(self, sub: pd.Series, landing: pd.Series) -> tuple[str, str, str]:
+    def get_email_text(
+        self, sub: pd.Series, landing: pd.Series, is_ground_reception: bool
+    ) -> tuple[str, str, str]:
         # attempt a geocode and DEM lookup
         geo = geocoder.osm(
             [landing["lat"], landing["lon"]],
@@ -206,7 +205,7 @@ class EmailNotifier:
         # Calculate landing estimation parameters (used in subject line and body)
         subj_lest_text: str = ""
         body_lest_text: str = ""
-        if elev is not None and not landing["ground_reception"]:
+        if elev is not None and not is_ground_reception:
             body_lest_text += f"""
                 <tr>
                     <td>Ground Elev</td>
@@ -250,7 +249,7 @@ class EmailNotifier:
         subj += f", bearing {round(landing['bearing_from_home'])}°"
         if place:
             subj += f" ({place})"
-        if landing["ground_reception"]:
+        if is_ground_reception:
             subj = "GROUND RECEPTION! " + subj
 
         # body
@@ -359,16 +358,21 @@ class EmailNotifier:
 
         return subj, body, unsub_url
 
-    def send_email(self, sub: pd.Series, landing: pd.Series) -> str:
-        # Query SondeHub for detail on the flight
-        flight, now = self.retriever.get_sonde_data(
-            params={
-                "duration": "1d",
-                "serial": landing["serial"],
-            }
-        )
+    def send_email(
+        self,
+        sub: pd.Series,
+        flight: pd.DataFrame,
+        ground_points: Optional[pd.DataFrame],
+    ) -> str:
+        # Derive the landing (the last received frame) from the full-rate trace,
+        # annotated with distance/bearing from the subscriber. ground_points (or
+        # None) was computed by the caller from this same trace and is what
+        # decides whether this is a ground reception.
+        landing = flight.loc[flight["frame"].idxmax()]
+        landing = self.annotate_with_distance(pd.DataFrame([landing]), sub).iloc[0]
+        is_ground_reception = ground_points is not None
 
-        subj, body, unsub_url = self.get_email_text(sub, landing)
+        subj, body, unsub_url = self.get_email_text(sub, landing, is_ground_reception)
 
         # build mime message
         msg = MIMEMultipart("mixed")
@@ -391,13 +395,12 @@ class EmailNotifier:
         ground_stats = None
 
         # If this is a ground reception, generate the ground reception map and get stats first
-        if landing["ground_reception"]:
+        if is_ground_reception:
             body += """
                 <tr>
                     <th colspan="2">Ground Reception</th>
                 </tr>
             """
-            ground_points = map_utils.identify_ground_points(flight)
             if ground_points is not None and len(ground_points) > 0:
                 ground_stats = self.map_utils.compute_ground_reception_stats(ground_points)
 
@@ -551,18 +554,29 @@ class EmailNotifier:
             if sonde["dist_from_home_m"] > distance_threshold_m:
                 break
 
+            if sonde["serial"] in sondes_emailed:
+                print(f"{sub['email']}: Skipping sonde {sonde['serial']}; already notified")
+                continue
+
+            # Pull the full-rate trace for this candidate. The worldwide summary
+            # used above is decimated to ~one point every 10 minutes, so deciding
+            # ground reception from its single last point is unreliable; instead
+            # decide it from the whole trailing run of the detailed trace. We
+            # reuse the trace to draw the map, so reported sondes aren't fetched
+            # twice, and per-serial fetches are cached across subscribers.
+            flight, _ = self.retriever.get_sonde_data(
+                params={"duration": "1d", "serial": sonde["serial"]}
+            )
+            ground_points = map_utils.identify_ground_points(flight)
+
             # if this sonde is still being tracked, do not report -- unless it's
             # a ground reception
             age = now - sonde["datetime"]
-            if age < pd.Timedelta(minutes=10) and not sonde["ground_reception"]:
+            if age < pd.Timedelta(minutes=10) and ground_points is None:
                 print(
                     f"{sub['email']}: Skipping sonde {sonde['serial']}; "
                     f"tracked {age} ago (at {sonde['datetime']}; curr time: {now})"
                 )
-                continue
-
-            if sonde["serial"] in sondes_emailed:
-                print(f"{sub['email']}: Skipping sonde {sonde['serial']}; already notified")
                 continue
 
             print(
@@ -570,7 +584,7 @@ class EmailNotifier:
                 f"range {sonde['dist_from_home_m'] / METERS_PER_MILE:.1f}, "
                 f"landed at {sonde['datetime'].replace(microsecond=0)}"
             )
-            map_url = self.send_email(sub, sonde)
+            map_url = self.send_email(sub, flight, ground_points)
             num_emails += 1
 
             # Record this notification so we don't re-notify for the same sonde
@@ -651,9 +665,11 @@ class EmailNotifier:
             print(f"Error: No data found for sonde {sonde_id}")
             return
 
-        # Get the last frame for this sonde
-        last_frame_idx = sondes["frame"].idxmax()
-        landing = sondes.loc[last_frame_idx]
+        # This query is already the full-rate trace, so it is the flight used for
+        # both the map and the ground-reception decision.
+        flight = sondes
+        ground_points = map_utils.identify_ground_points(flight)
+        landing = flight.loc[flight["frame"].idxmax()]
 
         # Create a mock subscription with dev email
         # Set home location 0.5 degrees away to show realistic distance/bearing
@@ -669,19 +685,13 @@ class EmailNotifier:
             }
         )
 
-        # Annotate the landing with distance/bearing from mock home location
-        sondes_df = pd.DataFrame([landing])
-        sondes_df = self.annotate_with_distance(sondes_df, mock_sub)
-        landing = sondes_df.iloc[0]
-
         print(f"Sending test email for sonde {sonde_id} to {DEV_EMAIL}")
         print(f"  Last heard: {landing['datetime']}")
         print(f"  Position: {landing['lat']}, {landing['lon']}")
-        print(f"  Ground reception: {landing['ground_reception']}")
-        print(f"  Distance from mock home: {landing['dist_from_home_m'] / METERS_PER_MILE:.1f} mi")
+        print(f"  Ground reception: {ground_points is not None}")
 
         try:
-            self.send_email(mock_sub, landing)
+            self.send_email(mock_sub, flight, ground_points)
             print("Test email sent successfully!")
         except Exception as e:
             traceback.print_exc()

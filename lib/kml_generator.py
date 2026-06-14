@@ -17,10 +17,10 @@ def generate_kml(serial: str) -> str:
         raise ValueError(f"Sonde {serial} does not exist or has no data")
 
     # Convert datetime column to pandas datetime
-    sonde['datetime'] = pd.to_datetime(sonde['datetime'])
+    sonde["datetime"] = pd.to_datetime(sonde["datetime"])
 
     # Index by datetime and drop all columns other than lat, lon, alt
-    sonde = sonde.set_index('datetime')[['lon', 'lat', 'alt']]
+    sonde = sonde.set_index("datetime")[["lon", "lat", "alt"]]
 
     # For each minute, take the last location a sonde was seen during that
     # minute. Also add the very first sonde sighting, and the highest
@@ -28,11 +28,17 @@ def generate_kml(serial: str) -> str:
     # there are multiple reports at that highest altitude. We pass a list
     # to sonde.loc[] to ensure we get a dataframe back from loc, not a series,
     # in case the label is unique.
-    by_minute = pd.concat([
-        sonde.head(1),
-        sonde.resample('1 min', label='right').last(),
-        sonde.loc[[sonde['alt'].idxmax()]].head(1),
-    ]).dropna().sort_index()
+    by_minute = (
+        pd.concat(
+            [
+                sonde.head(1),
+                sonde.resample("1 min", label="right").last(),
+                sonde.loc[[sonde["alt"].idxmax()]].head(1),
+            ]
+        )
+        .dropna()
+        .sort_index()
+    )
 
     # Create KML document
     kml = simplekml.Kml()

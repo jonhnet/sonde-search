@@ -12,7 +12,7 @@ import uuid
 
 from boto3.dynamodb.conditions import Key, Attr
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../.."))
 from website.backend.src import constants
 from website.backend.src import table_definitions
 from website.backend.src import util
@@ -20,8 +20,8 @@ from lib import listeners
 from lib import kml_generator
 from lib import landing_calendar
 
-DEFAULT_HOST = 'https://sondesearch.lectrobox.com'
-DEV_HOST = 'http://localhost:4000'
+DEFAULT_HOST = "https://sondesearch.lectrobox.com"
+DEV_HOST = "http://localhost:4000"
 
 # A placeholder for expensive setup that should only be done once. This
 # iteration of the program no longer has any such setup so this now has nothing
@@ -30,7 +30,7 @@ DEV_HOST = 'http://localhost:4000'
 
 class GlobalConfig:
     def __init__(self, retriever, dev_mode):
-        print('Global setup')
+        print("Global setup")
         self.retriever = retriever
         self.dev_mode = dev_mode
 
@@ -39,20 +39,20 @@ class ClientError(cherrypy.HTTPError):
     def __init__(self, message):
         super().__init__()
         print(f"client error: {message}")
-        self._msg = message.encode('utf8')
+        self._msg = message.encode("utf8")
 
     def set_response(self):
         super().set_response()
         response = cherrypy.serving.response
         response.body = self._msg
         response.status = 400  # type: ignore[assignment]
-        response.headers.pop('Content-Length', None)
+        response.headers.pop("Content-Length", None)
 
 
 class SondesearchAPI:
-    PREFERENCES = ('units', 'tzname')
-    VALID_UNITS = ('metric', 'imperial')
-    VERIFY_EMAIL_SUBJ = 'Verify your email to receive sonde notifications'
+    PREFERENCES = ("units", "tzname")
+    VALID_UNITS = ("metric", "imperial")
+    VERIFY_EMAIL_SUBJ = "Verify your email to receive sonde notifications"
 
     def __init__(self, global_config: GlobalConfig):
         self._g = global_config
@@ -63,8 +63,8 @@ class SondesearchAPI:
         def wrapper(*args, **kwargs):
             self = args[0]
             origin = DEV_HOST if self._g.dev_mode else DEFAULT_HOST
-            cherrypy.response.headers['Access-Control-Allow-Origin'] = origin
-            cherrypy.response.headers['Access-Control-Allow-Credentials'] = 'true'
+            cherrypy.response.headers["Access-Control-Allow-Origin"] = origin
+            cherrypy.response.headers["Access-Control-Allow-Credentials"] = "true"
             return func(*args, **kwargs)
 
         return wrapper
@@ -80,34 +80,31 @@ class SondesearchAPI:
         # Check to see if this email already exists in the system. If
         # so, simply return the existing UUID.
         rv = self.tables.users.query(
-            IndexName='email-lc-index',
-            KeyConditionExpression=Key('email_lc').eq(email.lower())
-        )['Items']
+            IndexName="email-lc-index", KeyConditionExpression=Key("email_lc").eq(email.lower())
+        )["Items"]
         if len(rv) > 0:
-            return rv[0]['uuid']
+            return rv[0]["uuid"]
 
         # Email address does not exist yet. Construct the initial
         # preferences object and insert it.
         user_item = {
-            'uuid': uuid.uuid4().hex,
-            'email': email,
-            'email_lc': email.lower(),
+            "uuid": uuid.uuid4().hex,
+            "email": email,
+            "email_lc": email.lower(),
         }
         print(f"creating new user, uuid {user_item['uuid']}")
         self.tables.users.put_item(Item=user_item)
-        return user_item['uuid']
+        return user_item["uuid"]
 
     def get_user_token_from_request(self):
-        if 'notifier_user_token_v2' not in cherrypy.request.cookie:
+        if "notifier_user_token_v2" not in cherrypy.request.cookie:
             raise ClientError("no user token in request cookies")
 
-        return cherrypy.request.cookie['notifier_user_token_v2'].value
+        return cherrypy.request.cookie["notifier_user_token_v2"].value
 
     def get_user_data(self):
         user_token = self.get_user_token_from_request()
-        rv = self.tables.users.query(
-            KeyConditionExpression=Key('uuid').eq(user_token)
-        )['Items']
+        rv = self.tables.users.query(KeyConditionExpression=Key("uuid").eq(user_token))["Items"]
 
         if len(rv) == 0:
             raise ClientError(f"unknown user token {user_token}")
@@ -123,7 +120,7 @@ class SondesearchAPI:
     @cherrypy.tools.json_out()  # type: ignore[attr-defined]
     @allow_lectrobox_cors
     def send_validation_email(self, email, url):
-        print(f'got validation request: e={email}, u={url}')
+        print(f"got validation request: e={email}, u={url}")
         user_token = self.get_user_token_from_email(email)
 
         # Generate two tokens:
@@ -137,48 +134,52 @@ class SondesearchAPI:
 
         # Store the association with a TTL for automatic cleanup
         ttl_time = int(time.time()) + self.PENDING_VERIFICATION_TTL_SECONDS
-        self.tables.pending_verifications.put_item(Item={
-            'pending_token': pending_token,
-            'email_token': email_token,
-            'user_token': user_token,
-            'ttl': ttl_time,
-        })
+        self.tables.pending_verifications.put_item(
+            Item={
+                "pending_token": pending_token,
+                "email_token": email_token,
+                "user_token": user_token,
+                "ttl": ttl_time,
+            }
+        )
 
         # The client sends its URL to us. Replace the tail (/signup)
         # with "/verify" plus the email token.
-        idx = url.index('/signup')
-        next_url = url[0:idx] + f'/verify/?email_token={email_token}'
-        print(f'got signup request from {email}: sending to {next_url}')
+        idx = url.index("/signup")
+        next_url = url[0:idx] + f"/verify/?email_token={email_token}"
+        print(f"got signup request from {email}: sending to {next_url}")
 
         # construct the email body
-        with open(os.path.join(os.path.dirname(__file__), "../config/verification-template.txt")) as f:
+        with open(
+            os.path.join(os.path.dirname(__file__), "../config/verification-template.txt")
+        ) as f:
             body_template = f.read()
         body = body_template.format(EMAIL=email, URL=next_url)
 
         # send
-        ses = boto3.client('ses')
+        ses = boto3.client("ses")
         ses.send_email(
             Source=constants.FROM_EMAIL_ADDR,
             Destination={
-                'ToAddresses': [email],
-                'BccAddresses': [constants.FROM_EMAIL_ADDR],
+                "ToAddresses": [email],
+                "BccAddresses": [constants.FROM_EMAIL_ADDR],
             },
             Message={
-                'Subject': {
-                    'Data': self.VERIFY_EMAIL_SUBJ,
-                    'Charset': 'utf-8',
+                "Subject": {
+                    "Data": self.VERIFY_EMAIL_SUBJ,
+                    "Charset": "utf-8",
                 },
-                'Body': {
-                    'Html': {
-                        'Data': body,
-                        'Charset': 'utf-8',
+                "Body": {
+                    "Html": {
+                        "Data": body,
+                        "Charset": "utf-8",
                     },
                 },
             },
         )
 
         # Return the pending token so the client can set it as a cookie
-        return {'success': True, 'pending_token': pending_token}
+        return {"success": True, "pending_token": pending_token}
 
     @cherrypy.expose
     @cherrypy.tools.json_out()  # type: ignore[attr-defined]
@@ -196,40 +197,41 @@ class SondesearchAPI:
         On success, returns the user_token which the frontend stores as the
         auth cookie.
         """
-        print(f'verify_email: email_token={email_token}, pending_token={pending_token}')
+        print(f"verify_email: email_token={email_token}, pending_token={pending_token}")
 
         if not pending_token:
-            raise ClientError("Missing browser verification token. "
-                              "Please use the same browser you used to sign up.")
+            raise ClientError(
+                "Missing browser verification token. "
+                "Please use the same browser you used to sign up."
+            )
 
         if not email_token:
             raise ClientError("Missing email verification token.")
 
         # Look up the pending verification record by pending_token
         rv = self.tables.pending_verifications.query(
-            KeyConditionExpression=Key('pending_token').eq(pending_token)
-        )['Items']
+            KeyConditionExpression=Key("pending_token").eq(pending_token)
+        )["Items"]
 
         if len(rv) == 0:
-            raise ClientError("Verification token not found or expired. "
-                              "Please sign up again.")
+            raise ClientError("Verification token not found or expired. " "Please sign up again.")
 
         record = rv[0]
 
         # Verify the email_token matches
-        if record.get('email_token') != email_token:
-            raise ClientError("Verification tokens do not match. "
-                              "Please use the same browser you used to sign up.")
+        if record.get("email_token") != email_token:
+            raise ClientError(
+                "Verification tokens do not match. "
+                "Please use the same browser you used to sign up."
+            )
 
-        user_token = record['user_token']
+        user_token = record["user_token"]
 
         # Delete the pending verification record since it's been used
-        self.tables.pending_verifications.delete_item(
-            Key={'pending_token': pending_token}
-        )
+        self.tables.pending_verifications.delete_item(Key={"pending_token": pending_token})
 
-        print(f'verify_email: success for user_token={user_token}')
-        return {'success': True, 'user_token': user_token}
+        print(f"verify_email: success for user_token={user_token}")
+        return {"success": True, "user_token": user_token}
 
     @cherrypy.expose
     @cherrypy.tools.json_out()  # type: ignore[attr-defined]
@@ -245,34 +247,36 @@ class SondesearchAPI:
 
         # Get subscriptions
         db_items = self.tables.subscriptions.query(
-            IndexName='subscriber-index',
-            KeyConditionExpression=Key('subscriber').eq(user_data['uuid']),
-            FilterExpression=Attr('active').eq(True),
+            IndexName="subscriber-index",
+            KeyConditionExpression=Key("subscriber").eq(user_data["uuid"]),
+            FilterExpression=Attr("active").eq(True),
         )
 
         subs = []
-        for item in db_items['Items']:
-            subs.append({
-                'uuid': item['uuid'],
-                'lat': float(item['lat']),
-                'lon': float(item['lon']),
-                'max_distance_mi': float(item['max_distance_mi']),
-            })
+        for item in db_items["Items"]:
+            subs.append(
+                {
+                    "uuid": item["uuid"],
+                    "lat": float(item["lat"]),
+                    "lon": float(item["lon"]),
+                    "max_distance_mi": float(item["max_distance_mi"]),
+                }
+            )
 
         # Return both preferences and subscriptions
         resp = {
-            'email': user_data['email'],
-            'prefs': prefs,
-            'subs': subs,
+            "email": user_data["email"],
+            "prefs": prefs,
+            "subs": subs,
         }
 
         return resp
 
     def _required(self, args, arg):
         if arg not in args:
-            raise ClientError(f'missing argument: {arg}')
+            raise ClientError(f"missing argument: {arg}")
         if not args[arg]:
-            raise ClientError(f'empty argument: {arg}')
+            raise ClientError(f"empty argument: {arg}")
 
         return args[arg]
 
@@ -283,34 +287,34 @@ class SondesearchAPI:
         user_data = self.get_user_data()
 
         # Construct the preferences object
-        user_data.update({
-            'units': self._required(args, 'units'),
-            'tzname': self._required(args, 'tzname'),
-        })
+        user_data.update(
+            {
+                "units": self._required(args, "units"),
+                "tzname": self._required(args, "tzname"),
+            }
+        )
 
         # Construct the subscription object
         sub_item = {
             # uuid of the subscription
-            'uuid': uuid.uuid4().hex,
-
+            "uuid": uuid.uuid4().hex,
             # uuid of the subscriber
-            'subscriber': user_data['uuid'],
-
-            'active': True,
-            'subscribe_time': self.get_time(),
-            'lat': Decimal(self._required(args, 'lat')),
-            'lon': Decimal(self._required(args, 'lon')),
-            'max_distance_mi': Decimal(self._required(args, 'max_distance_mi')),
+            "subscriber": user_data["uuid"],
+            "active": True,
+            "subscribe_time": self.get_time(),
+            "lat": Decimal(self._required(args, "lat")),
+            "lon": Decimal(self._required(args, "lon")),
+            "max_distance_mi": Decimal(self._required(args, "max_distance_mi")),
         }
 
-        if not user_data['units'] in self.VALID_UNITS:
+        if not user_data["units"] in self.VALID_UNITS:
             raise ClientError(f'invalid unit {user_data["units"]}')
-        if not -90 <= sub_item['lat'] <= 90:
-            raise ClientError('latitude out of range')
-        if not -180 <= sub_item['lon'] <= 180:
-            raise ClientError('longitude out of range')
-        if sub_item['max_distance_mi'] <= 0:
-            raise ClientError('max_distance_mi must be positive')
+        if not -90 <= sub_item["lat"] <= 90:
+            raise ClientError("latitude out of range")
+        if not -180 <= sub_item["lon"] <= 180:
+            raise ClientError("longitude out of range")
+        if sub_item["max_distance_mi"] <= 0:
+            raise ClientError("max_distance_mi must be positive")
 
         print(f"subscriber {sub_item['subscriber']}: new subscription {sub_item['uuid']}")
 
@@ -320,9 +324,9 @@ class SondesearchAPI:
         # Editing an entry is actually a combination subscribe + unsubscribe.
         # Edits set the 'replace_uuid' property to indicate which subscription
         # should be cancelled one this one is successfully created.
-        if 'replace_uuid' in args:
+        if "replace_uuid" in args:
             print(f"deleting old subscription {args['replace_uuid']}")
-            self._unsubscribe_common(args['replace_uuid'])
+            self._unsubscribe_common(args["replace_uuid"])
 
         return self.get_config()
 
@@ -333,25 +337,25 @@ class SondesearchAPI:
         print(f"Unsubscribe headers: {cherrypy.request.headers}")
         # Unsubscribe
         args = {
-            'Key': {
-                'uuid': uuid,
+            "Key": {
+                "uuid": uuid,
             },
-            'UpdateExpression': 'SET active=:f, unsubscribe_time=:now',
-            'ExpressionAttributeValues': {
-                ':f': False,
-                ':now': self.get_time(),
+            "UpdateExpression": "SET active=:f, unsubscribe_time=:now",
+            "ExpressionAttributeValues": {
+                ":f": False,
+                ":now": self.get_time(),
             },
-            'ReturnValues': "ALL_NEW",
+            "ReturnValues": "ALL_NEW",
         }
 
         if user_token is not None:
-            args['ConditionExpression'] = Key('subscriber').eq(user_token)
+            args["ConditionExpression"] = Key("subscriber").eq(user_token)
 
         rv = self.tables.subscriptions.update_item(**args)
-        sub = rv['Attributes']
+        sub = rv["Attributes"]
 
         return {
-            'cancelled_sub': sub,
+            "cancelled_sub": sub,
         }
 
     # Unsubscribe link put at the bottom of each email - no user token
@@ -364,9 +368,9 @@ class SondesearchAPI:
         res = self._unsubscribe_common(uuid)
         print(f"one-click unsubscribe of subscription {uuid}")
         return {
-            'success': True,
-            'cancelled_sub_lat': float(res['cancelled_sub']['lat']),
-            'cancelled_sub_lon': float(res['cancelled_sub']['lon']),
+            "success": True,
+            "cancelled_sub_lat": float(res["cancelled_sub"]["lat"]),
+            "cancelled_sub_lon": float(res["cancelled_sub"]["lon"]),
         }
 
     # Management portal unsubscribe where a user token is provided. If
@@ -385,7 +389,7 @@ class SondesearchAPI:
     @cherrypy.expose
     @allow_lectrobox_cors
     def get_notification_history(self):
-        cherrypy.response.headers['Content-Type'] = 'application/json'
+        cherrypy.response.headers["Content-Type"] = "application/json"
 
         NUM_HISTORY_DAYS = 31
         time_sent_cutoff = Decimal(time.time() - NUM_HISTORY_DAYS * 86400)
@@ -396,35 +400,36 @@ class SondesearchAPI:
         # First, get all of this user's subscriptions
         subs = util.dynamodb_to_dataframe(
             self.tables.subscriptions.query,
-            IndexName='subscriber-index',
-            KeyConditionExpression=Key('subscriber').eq(user_token),
+            IndexName="subscriber-index",
+            KeyConditionExpression=Key("subscriber").eq(user_token),
         )
 
         if subs.empty:
             # If there are no subscriptions, return nothing
-            rv: str = '[]'
+            rv: str = "[]"
         else:
             # Get notification history for each subscription
             dfs = []
-            for sub in subs['uuid']:
-                dfs.append(util.dynamodb_to_dataframe(
-                    self.tables.notifications.query,
-                    KeyConditionExpression=(
-                        Key('subscription_uuid').eq(sub)
-                        & Key('time_sent').gt(time_sent_cutoff)
-                    ),
-                ))
+            for sub in subs["uuid"]:
+                dfs.append(
+                    util.dynamodb_to_dataframe(
+                        self.tables.notifications.query,
+                        KeyConditionExpression=(
+                            Key("subscription_uuid").eq(sub) & Key("time_sent").gt(time_sent_cutoff)
+                        ),
+                    )
+                )
             notifications = pd.concat(dfs)
-            rv = notifications.to_json(orient='records') or '[]'
+            rv = notifications.to_json(orient="records") or "[]"
 
-        return rv.encode('utf-8')
+        return rv.encode("utf-8")
 
     @cherrypy.expose
     def get_sonde_kml(self, serial):
         kml_content = kml_generator.generate_kml(serial)
-        cherrypy.response.headers['Content-Type'] = 'application/vnd.google-earth.kml+xml'
-        cherrypy.response.headers['Content-Disposition'] = f'attachment; filename="{serial}.kml"'
-        return kml_content.encode('utf8')
+        cherrypy.response.headers["Content-Type"] = "application/vnd.google-earth.kml+xml"
+        cherrypy.response.headers["Content-Disposition"] = f'attachment; filename="{serial}.kml"'
+        return kml_content.encode("utf8")
 
     @cherrypy.expose
     @cherrypy.tools.json_out()  # type: ignore[attr-defined]
@@ -439,36 +444,30 @@ class SondesearchAPI:
             result = listeners.get_listener_stats(serial)
 
             # Convert DataFrames to JSON-serializable format
-            stats_df = result['stats']
-            coverage_series = result['coverage']
+            stats_df = result["stats"]
+            coverage_series = result["coverage"]
 
             # Flatten the multi-index columns for stats
             # Handle both multi-index columns like ('frame', 'first') and single columns like ('cov%',)
             stats_df.columns = [
-                '_'.join(str(c) for c in col).strip('_') if isinstance(col, tuple) else str(col)
+                "_".join(str(c) for c in col).strip("_") if isinstance(col, tuple) else str(col)
                 for col in stats_df.columns.values
             ]
-            stats_data = stats_df.reset_index().to_dict(orient='records')
+            stats_data = stats_df.reset_index().to_dict(orient="records")
 
             # Convert coverage series to dict
             coverage_data = coverage_series.to_dict()
 
             return {
-                'success': True,
-                'stats': stats_data,
-                'coverage': coverage_data,
-                'warning': result['warning']
+                "success": True,
+                "stats": stats_data,
+                "coverage": coverage_data,
+                "warning": result["warning"],
             }
         except ValueError as e:
-            return {
-                'success': False,
-                'error': str(e)
-            }
+            return {"success": False, "error": str(e)}
         except Exception as e:
-            return {
-                'success': False,
-                'error': f'Unexpected error: {str(e)}'
-            }
+            return {"success": False, "error": f"Unexpected error: {str(e)}"}
 
     @cherrypy.expose
     @allow_lectrobox_cors
@@ -487,16 +486,16 @@ class SondesearchAPI:
 
             # Generate the calendar in a subprocess to avoid memory accumulation
             image_bytes = landing_calendar.generate_calendar_subprocess(
-                bottom_lat, left_lon, top_lat, right_lon, format='webp'
+                bottom_lat, left_lon, top_lat, right_lon, format="webp"
             )
 
-            cherrypy.response.headers['Content-Type'] = 'image/webp'
+            cherrypy.response.headers["Content-Type"] = "image/webp"
             return image_bytes
 
         except ValueError as e:
-            raise ClientError(f'Invalid parameters: {str(e)}')
+            raise ClientError(f"Invalid parameters: {str(e)}")
         except Exception as e:
-            raise ClientError(f'Error generating calendar: {str(e)}')
+            raise ClientError(f"Error generating calendar: {str(e)}")
 
 
 global_config = None
@@ -509,32 +508,36 @@ def mount_server_instance(retriever, dev_mode):
         global_config = GlobalConfig(retriever=retriever, dev_mode=dev_mode)
 
     apiserver = SondesearchAPI(global_config)
-    cherrypy.tree.mount(apiserver, '/', {'/': {}})
+    cherrypy.tree.mount(apiserver, "/", {"/": {}})
     return apiserver
 
 
 # "application" is the magic function called by Apache's wsgi module or uwsgi
 def application(environ, start_response):
     mount_server_instance(retriever=util.LiveSondeHub(), dev_mode=False)
-    cherrypy.config.update({
-        'log.screen': True,
-        'environment': 'production',
-        'tools.proxy.on': True,
-    })
+    cherrypy.config.update(
+        {
+            "log.screen": True,
+            "environment": "production",
+            "tools.proxy.on": True,
+        }
+    )
     return cherrypy.tree(environ, start_response)
 
 
 # For local testing
 if __name__ == "__main__":
-    cherrypy.config.update({
-        'log.screen': True,
-        'server.socket_port': 4001,
-    })
-    cherrypy.server.socket_host = '::'
+    cherrypy.config.update(
+        {
+            "log.screen": True,
+            "server.socket_port": 4001,
+        }
+    )
+    cherrypy.server.socket_host = "::"
     cherrypy.quickstart(
         mount_server_instance(
             retriever=util.LiveSondeHub(),
             dev_mode=True,
         ),
-        '/'
+        "/",
     )

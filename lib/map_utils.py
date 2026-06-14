@@ -3,12 +3,20 @@ Shared utilities for generating maps of sonde flights and landing locations.
 """
 
 import os
+import time
 from dataclasses import dataclass
 from functools import lru_cache
 from math import ceil
 from typing import Tuple, Optional
+
 import contextily as cx
 import matplotlib.figure
+import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter
+import numpy as np
+import pandas as pd
+import requests
+from pyproj import Transformer
 
 # Default cache directory for contextily map tiles
 DEFAULT_CONTEXTILY_CACHE_DIR = os.path.expanduser("~/.cache/geotiles")
@@ -31,15 +39,6 @@ def setup_contextily_cache():
     cx.set_cache_dir(cache_dir)
 
 
-import matplotlib.pyplot as plt
-from matplotlib.ticker import FuncFormatter
-import numpy as np
-import pandas as pd
-import requests
-import time
-from pyproj import Transformer
-
-
 # Whitespace padding around map boundaries (20%)
 DEFAULT_MAP_WHITESPACE = 0.2
 
@@ -54,6 +53,7 @@ MIN_MAP_SPAN_DEG = 0.01
 @dataclass
 class GroundReceptionStats:
     """Statistics about ground reception points."""
+
     avg_lat: float
     avg_lon: float
     num_points: int
@@ -72,7 +72,7 @@ class MapUtils:
 
     def __init__(self):
         # Create transformer once per instance
-        self.wgs84_to_mercator = Transformer.from_crs(crs_from='EPSG:4326', crs_to='EPSG:3857')
+        self.wgs84_to_mercator = Transformer.from_crs(crs_from="EPSG:4326", crs_to="EPSG:3857")
 
     # Convert WGS84 lat/lon to Web Mercator x/y coordinates
     def to_mercator_xy(self, lat, lon):
@@ -91,8 +91,10 @@ class MapUtils:
 
     # Calculate map boundaries and zoom level for given points
     def get_map_limits(
-        self, points, map_whitespace: float = DEFAULT_MAP_WHITESPACE,
-        min_span: float = MIN_MAP_SPAN_DEG
+        self,
+        points,
+        map_whitespace: float = DEFAULT_MAP_WHITESPACE,
+        min_span: float = MIN_MAP_SPAN_DEG,
     ) -> Tuple[float, float, float, float, float]:
         min_lat = min([point[0] for point in points])
         max_lat = max([point[0] for point in points])
@@ -133,16 +135,18 @@ class MapUtils:
             ground_points: DataFrame with 'lat', 'lon', and 'alt' columns
         """
         # Convert all ground points to mercator coordinates
-        ground_x, ground_y = self.to_mercator_xy(ground_points['lat'].values, ground_points['lon'].values)
+        ground_x, ground_y = self.to_mercator_xy(
+            ground_points["lat"].values, ground_points["lon"].values
+        )
 
         # Calculate weighted average of lat/lon (equal weights for now)
-        avg_lat = ground_points['lat'].mean()
-        avg_lon = ground_points['lon'].mean()
+        avg_lat = ground_points["lat"].mean()
+        avg_lon = ground_points["lon"].mean()
         avg_x, avg_y = self.to_mercator_xy(avg_lat, avg_lon)
 
         # Calculate standard deviation in both degrees and meters
-        std_dev_lat = ground_points['lat'].std()
-        std_dev_lon = ground_points['lon'].std()
+        std_dev_lat = ground_points["lat"].std()
+        std_dev_lon = ground_points["lon"].std()
 
         # Calculate standard deviation in meters
         # Since we're in mercator (meters), we can calculate std dev directly from distances
@@ -153,8 +157,8 @@ class MapUtils:
         std_dev_combined = np.sqrt(std_dev_x**2 + std_dev_y**2)
 
         # Calculate altitude statistics
-        avg_alt = ground_points['alt'].mean()
-        std_dev_alt = ground_points['alt'].std()
+        avg_alt = ground_points["alt"].mean()
+        std_dev_alt = ground_points["alt"].std()
 
         # Get ground elevation at the weighted average position
         ground_elev = get_elevation(avg_lat, avg_lon)
@@ -170,12 +174,12 @@ class MapUtils:
             std_dev_combined=std_dev_combined,
             avg_alt=avg_alt,
             std_dev_alt=std_dev_alt,
-            ground_elev=ground_elev
+            ground_elev=ground_elev,
         )
 
-    def draw_ground_reception_map(self, ground_points: pd.DataFrame,
-                                  stats: GroundReceptionStats,
-                                  size: int = 10) -> matplotlib.figure.Figure:
+    def draw_ground_reception_map(
+        self, ground_points: pd.DataFrame, stats: GroundReceptionStats, size: int = 10
+    ) -> matplotlib.figure.Figure:
         """Draw a map showing ground reception points with statistics.
 
         Creates a map with:
@@ -193,28 +197,43 @@ class MapUtils:
             The matplotlib Figure object
         """
         fig, ax = plt.subplots(figsize=(size, size))
-        ax.set_aspect('equal')
+        ax.set_aspect("equal")
 
         # Convert all ground points to mercator coordinates
-        ground_x, ground_y = self.to_mercator_xy(ground_points['lat'].values, ground_points['lon'].values)
+        ground_x, ground_y = self.to_mercator_xy(
+            ground_points["lat"].values, ground_points["lon"].values
+        )
 
         # Plot all ground points
-        ax.scatter(ground_x, ground_y, color='red', s=50, alpha=0.6, marker='o', label='Ground points')
+        ax.scatter(
+            ground_x, ground_y, color="red", s=50, alpha=0.6, marker="o", label="Ground points"
+        )
 
         avg_x, avg_y = self.to_mercator_xy(stats.avg_lat, stats.avg_lon)
 
         # Plot the weighted average point
-        ax.scatter(avg_x, avg_y, color='blue', s=200, alpha=0.8, marker='*',
-                   label='Weighted average', edgecolors='black', linewidths=2, zorder=5)
+        ax.scatter(
+            avg_x,
+            avg_y,
+            color="blue",
+            s=200,
+            alpha=0.8,
+            marker="*",
+            label="Weighted average",
+            edgecolors="black",
+            linewidths=2,
+            zorder=5,
+        )
 
         # Prepare list of points for map limits calculation
-        map_limits = [[lat, lon] for lat, lon in zip(ground_points['lat'], ground_points['lon'])]
+        map_limits = [[lat, lon] for lat, lon in zip(ground_points["lat"], ground_points["lon"])]
 
         # Find the limits of the map (no whitespace - ticks define the boundary).
         # This map is meant to show an extent of just a few meters, so allow any
         # size span rather than the default ~1 km floor.
         min_x, min_y, max_x, max_y, zoom = self.get_map_limits(
-            map_limits, map_whitespace=0, min_span=0)
+            map_limits, map_whitespace=0, min_span=0
+        )
 
         # Calculate tick interval to get regular spacing including 0
         # The range in meters from the average point
@@ -259,33 +278,39 @@ class MapUtils:
             return int(y - avg_y)
 
         # Create secondary axes showing distances in meters
-        ax.set_xlabel('East-West distance from average (m)', fontsize=10)
-        ax.set_ylabel('North-South distance from average (m)', fontsize=10)
+        ax.set_xlabel("East-West distance from average (m)", fontsize=10)
+        ax.set_ylabel("North-South distance from average (m)", fontsize=10)
 
         # Format the tick labels to show meters
         ax.xaxis.set_major_formatter(FuncFormatter(mercator_to_meters_x))
         ax.yaxis.set_major_formatter(FuncFormatter(mercator_to_meters_y))
 
         # Add grid for easier reading
-        ax.grid(True, color='grey', linestyle='--', linewidth=1.0)
+        ax.grid(True, color="grey", linestyle="--", linewidth=1.0)
 
         # Add text box at the top with statistics
         stats_text = f"Weighted Avg ({len(ground_points)} points): {stats.avg_lat:.6f}, {stats.avg_lon:.6f}\n"
-        stats_text += (f"Std Dev: E-W {stats.std_dev_x:.1f}m, N-S {stats.std_dev_y:.1f}m, "
-                       f"Combined {stats.std_dev_combined:.1f}m\n")
+        stats_text += (
+            f"Std Dev: E-W {stats.std_dev_x:.1f}m, N-S {stats.std_dev_y:.1f}m, "
+            f"Combined {stats.std_dev_combined:.1f}m\n"
+        )
         stats_text += f"Altitude: {stats.avg_alt:.1f}m (±{stats.std_dev_alt:.1f}m)"
         if stats.ground_elev is not None:
             height_agl = stats.avg_alt - stats.ground_elev
             stats_text += f", Ground: {stats.ground_elev:.1f}m, AGL: {height_agl:.1f}m"
-        ax.text(0.5, 0.98, stats_text,
-                transform=ax.transAxes,
-                fontsize=9,
-                verticalalignment='top',
-                horizontalalignment='center',
-                bbox=dict(boxstyle='round,pad=0.5', facecolor='yellow', alpha=0.8))
+        ax.text(
+            0.5,
+            0.98,
+            stats_text,
+            transform=ax.transAxes,
+            fontsize=9,
+            verticalalignment="top",
+            horizontalalignment="center",
+            bbox=dict(boxstyle="round,pad=0.5", facecolor="yellow", alpha=0.8),
+        )
 
         # Add legend
-        ax.legend(loc='lower left', framealpha=0.9)
+        ax.legend(loc="lower left", framealpha=0.9)
 
         fig.tight_layout()
 
@@ -307,7 +332,7 @@ def add_basemap(ax, zoom, attempts: int = 3) -> bool:
             cx.add_basemap(
                 ax,
                 zoom=zoom,
-                crs='EPSG:3857',
+                crs="EPSG:3857",
                 source=cx.providers.OpenStreetMap.Mapnik,
             )
             return True
@@ -341,44 +366,48 @@ def _get_elevation_cached(lat: float, lon: float) -> Optional[float]:
     """
     for attempt in range(5):
         try:
-            resp = requests.get('https://epqs.nationalmap.gov/v1/json', params={
-                'x': lon,
-                'y': lat,
-                'units': 'Meters',
-                'wkid': '4326',
-                'includeDate': 'True',
-            }, timeout=10)
+            resp = requests.get(
+                "https://epqs.nationalmap.gov/v1/json",
+                params={
+                    "x": lon,
+                    "y": lat,
+                    "units": "Meters",
+                    "wkid": "4326",
+                    "includeDate": "True",
+                },
+                timeout=10,
+            )
             resp.raise_for_status()
             # Out-of-region returns "Call failed." error text - fall back immediately
-            if resp.text.startswith('Call failed'):
-                print(f'USGS elev {lat},{lon}: out of region')
+            if resp.text.startswith("Call failed"):
+                print(f"USGS elev {lat},{lon}: out of region")
                 break
             data = resp.json()
-            value = data.get('value')
-            resolution = data.get('resolution')
+            value = data.get("value")
+            resolution = data.get("resolution")
             if value is not None and resolution is not None and resolution < 0.001:
-                print(f'USGS elev {lat},{lon}: {value}m (res={resolution})')
+                print(f"USGS elev {lat},{lon}: {value}m (res={resolution})")
                 return float(value)
-            print(f'USGS elev {lat},{lon}: low-res (res={resolution}), retrying')
+            print(f"USGS elev {lat},{lon}: low-res (res={resolution}), retrying")
         except Exception as e:
-            print(f'USGS elev {lat},{lon}: {e}, retrying')
+            print(f"USGS elev {lat},{lon}: {e}, retrying")
         if attempt < 4:
             time.sleep(2)
 
     # Fall back to OpenTopoData (ned10m US, eudem25m Europe, srtm30m global)
-    print(f'USGS elev {lat},{lon}: falling back to OpenTopoData')
+    print(f"USGS elev {lat},{lon}: falling back to OpenTopoData")
     try:
         resp = requests.get(
-            'https://api.opentopodata.org/v1/ned10m,eudem25m,srtm30m',
-            params={'locations': f'{lat},{lon}'},
+            "https://api.opentopodata.org/v1/ned10m,eudem25m,srtm30m",
+            params={"locations": f"{lat},{lon}"},
             timeout=10,
         )
         resp.raise_for_status()
-        results = resp.json().get('results', [])
-        if results and results[0].get('elevation') is not None:
-            elev = float(results[0]['elevation'])
-            dataset = results[0].get('dataset', 'unknown')
-            print(f'OpenTopoData elev {lat},{lon}: {elev}m (dataset={dataset})')
+        results = resp.json().get("results", [])
+        if results and results[0].get("elevation") is not None:
+            elev = float(results[0]["elevation"])
+            dataset = results[0].get("dataset", "unknown")
+            print(f"OpenTopoData elev {lat},{lon}: {elev}m (dataset={dataset})")
             return elev
     except Exception:
         pass
@@ -402,10 +431,10 @@ def identify_ground_points(flight_df: pd.DataFrame) -> Optional[pd.DataFrame]:
         points found or if the trace doesn't end with ground points
     """
     # Sort by frame to ensure proper ordering
-    flight_df = flight_df.sort_values('frame').reset_index(drop=True)
+    flight_df = flight_df.sort_values("frame").reset_index(drop=True)
 
     # Mark each point as ground (True) or not (False)
-    is_ground = (flight_df['vel_v'].abs() < 1) & (flight_df['vel_h'].abs() < 1)
+    is_ground = (flight_df["vel_v"].abs() < 1) & (flight_df["vel_h"].abs() < 1)
 
     # The trace must end with ground points
     if not is_ground.iloc[-1]:

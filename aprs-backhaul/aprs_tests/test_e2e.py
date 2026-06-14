@@ -104,8 +104,11 @@ async def test_e2e_pi_to_cloud_latest_wins():
 
     pi_cfg = Config(
         callsign="KK7YBO",
-        kiss_host="127.0.0.1", kiss_port=kiss_server.port,
-        tocall="APZSDH", path=[], min_interval_sec=WINDOW,
+        kiss_host="127.0.0.1",
+        kiss_port=kiss_server.port,
+        tocall="APZSDH",
+        path=[],
+        min_interval_sec=WINDOW,
         # Keep tasks running for the duration of the test by requiring
         # more idle windows than we actually wait out.
         idle_windows_before_eof=100,
@@ -113,19 +116,11 @@ async def test_e2e_pi_to_cloud_latest_wins():
     kiss_client = KissTncClient(pi_cfg.kiss_host, pi_cfg.kiss_port)
     gateway = AprsPiGateway(pi_cfg, kiss_client, now_fn=lambda: 1_700_000_000.0)
     try:
-        await gateway.on_payload_summary(
-            _make_payload_summary("S4310587", frame=10)
-        )
-        await gateway.on_payload_summary(
-            _make_payload_summary("S4310587", frame=11)
-        )
-        await gateway.on_payload_summary(
-            _make_payload_summary("S4310587", frame=12)
-        )
+        await gateway.on_payload_summary(_make_payload_summary("S4310587", frame=10))
+        await gateway.on_payload_summary(_make_payload_summary("S4310587", frame=11))
+        await gateway.on_payload_summary(_make_payload_summary("S4310587", frame=12))
         # A second sonde shows up; fires immediately.
-        await gateway.on_payload_summary(
-            _make_payload_summary("M0123456", frame=500)
-        )
+        await gateway.on_payload_summary(_make_payload_summary("M0123456", frame=500))
         # Wait for the timer to tick past the window boundary.
         await asyncio.sleep(WAIT)
     finally:
@@ -144,7 +139,10 @@ async def test_e2e_pi_to_cloud_latest_wins():
     uploader = MagicMock()
     dedup = FrameDedup(ttl_sec=3600)
     handler = PacketHandler(
-        cloud_cfg, reception_logger, uploader, dedup,
+        cloud_cfg,
+        reception_logger,
+        uploader,
+        dedup,
         now_fn=lambda: datetime(2026, 4, 19, 18, 15, 31, tzinfo=timezone.utc),
     )
     for fr in frames:
@@ -172,8 +170,11 @@ async def test_e2e_end_of_flight_redundant_finals_plus_killed():
 
     pi_cfg = Config(
         callsign="KK7YBO",
-        kiss_host="127.0.0.1", kiss_port=kiss_server.port,
-        tocall="APZSDH", path=[], min_interval_sec=WINDOW,
+        kiss_host="127.0.0.1",
+        kiss_port=kiss_server.port,
+        tocall="APZSDH",
+        path=[],
+        min_interval_sec=WINDOW,
         idle_windows_before_eof=1,
         final_redundancy=2,
         final_spacing_sec=0.0,
@@ -181,15 +182,9 @@ async def test_e2e_end_of_flight_redundant_finals_plus_killed():
     kiss_client = KissTncClient(pi_cfg.kiss_host, pi_cfg.kiss_port)
     gateway = AprsPiGateway(pi_cfg, kiss_client, now_fn=lambda: 1_700_000_000.0)
     try:
-        await gateway.on_payload_summary(
-            _make_payload_summary("S4310587", frame=1)
-        )
-        await gateway.on_payload_summary(
-            _make_payload_summary("S4310587", frame=99, alt=500.0)
-        )
-        await gateway.on_payload_summary(
-            _make_payload_summary("S4310587", frame=100, alt=50.0)
-        )
+        await gateway.on_payload_summary(_make_payload_summary("S4310587", frame=1))
+        await gateway.on_payload_summary(_make_payload_summary("S4310587", frame=99, alt=500.0))
+        await gateway.on_payload_summary(_make_payload_summary("S4310587", frame=100, alt=50.0))
         # Wait enough windows for: flush + idle + EOF actions.
         await asyncio.sleep(WINDOW * 4)
         assert "S4310587" not in gateway.coalescer._tasks
@@ -204,10 +199,7 @@ async def test_e2e_end_of_flight_redundant_finals_plus_killed():
     #           2 redundant final (frame 100 live) + 1 killed (frame 100 dead)
     assert len(frames) == 5
 
-    pkts = [
-        aprslib.parse(_frame_to_tnc2(fr))
-        for fr in frames
-    ]
+    pkts = [aprslib.parse(_frame_to_tnc2(fr)) for fr in frames]
     cmts = [ae.parse_sonde_comment(p["comment"]) for p in pkts]
 
     assert [p["alive"] for p in pkts] == [True, True, True, True, False]
@@ -229,7 +221,10 @@ async def test_e2e_cloud_dedups_aprs_duplicates():
     uploader = MagicMock()
     dedup = FrameDedup(ttl_sec=3600)
     handler = PacketHandler(
-        cloud_cfg, reception_logger, uploader, dedup,
+        cloud_cfg,
+        reception_logger,
+        uploader,
+        dedup,
         now_fn=lambda: datetime(2026, 4, 19, 18, 15, 31, tzinfo=timezone.utc),
     )
     tnc2 = (
@@ -251,8 +246,11 @@ async def test_e2e_udp_to_kiss_via_real_sockets():
 
     pi_cfg = Config(
         callsign="KK7YBO",
-        kiss_host="127.0.0.1", kiss_port=kiss_server.port,
-        tocall="APZSDH", path=[], min_interval_sec=WINDOW,
+        kiss_host="127.0.0.1",
+        kiss_port=kiss_server.port,
+        tocall="APZSDH",
+        path=[],
+        min_interval_sec=WINDOW,
         idle_windows_before_eof=100,
     )
     kiss_client = KissTncClient(pi_cfg.kiss_host, pi_cfg.kiss_port)

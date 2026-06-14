@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import table_definitions
 import util
 
+
 def go():
     t = table_definitions.TableClients()
 
@@ -18,18 +19,17 @@ def go():
     users = util.dynamodb_to_dataframe(t.users.scan)
 
     for _, user in users.iterrows():
-        if 'email_lc' in user and not pd.isna(user['email_lc']):
+        if "email_lc" in user and not pd.isna(user["email_lc"]):
             continue
-        print(user['email'])
+        print(user["email"])
         t.users.update_item(
             Key={
-                'uuid': user['uuid'],
+                "uuid": user["uuid"],
             },
-            UpdateExpression='set email_lc = :e',
-            ExpressionAttributeValues={
-                ':e': user['email'].lower()
-            }
+            UpdateExpression="set email_lc = :e",
+            ExpressionAttributeValues={":e": user["email"].lower()},
         )
+
 
 if __name__ == "__main__":
     go()

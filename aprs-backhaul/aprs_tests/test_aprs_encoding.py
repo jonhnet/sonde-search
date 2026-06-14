@@ -28,8 +28,7 @@ def test_format_object_line_southern_eastern_hemisphere():
 def test_object_line_roundtrip_via_aprslib():
     ts = datetime(2026, 4, 19, 12, 0, 0, tzinfo=timezone.utc)
     comment_text = "F2345 S-3.1 f403.000 tA"
-    info = ae.format_object_line("S4310587", 47.608, -122.335, ts, comment_text,
-                                 altitude_m=25310)
+    info = ae.format_object_line("S4310587", 47.608, -122.335, ts, comment_text, altitude_m=25310)
     pkt = parse_info(info)
     assert pkt["format"] == "object"
     assert pkt["object_name"].strip() == "S4310587"
@@ -48,8 +47,9 @@ def test_object_line_roundtrip_via_aprslib():
 
 def test_format_object_line_emits_altitude_extension():
     ts = datetime(2026, 4, 19, 18, 15, 30, tzinfo=timezone.utc)
-    info = ae.format_object_line("X", 0.0, 0.0, ts, "F1 S0.0",
-                                 altitude_m=9144.0)  # 9144 m ≈ 30000 ft
+    info = ae.format_object_line(
+        "X", 0.0, 0.0, ts, "F1 S0.0", altitude_m=9144.0
+    )  # 9144 m ≈ 30000 ft
     assert "/A=030000" in info
     pkt = parse_info(info)
     assert pkt["altitude"] == pytest.approx(9144.0, abs=0.5)
@@ -97,22 +97,35 @@ def test_parse_sonde_comment_vel_v_roundtrip():
 
 
 def test_format_sonde_comment_with_all_in_comment_fields():
-    c = ae.format_sonde_comment(_obs(
-        frame=99999, snr=-12.3, alt=35000,           # alt skipped (in /A=)
-        vel_v=-40.0, vel_h=150.0, heading=45.2,      # vel_h/heading skipped
-        temp=-42.5, humidity=95.3, pressure=250.7,
-        batt=3.05, sats=10,
-    ))
-    assert c == ("F99999 S-12.3 f403.000 tA v-40.0 "
-                 "T-42.5 H95 P251 B3.0 N10")
+    c = ae.format_sonde_comment(
+        _obs(
+            frame=99999,
+            snr=-12.3,
+            alt=35000,  # alt skipped (in /A=)
+            vel_v=-40.0,
+            vel_h=150.0,
+            heading=45.2,  # vel_h/heading skipped
+            temp=-42.5,
+            humidity=95.3,
+            pressure=250.7,
+            batt=3.05,
+            sats=10,
+        )
+    )
+    assert c == ("F99999 S-12.3 f403.000 tA v-40.0 " "T-42.5 H95 P251 B3.0 N10")
 
 
 def test_parse_sonde_comment_in_comment_fields_roundtrip():
-    c = ae.format_sonde_comment(_obs(
-        vel_v=-5.2,
-        temp=-42.5, humidity=95, pressure=251,
-        batt=3.0, sats=10,
-    ))
+    c = ae.format_sonde_comment(
+        _obs(
+            vel_v=-5.2,
+            temp=-42.5,
+            humidity=95,
+            pressure=251,
+            batt=3.0,
+            sats=10,
+        )
+    )
     p = ae.parse_sonde_comment(c)
     assert p is not None
     assert p.vel_v == -5.2
@@ -167,9 +180,21 @@ def test_encode_sonde_type_distinguishes_all_variants():
     the cloud daemon can forward an exact (manufacturer, type) to SondeHub
     — matching what auto_rx would have uploaded directly."""
     types = [
-        "RS41", "RS41-SG", "RS41-SGP", "RS41-SGM", "RS41-SGPE",
-        "RS92", "RS92-NGP", "RS92-SGP",
-        "DFM", "DFM06", "DFM09", "DFM09P", "DFM17", "DFM17P", "DFM-Unknown",
+        "RS41",
+        "RS41-SG",
+        "RS41-SGP",
+        "RS41-SGM",
+        "RS41-SGPE",
+        "RS92",
+        "RS92-NGP",
+        "RS92-SGP",
+        "DFM",
+        "DFM06",
+        "DFM09",
+        "DFM09P",
+        "DFM17",
+        "DFM17P",
+        "DFM-Unknown",
     ]
     codes = {t: ae.encode_sonde_type(t) for t in types}
     assert "?" not in codes.values()
@@ -194,12 +219,12 @@ def test_decode_sonde_type_malformed_returns_none():
     assert ae.decode_sonde_type("") is None
     assert ae.decode_sonde_type("AB") is None
     assert ae.decode_sonde_type("?") is None
-    assert ae.decode_sonde_type("~") is None   # unassigned char
+    assert ae.decode_sonde_type("~") is None  # unassigned char
 
 
 def test_format_parse_comment_type_roundtrip():
     c = ae.format_sonde_comment(_obs(model="IMET5"))
-    assert "tW" in c   # IMET5 maps to 'W'
+    assert "tW" in c  # IMET5 maps to 'W'
     p = ae.parse_sonde_comment(c)
     assert p is not None
     assert p.type_str == "IMET5"
@@ -235,9 +260,13 @@ def test_format_object_line_with_cse_spd():
     (`CSE/SPD`, exactly 7 bytes) between symbol code and comment."""
     ts = datetime(2026, 4, 19, 18, 15, 30, tzinfo=timezone.utc)
     info = ae.format_object_line(
-        serial="S4310587", lat=40.05, lon=-105.25, ts_utc=ts,
+        serial="S4310587",
+        lat=40.05,
+        lon=-105.25,
+        ts_utc=ts,
         comment="F1 S0.0 f403.000 A100 tA",
-        course_deg=332, speed_knots=32.0,
+        course_deg=332,
+        speed_knots=32.0,
     )
     # Header is 37 bytes; CSE/SPD is the next 7 bytes.
     assert info[37:44] == "332/032"
@@ -249,10 +278,12 @@ def test_format_object_line_with_cse_spd():
 
 def test_format_object_line_omits_cse_spd_when_either_missing():
     ts = datetime(2026, 4, 19, 0, 0, 0, tzinfo=timezone.utc)
-    no_course = ae.format_object_line("X", 0.0, 0.0, ts, "F1 S0.0 A0",
-                                      course_deg=None, speed_knots=10.0)
-    no_speed = ae.format_object_line("X", 0.0, 0.0, ts, "F1 S0.0 A0",
-                                     course_deg=180, speed_knots=None)
+    no_course = ae.format_object_line(
+        "X", 0.0, 0.0, ts, "F1 S0.0 A0", course_deg=None, speed_knots=10.0
+    )
+    no_speed = ae.format_object_line(
+        "X", 0.0, 0.0, ts, "F1 S0.0 A0", course_deg=180, speed_knots=None
+    )
     # Without the extension, the comment starts immediately after symbol code.
     assert no_course[37:].startswith("F1 S0.0 A0")
     assert no_speed[37:].startswith("F1 S0.0 A0")
@@ -261,8 +292,12 @@ def test_format_object_line_omits_cse_spd_when_either_missing():
 def test_format_object_line_killed():
     ts = datetime(2026, 4, 19, 18, 15, 30, tzinfo=timezone.utc)
     info = ae.format_object_line(
-        serial="S4310587", lat=40.05, lon=-105.25, ts_utc=ts,
-        comment="F123 S12.3 f403.000 A25310 tRS41", live=False,
+        serial="S4310587",
+        lat=40.05,
+        lon=-105.25,
+        ts_utc=ts,
+        comment="F123 S12.3 f403.000 A25310 tRS41",
+        live=False,
     )
     assert info[10] == "_"
     pkt = parse_info(info)
@@ -372,10 +407,10 @@ def test_build_and_parse_ui_frame():
 def test_build_ui_frame_last_bit_set_on_final_address():
     frame = ae.build_ui_frame("N0CALL", "APZSDH", [], info=";")
     # No digipeater path: source is the final address, last bit set
-    assert frame[13] & 0x01 == 0x01    # source SSID byte
-    assert frame[6] & 0x01 == 0x00     # dest SSID byte (not last)
+    assert frame[13] & 0x01 == 0x01  # source SSID byte
+    assert frame[6] & 0x01 == 0x00  # dest SSID byte (not last)
 
     frame2 = ae.build_ui_frame("N0CALL", "APZSDH", ["WIDE1-1"], info=";")
     # With a path hop, the last bit moves to the hop's SSID byte
-    assert frame2[13] & 0x01 == 0x00   # source no longer last
-    assert frame2[20] & 0x01 == 0x01   # hop is last
+    assert frame2[13] & 0x01 == 0x00  # source no longer last
+    assert frame2[20] & 0x01 == 0x01  # hop is last

@@ -39,7 +39,7 @@ def make_pkt(**overrides):
         "object_name": "S4310587 ",
         "latitude": 40.05,
         "longitude": -105.25,
-        "altitude": 25310.0,                    # parsed by aprslib from /A=
+        "altitude": 25310.0,  # parsed by aprslib from /A=
         "comment": "F2345 S12.3 f403.000 tRS41",
         "raw_timestamp": "181530z",
         "symbol": "O",
@@ -87,16 +87,36 @@ def test_frame_dedup_ttl_expiry():
 
 def test_build_sondehub_record_has_required_fields():
     cfg = make_cfg()
-    comment = ae.SondeComment(frame=2345, snr=12.3, freq_mhz=403.000,
-                              alt_m=25310, type_str="RS41",
-                              manufacturer="Vaisala")
+    comment = ae.SondeComment(
+        frame=2345, snr=12.3, freq_mhz=403.000, alt_m=25310, type_str="RS41", manufacturer="Vaisala"
+    )
     now = datetime(2026, 4, 19, 18, 15, 31, tzinfo=timezone.utc)
-    rec = build_sondehub_record(cfg, "S4310587", 40.05, -105.25, comment,
-                                "181530", uploader_callsign="N3UUO_APRS",
-                                now_utc=now)
-    required = {"software_name", "software_version", "uploader_callsign",
-                "time_received", "datetime", "serial", "frame", "lat", "lon",
-                "alt", "type", "manufacturer", "frequency", "snr"}
+    rec = build_sondehub_record(
+        cfg,
+        "S4310587",
+        40.05,
+        -105.25,
+        comment,
+        "181530",
+        uploader_callsign="N3UUO_APRS",
+        now_utc=now,
+    )
+    required = {
+        "software_name",
+        "software_version",
+        "uploader_callsign",
+        "time_received",
+        "datetime",
+        "serial",
+        "frame",
+        "lat",
+        "lon",
+        "alt",
+        "type",
+        "manufacturer",
+        "frequency",
+        "snr",
+    }
     assert required.issubset(rec.keys())
     assert rec["uploader_callsign"] == "N3UUO_APRS"
     assert rec["serial"] == "S4310587"
@@ -107,25 +127,39 @@ def test_build_sondehub_record_has_required_fields():
 
 def test_build_sondehub_record_includes_velocity_when_present():
     cfg = make_cfg()
-    comment = ae.SondeComment(frame=2345, snr=12.3, freq_mhz=403.000,
-                              alt_m=25310, type_str="RS41",
-                              manufacturer="Vaisala",
-                              vel_v=-5.2, vel_h=8.4)
+    comment = ae.SondeComment(
+        frame=2345,
+        snr=12.3,
+        freq_mhz=403.000,
+        alt_m=25310,
+        type_str="RS41",
+        manufacturer="Vaisala",
+        vel_v=-5.2,
+        vel_h=8.4,
+    )
     now = datetime(2026, 4, 19, 18, 15, 31, tzinfo=timezone.utc)
-    rec = build_sondehub_record(cfg, "S4310587", 40.05, -105.25, comment,
-                                "181530", uploader_callsign="X",
-                                now_utc=now)
+    rec = build_sondehub_record(
+        cfg, "S4310587", 40.05, -105.25, comment, "181530", uploader_callsign="X", now_utc=now
+    )
     assert rec["vel_v"] == -5.2
     assert rec["vel_h"] == 8.4
 
 
 def test_build_sondehub_record_omits_velocity_when_missing():
     cfg = make_cfg()
-    comment = ae.SondeComment(frame=1, snr=0.0, freq_mhz=400.0, alt_m=0,
-                              type_str="RS41", manufacturer="Vaisala")
-    rec = build_sondehub_record(cfg, "X1", 0.0, 0.0, comment, "000000",
-                                uploader_callsign="X",
-                                now_utc=datetime(2026, 1, 1, tzinfo=timezone.utc))
+    comment = ae.SondeComment(
+        frame=1, snr=0.0, freq_mhz=400.0, alt_m=0, type_str="RS41", manufacturer="Vaisala"
+    )
+    rec = build_sondehub_record(
+        cfg,
+        "X1",
+        0.0,
+        0.0,
+        comment,
+        "000000",
+        uploader_callsign="X",
+        now_utc=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
     assert "vel_v" not in rec
     assert "vel_h" not in rec
 
@@ -158,10 +192,14 @@ def test_packet_handler_reads_course_speed_from_aprs_extension(tmp_path):
     cfg = make_cfg(reception_log_path=str(tmp_path / "rx.jsonl"))
     logger = ReceptionLogger(cfg.reception_log_path)
     uploader = MagicMock()
-    handler = PacketHandler(cfg, logger, uploader, FrameDedup(3600),
-                            now_fn=lambda: datetime(2026, 4, 19, 18, 15, 31,
-                                                    tzinfo=timezone.utc))
-    handler(make_pkt(course=332, speed=59.264))   # 32 knots → 59.264 km/h
+    handler = PacketHandler(
+        cfg,
+        logger,
+        uploader,
+        FrameDedup(3600),
+        now_fn=lambda: datetime(2026, 4, 19, 18, 15, 31, tzinfo=timezone.utc),
+    )
+    handler(make_pkt(course=332, speed=59.264))  # 32 knots → 59.264 km/h
     logger.close()
     record = uploader.add.call_args[0][0]
     assert record["heading"] == 332
@@ -174,9 +212,13 @@ def test_packet_handler_logs_and_queues_when_upload_enabled(tmp_path):
     logger = ReceptionLogger(cfg.reception_log_path)
     uploader = MagicMock()
     dedup = FrameDedup(ttl_sec=3600)
-    handler = PacketHandler(cfg, logger, uploader, dedup,
-                            now_fn=lambda: datetime(2026, 4, 19, 18, 15, 31,
-                                                    tzinfo=timezone.utc))
+    handler = PacketHandler(
+        cfg,
+        logger,
+        uploader,
+        dedup,
+        now_fn=lambda: datetime(2026, 4, 19, 18, 15, 31, tzinfo=timezone.utc),
+    )
     handler(make_pkt(**{"from": "N3UUO-10"}))
     logger.close()
 
@@ -200,9 +242,13 @@ def test_packet_handler_logs_but_does_not_upload_when_uploader_is_none(tmp_path)
     cfg = make_cfg(reception_log_path=str(tmp_path / "rx.jsonl"))
     logger = ReceptionLogger(cfg.reception_log_path)
     dedup = FrameDedup(ttl_sec=3600)
-    handler = PacketHandler(cfg, logger, uploader=None, dedup=dedup,
-                            now_fn=lambda: datetime(2026, 4, 19, 18, 15, 31,
-                                                    tzinfo=timezone.utc))
+    handler = PacketHandler(
+        cfg,
+        logger,
+        uploader=None,
+        dedup=dedup,
+        now_fn=lambda: datetime(2026, 4, 19, 18, 15, 31, tzinfo=timezone.utc),
+    )
     handler(make_pkt())
     logger.close()
 
@@ -215,16 +261,22 @@ def test_packet_handler_logs_killed_object_with_alive_false(tmp_path):
     cfg = make_cfg(reception_log_path=str(tmp_path / "rx.jsonl"))
     logger = ReceptionLogger(cfg.reception_log_path)
     dedup = FrameDedup(ttl_sec=3600)
-    handler = PacketHandler(cfg, logger, uploader=None, dedup=dedup,
-                            now_fn=lambda: datetime(2026, 4, 19, 18, 15, 31,
-                                                    tzinfo=timezone.utc))
+    handler = PacketHandler(
+        cfg,
+        logger,
+        uploader=None,
+        dedup=dedup,
+        now_fn=lambda: datetime(2026, 4, 19, 18, 15, 31, tzinfo=timezone.utc),
+    )
     # First: a live object.
     handler(make_pkt())
     # Dedup will drop a duplicate-frame packet, so use a different frame here.
-    handler(make_pkt(
-        alive=False,
-        comment="F2346 S12.3 f403.000 A25310 tRS41",
-    ))
+    handler(
+        make_pkt(
+            alive=False,
+            comment="F2346 S12.3 f403.000 A25310 tRS41",
+        )
+    )
     logger.close()
 
     lines = (tmp_path / "rx.jsonl").read_text().strip().split("\n")
@@ -301,6 +353,7 @@ def test_uploader_flush_once_sends_gzipped_json(monkeypatch):
     call = session.put.call_args
     assert call.kwargs["headers"]["Content-Encoding"] == "gzip"
     import gzip as _g
+
     body = _g.decompress(call.kwargs["data"])
     records = json.loads(body)
     assert [r["serial"] for r in records] == ["A", "B"]

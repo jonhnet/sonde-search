@@ -22,15 +22,21 @@ def get_sonde_summaries_as_dataframe(columns=None):
     dfs = []
     for year in YEARS_AVAILABLE:
         filename = FILENAME_TEMPLATE.format(year=year)
-        url = f'{BASE_URL}{filename}'
+        url = f"{BASE_URL}{filename}"
 
         # download the file into the temp directory (cache); if it's already
         # there, wget will not re-download it
-        subprocess.check_call([
-            "wget", "-nv", "-N", "--no-if-modified-since",
-            url,
-            "-P", dirname,
-        ])
+        subprocess.check_call(
+            [
+                "wget",
+                "-nv",
+                "-N",
+                "--no-if-modified-since",
+                url,
+                "-P",
+                dirname,
+            ]
+        )
 
         # load and parse
         dfs.append(pd.read_parquet(os.path.join(dirname, filename), columns=columns))
@@ -44,12 +50,12 @@ def years_covered(df):
     # Get years that have the bulk of the data points
     year_counts = df["datetime"].dt.year.value_counts()
     peak = year_counts.max()
-    years = year_counts.loc[year_counts > peak * .001].index
+    years = year_counts.loc[year_counts > peak * 0.001].index
     return sorted(years)
-    
+
 
 if __name__ == "__main__":
     df = get_sonde_summaries_as_dataframe()
     print(df)
-    df = df.sort_values('datetime')
-    print(df['datetime'])
+    df = df.sort_values("datetime")
+    print(df["datetime"])

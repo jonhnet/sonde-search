@@ -11,7 +11,7 @@ import sys
 import time
 from typing import TextIO, Optional, Any
 
-sys.path.insert(0, os.path.expanduser('~/projects/gpp4323'))
+sys.path.insert(0, os.path.expanduser("~/projects/gpp4323"))
 import gpp4323
 from collector import DataCollector, LoadReading
 
@@ -29,13 +29,13 @@ class SimpleLogger:
     def open_output(self) -> None:
         """Open the output file or use stdout"""
         if self.output_file:
-            self.csvfile = open(self.output_file, 'w', newline='')
+            self.csvfile = open(self.output_file, "w", newline="")
             print(f"Writing to {self.output_file}")
         else:
             self.csvfile = sys.stdout
 
         self.writer = csv.writer(self.csvfile)
-        self.writer.writerow(['timestamp', 'voltage_V', 'current_A', 'power_W'])
+        self.writer.writerow(["timestamp", "voltage_V", "current_A", "power_W"])
 
     def close_output(self) -> None:
         """Close the output file if it's not stdout"""
@@ -48,12 +48,14 @@ class SimpleLogger:
             self.start_time = time.time()
 
         # Write to CSV (timestamp as Unix epoch)
-        self.writer.writerow([
-            f'{reading.timestamp.timestamp():.3f}',
-            f'{reading.voltage:.4f}',
-            f'{reading.current:.4f}',
-            f'{reading.power:.4f}'
-        ])
+        self.writer.writerow(
+            [
+                f"{reading.timestamp.timestamp():.3f}",
+                f"{reading.voltage:.4f}",
+                f"{reading.current:.4f}",
+                f"{reading.power:.4f}",
+            ]
+        )
 
         if self.csvfile == sys.stdout:
             self.csvfile.flush()
@@ -71,38 +73,21 @@ class SimpleLogger:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description='Log GPP4323 Channel 1 load readings'
+    parser = argparse.ArgumentParser(description="Log GPP4323 Channel 1 load readings")
+    parser.add_argument(
+        "--host", default="gpp4323", help="Hostname or IP address of GPP4323 (default: gpp4323)"
+    )
+    parser.add_argument("--port", type=int, default=1026, help="TCP port (default: 1026)")
+    parser.add_argument(
+        "--rate", type=float, default=1.0, help="Sampling rate in Hz (default: 1.0)"
     )
     parser.add_argument(
-        '--host',
-        default='gpp4323',
-        help='Hostname or IP address of GPP4323 (default: gpp4323)'
-    )
-    parser.add_argument(
-        '--port',
-        type=int,
-        default=1026,
-        help='TCP port (default: 1026)'
-    )
-    parser.add_argument(
-        '--rate',
-        type=float,
-        default=1.0,
-        help='Sampling rate in Hz (default: 1.0)'
-    )
-    parser.add_argument(
-        '--load-voltage',
+        "--load-voltage",
         type=float,
         default=12.5,
-        help='CV-load voltage to set on the channel, simulating a battery '
-             '(default: 12.5)'
+        help="CV-load voltage to set on the channel, simulating a battery " "(default: 12.5)",
     )
-    parser.add_argument(
-        '--output',
-        '-o',
-        help='Output CSV file (default: stdout)'
-    )
+    parser.add_argument("--output", "-o", help="Output CSV file (default: stdout)")
 
     args = parser.parse_args()
 
@@ -126,7 +111,7 @@ def main():
             g.channel(1),
             rate=args.rate,
             callback=logger.handle_reading,
-            load_voltage=args.load_voltage
+            load_voltage=args.load_voltage,
         )
 
         # Start collection loop (blocking)
@@ -148,5 +133,5 @@ def main():
         logger.close_output()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

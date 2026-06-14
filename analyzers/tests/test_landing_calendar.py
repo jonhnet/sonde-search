@@ -11,7 +11,7 @@ from PIL import Image
 import pytest
 
 # Add project root to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
 def _make_test_dataframe():
@@ -22,39 +22,43 @@ def _make_test_dataframe():
     records = []
     for month in range(1, 13):
         for i in range(3):
-            serial = f'SONDE-M{month}-{i}'
+            serial = f"SONDE-M{month}-{i}"
             # Ascending frame
-            records.append({
-                'serial': serial,
-                'frame': 100,
-                'lat': 47.0 + i * 0.1,
-                'lon': -122.0 - i * 0.1,
-                'alt': 20000.0,
-                'datetime': f'2023-{month:02d}-15T00:00:00',
-            })
+            records.append(
+                {
+                    "serial": serial,
+                    "frame": 100,
+                    "lat": 47.0 + i * 0.1,
+                    "lon": -122.0 - i * 0.1,
+                    "alt": 20000.0,
+                    "datetime": f"2023-{month:02d}-15T00:00:00",
+                }
+            )
             # Landing frame
-            records.append({
-                'serial': serial,
-                'frame': 200,
-                'lat': 47.0 + i * 0.1,
-                'lon': -122.0 - i * 0.1,
-                'alt': 500.0,
-                'datetime': f'2023-{month:02d}-15T02:00:00',
-            })
+            records.append(
+                {
+                    "serial": serial,
+                    "frame": 200,
+                    "lat": 47.0 + i * 0.1,
+                    "lon": -122.0 - i * 0.1,
+                    "alt": 500.0,
+                    "datetime": f"2023-{month:02d}-15T02:00:00",
+                }
+            )
     return pd.DataFrame(records)
 
 
 # Patch contextily.add_basemap globally for all tests — avoids tile downloads
 @pytest.fixture(autouse=True)
 def no_basemap():
-    with mock.patch('lib.landing_calendar.cx.add_basemap'):
+    with mock.patch("lib.landing_calendar.cx.add_basemap"):
         yield
 
 
 @pytest.fixture(autouse=True)
 def mock_sonde_data():
     with mock.patch(
-        'lib.landing_calendar.get_sonde_summaries_as_dataframe',
+        "lib.landing_calendar.get_sonde_summaries_as_dataframe",
         return_value=_make_test_dataframe(),
     ):
         yield
@@ -64,24 +68,24 @@ class TestGenerateCalendar:
     def test_returns_png_bytes(self):
         from lib.landing_calendar import generate_calendar
 
-        result = generate_calendar(46, -123, 48, -121, format='png')
+        result = generate_calendar(46, -123, 48, -121, format="png")
 
         img = Image.open(io.BytesIO(result))
-        assert img.format == 'PNG'
+        assert img.format == "PNG"
 
     def test_returns_webp_bytes(self):
         from lib.landing_calendar import generate_calendar
 
-        result = generate_calendar(46, -123, 48, -121, format='webp')
+        result = generate_calendar(46, -123, 48, -121, format="webp")
 
         img = Image.open(io.BytesIO(result))
-        assert img.format == 'WEBP'
+        assert img.format == "WEBP"
 
     def test_grid_dimensions(self):
         """The output image should be a 3-wide x 4-tall grid of month images."""
         from lib.landing_calendar import generate_calendar
 
-        result = generate_calendar(46, -123, 48, -121, format='png')
+        result = generate_calendar(46, -123, 48, -121, format="png")
 
         img = Image.open(io.BytesIO(result))
         # Grid is 3 columns x 4 rows, so width should be ~3x height/4
@@ -95,10 +99,10 @@ class TestGenerateCalendar:
         from lib.landing_calendar import generate_calendar
 
         # Bounds far from any test data
-        result = generate_calendar(0, 0, 1, 1, format='png')
+        result = generate_calendar(0, 0, 1, 1, format="png")
 
         img = Image.open(io.BytesIO(result))
-        assert img.format == 'PNG'
+        assert img.format == "PNG"
         assert img.width > 0 and img.height > 0
 
 
@@ -106,17 +110,17 @@ class TestGenerateCalendarToFile:
     def test_writes_file(self):
         from lib.landing_calendar import generate_calendar_to_file
 
-        with tempfile.NamedTemporaryFile(suffix='.webp', delete=False) as f:
+        with tempfile.NamedTemporaryFile(suffix=".webp", delete=False) as f:
             path = f.name
 
         try:
-            generate_calendar_to_file(46, -123, 48, -121, path, format='webp')
+            generate_calendar_to_file(46, -123, 48, -121, path, format="webp")
 
             assert os.path.exists(path)
             assert os.path.getsize(path) > 0
 
             img = Image.open(path)
-            assert img.format == 'WEBP'
+            assert img.format == "WEBP"
         finally:
             os.unlink(path)
 
@@ -126,12 +130,12 @@ class TestRenderOneMonth:
         from lib.landing_calendar import _render_one_month, _project
 
         df = _make_test_dataframe()
-        df['datetime'] = pd.to_datetime(df['datetime'])
-        df['month'] = df['datetime'].dt.month
+        df["datetime"] = pd.to_datetime(df["datetime"])
+        df["month"] = df["datetime"].dt.month
         gdf = _project(df)
 
         month_data = gdf.loc[gdf.month == 1]
-        img = _render_one_month(month_data, 'January', gdf.crs)
+        img = _render_one_month(month_data, "January", gdf.crs)
 
         assert isinstance(img, Image.Image)
         assert img.width > 0 and img.height > 0
@@ -140,12 +144,12 @@ class TestRenderOneMonth:
         from lib.landing_calendar import _render_one_month, _project
 
         df = _make_test_dataframe()
-        df['datetime'] = pd.to_datetime(df['datetime'])
-        df['month'] = df['datetime'].dt.month
+        df["datetime"] = pd.to_datetime(df["datetime"])
+        df["month"] = df["datetime"].dt.month
         df = df.iloc[0:0]  # empty
         gdf = _project(df)
 
-        img = _render_one_month(gdf, 'January', gdf.crs)
+        img = _render_one_month(gdf, "January", gdf.crs)
 
         assert isinstance(img, Image.Image)
 
@@ -155,9 +159,9 @@ class TestCompositeGrid:
         from lib.landing_calendar import _composite_grid, CALENDAR_ROWS, CALENDAR_COLS
 
         cell_size = 100
-        images = [Image.new('RGB', (cell_size, cell_size), 'red') for _ in range(12)]
+        images = [Image.new("RGB", (cell_size, cell_size), "red") for _ in range(12)]
 
-        result_bytes = _composite_grid(images, 'png')
+        result_bytes = _composite_grid(images, "png")
 
         result = Image.open(io.BytesIO(result_bytes))
         assert result.width == cell_size * CALENDAR_COLS
@@ -172,9 +176,9 @@ class TestCompositeGrid:
         for i in range(12):
             # Alternate between two sizes
             size = 100 if i % 2 == 0 else 80
-            images.append(Image.new('RGB', (size, size), 'blue'))
+            images.append(Image.new("RGB", (size, size), "blue"))
 
-        result_bytes = _composite_grid(images, 'png')
+        result_bytes = _composite_grid(images, "png")
 
         result = Image.open(io.BytesIO(result_bytes))
         assert result.width == 100 * CALENDAR_COLS
@@ -186,7 +190,7 @@ class TestProject:
         from lib.landing_calendar import _project
 
         df = _make_test_dataframe()
-        df['datetime'] = pd.to_datetime(df['datetime'])
+        df["datetime"] = pd.to_datetime(df["datetime"])
 
         gdf = _project(df)
 
@@ -196,7 +200,7 @@ class TestProject:
         from lib.landing_calendar import _project
 
         df = _make_test_dataframe()
-        df['datetime'] = pd.to_datetime(df['datetime'])
+        df["datetime"] = pd.to_datetime(df["datetime"])
 
         gdf = _project(df)
 
@@ -206,7 +210,7 @@ class TestProject:
         from lib.landing_calendar import _project
 
         df = _make_test_dataframe()
-        df['datetime'] = pd.to_datetime(df['datetime'])
+        df["datetime"] = pd.to_datetime(df["datetime"])
         df = df.iloc[0:0]
 
         gdf = _project(df)

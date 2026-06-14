@@ -208,9 +208,7 @@ def simulate(args):
 def main():
     parser = argparse.ArgumentParser(description="Mock radiosonde_auto_rx UDP sender")
     parser.add_argument("--port", type=int, default=55673, help="UDP port (default: 55673)")
-    parser.add_argument(
-        "--host", default="127.0.0.1", help="Destination host (default: 127.0.0.1)"
-    )
+    parser.add_argument("--host", default="127.0.0.1", help="Destination host (default: 127.0.0.1)")
     parser.add_argument(
         "--interval", type=float, default=2.0, help="Seconds between packets (default: 2.0)"
     )
@@ -218,8 +216,10 @@ def main():
         "--num-sondes", type=int, default=1, help="Number of simultaneous sondes (default: 1)"
     )
     parser.add_argument(
-        "--replay", type=str, default=None,
-        help="Path to an auto_rx CSV log file to replay instead of simulating"
+        "--replay",
+        type=str,
+        default=None,
+        help="Path to an auto_rx CSV log file to replay instead of simulating",
     )
     args = parser.parse_args()
 

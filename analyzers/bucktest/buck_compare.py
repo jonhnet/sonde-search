@@ -124,10 +124,9 @@ def print_table(headers: list[str], rows: list[list[str]]) -> None:
         print(format_row(row))
 
 
-def pct_at(rows_a: dict[Key, dict[str, str]],
-           rows_b: dict[Key, dict[str, str]],
-           key: Key,
-           metric: Metric) -> Optional[float]:
+def pct_at(
+    rows_a: dict[Key, dict[str, str]], rows_b: dict[Key, dict[str, str]], key: Key, metric: Metric
+) -> Optional[float]:
     if key not in rows_a or key not in rows_b:
         return None
     old = numeric_value(rows_a[key], metric)
@@ -137,10 +136,11 @@ def pct_at(rows_a: dict[Key, dict[str, str]],
     return percent_difference(old, new)
 
 
-def print_iq_matrix(rows_a: dict[Key, dict[str, str]],
-                    rows_b: dict[Key, dict[str, str]]) -> None:
-    vins = sorted({key.vin_set for key in rows_a if key.test == "iq"} |
-                  {key.vin_set for key in rows_b if key.test == "iq"})
+def print_iq_matrix(rows_a: dict[Key, dict[str, str]], rows_b: dict[Key, dict[str, str]]) -> None:
+    vins = sorted(
+        {key.vin_set for key in rows_a if key.test == "iq"}
+        | {key.vin_set for key in rows_b if key.test == "iq"}
+    )
     if not vins:
         return
 
@@ -157,9 +157,9 @@ def print_iq_matrix(rows_a: dict[Key, dict[str, str]],
     print_table(headers, rows)
 
 
-def print_efficiency_matrix(rows_a: dict[Key, dict[str, str]],
-                            rows_b: dict[Key, dict[str, str]],
-                            metric: Metric) -> None:
+def print_efficiency_matrix(
+    rows_a: dict[Key, dict[str, str]], rows_b: dict[Key, dict[str, str]], metric: Metric
+) -> None:
     keys = [key for key in set(rows_a) | set(rows_b) if key.test == "efficiency"]
     if not keys:
         return
@@ -179,8 +179,9 @@ def print_efficiency_matrix(rows_a: dict[Key, dict[str, str]],
     print_table(headers, rows)
 
 
-def print_key_status(rows_a: dict[Key, dict[str, str]],
-                     rows_b: dict[Key, dict[str, str]]) -> list[Key]:
+def print_key_status(
+    rows_a: dict[Key, dict[str, str]], rows_b: dict[Key, dict[str, str]]
+) -> list[Key]:
     keys_a = set(rows_a)
     keys_b = set(rows_b)
     common = sorted(keys_a & keys_b, key=lambda k: (k.test, k.vin_set, k.iload_set_a or -1))
@@ -214,8 +215,7 @@ def compare(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Compare two buck_characterize.py CSV files.")
+    parser = argparse.ArgumentParser(description="Compare two buck_characterize.py CSV files.")
     parser.add_argument("first", help="First buck CSV")
     parser.add_argument("second", help="Second buck CSV")
     args = parser.parse_args()

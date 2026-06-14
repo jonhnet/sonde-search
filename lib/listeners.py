@@ -30,9 +30,7 @@ def get_listener_stats(sondeid):
     warning = None
 
     if len(df) == 0:
-        df = pd.DataFrame(
-            requests.get(f"https://api.v2.sondehub.org/sonde/{sondeid}").json()
-        )
+        df = pd.DataFrame(requests.get(f"https://api.v2.sondehub.org/sonde/{sondeid}").json())
         warning = "Using live data API that only returns one listener per data point"
 
     if len(df) == 0:
@@ -60,20 +58,13 @@ def get_listener_stats(sondeid):
     agg.insert(  # type: ignore[call-overload]
         3,
         "cov%",
-        agg[("frame", "count")]
-        / (1 + agg[("frame", "last")] - agg[("frame", "first")]),
+        agg[("frame", "count")] / (1 + agg[("frame", "last")] - agg[("frame", "first")]),
     )
     agg["cov%"] = (agg["cov%"] * 100).round(1)  # type: ignore[index]
     agg = agg.sort_values([("frame", "last")], ascending=False)  # type: ignore[call-overload]
 
     # Calculate how many points were heard by which combinations of listeners
-    who_per_point = df.groupby("frame")["uploader_callsign"].agg(
-        lambda x: ",".join(sorted(set(x)))
-    )
+    who_per_point = df.groupby("frame")["uploader_callsign"].agg(lambda x: ",".join(sorted(set(x))))
     coverage_counts = who_per_point.value_counts()
 
-    return {
-        'stats': agg,
-        'coverage': coverage_counts,
-        'warning': warning
-    }
+    return {"stats": agg, "coverage": coverage_counts, "warning": warning}

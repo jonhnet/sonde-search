@@ -28,8 +28,8 @@ import elevation
 import elevation.datasource
 
 # Override elevation library's cache directory to respect ELEVATION_CACHE_DIR env var
-if 'ELEVATION_CACHE_DIR' in os.environ:
-    elevation.datasource.CACHE_DIR = os.environ['ELEVATION_CACHE_DIR']
+if "ELEVATION_CACHE_DIR" in os.environ:
+    elevation.datasource.CACHE_DIR = os.environ["ELEVATION_CACHE_DIR"]
 
 
 class DEMManager:
@@ -39,7 +39,7 @@ class DEMManager:
     Automatically downloads SRTM tiles as needed and caches them locally.
     """
 
-    def __init__(self, cache_dir='~/.cache/srtm'):
+    def __init__(self, cache_dir="~/.cache/srtm"):
         """
         Initialize DEM manager.
 
@@ -54,9 +54,9 @@ class DEMManager:
 
         # Track DEM resolution statistics (for SRTM_BEST mode)
         self.stats = {
-            'srtm1_queries': 0,  # Successful SRTM1 queries
-            'srtm3_fallback_queries': 0,  # Had to fall back to SRTM3
-            'total_queries': 0
+            "srtm1_queries": 0,  # Successful SRTM1 queries
+            "srtm3_fallback_queries": 0,  # Had to fall back to SRTM3
+            "total_queries": 0,
         }
 
         # Override elevation library cache directory to match our cache_dir
@@ -65,8 +65,9 @@ class DEMManager:
 
         print(f"DEM cache directory: {self.cache_dir}")
 
-    def download_tiles_for_bounds(self, min_lat, min_lon, max_lat, max_lon,
-                                   product='SRTM3', progress_callback=None):
+    def download_tiles_for_bounds(
+        self, min_lat, min_lon, max_lat, max_lon, product="SRTM3", progress_callback=None
+    ):
         """
         Download DEM tiles covering a bounding box.
 
@@ -80,7 +81,7 @@ class DEMManager:
             Path to the downloaded/clipped DEM file (or tuple of paths for SRTM_BEST)
         """
         # Handle SRTM_BEST by downloading both and returning both paths
-        if product == 'SRTM_BEST':
+        if product == "SRTM_BEST":
             print(f"  Using SRTM_BEST: downloading both SRTM1 and SRTM3")
             if progress_callback:
                 progress_callback(0, 2, "Downloading SRTM1 elevation data (30m resolution)...")
@@ -91,7 +92,7 @@ class DEMManager:
             # Try SRTM1 first (may fail for some areas)
             try:
                 srtm1_file = self._download_single_product(
-                    min_lat, min_lon, max_lat, max_lon, 'SRTM1', progress_callback
+                    min_lat, min_lon, max_lat, max_lon, "SRTM1", progress_callback
                 )
                 print(f"  SRTM1 download successful")
             except Exception as e:
@@ -102,7 +103,7 @@ class DEMManager:
                 progress_callback(1, 2, "Downloading SRTM3 elevation data (90m resolution)...")
             try:
                 srtm3_file = self._download_single_product(
-                    min_lat, min_lon, max_lat, max_lon, 'SRTM3', progress_callback
+                    min_lat, min_lon, max_lat, max_lon, "SRTM3", progress_callback
                 )
                 print(f"  SRTM3 download successful")
             except Exception as e:
@@ -116,11 +117,15 @@ class DEMManager:
 
         # Single product download
         if progress_callback:
-            product_name = "SRTM1 (30m)" if product == 'SRTM1' else "SRTM3 (90m)"
+            product_name = "SRTM1 (30m)" if product == "SRTM1" else "SRTM3 (90m)"
             progress_callback(0, 1, f"Downloading {product_name} elevation data...")
-        return self._download_single_product(min_lat, min_lon, max_lat, max_lon, product, progress_callback)
+        return self._download_single_product(
+            min_lat, min_lon, max_lat, max_lon, product, progress_callback
+        )
 
-    def _download_single_product(self, min_lat, min_lon, max_lat, max_lon, product, progress_callback=None):
+    def _download_single_product(
+        self, min_lat, min_lon, max_lat, max_lon, product, progress_callback=None
+    ):
         """
         Download raw SRTM tiles for a bounding box and return VRT path.
 
@@ -139,15 +144,15 @@ class DEMManager:
         """
         # Add small padding to ensure coverage
         padding = 0.01
-        bounds = (min_lon - padding, min_lat - padding,
-                 max_lon + padding, max_lat + padding)
+        bounds = (min_lon - padding, min_lat - padding, max_lon + padding, max_lat + padding)
 
         print(f"  Downloading DEM tiles for bounds: {bounds}")
         print(f"    Product: {product} ({'~30m' if product == 'SRTM1' else '~90m'} resolution)")
 
         import os
+
         cache_root = str(self.cache_dir)
-        vrt_path = os.path.join(cache_root, product, f'{product}.vrt')
+        vrt_path = os.path.join(cache_root, product, f"{product}.vrt")
 
         # Check which tiles we need
         tiles_needed = self._get_tiles_for_bounds(bounds)
@@ -192,7 +197,9 @@ class DEMManager:
         tiles_missing = self._check_missing_tiles(tiles_needed, product, str(self.cache_dir))
 
         total_tiles = len(tiles_missing)
-        print(f"  Processing {total_tiles} tiles individually (1-degree tiles matching source data)...")
+        print(
+            f"  Processing {total_tiles} tiles individually (1-degree tiles matching source data)..."
+        )
 
         # Process each 1-degree tile
         for idx, (lat, lon) in enumerate(tiles_missing):
@@ -203,16 +210,26 @@ class DEMManager:
 
             # Check if we have this tile processed already
             if self._is_chunk_cached(tile_bounds, product):
-                print(f"  Tile {tile_num}/{total_tiles} already processed (lat={lat}, lon={lon})...")
+                print(
+                    f"  Tile {tile_num}/{total_tiles} already processed (lat={lat}, lon={lon})..."
+                )
                 if progress_callback:
-                    product_name = "SRTM1 (30m)" if product == 'SRTM1' else "SRTM3 (90m)"
-                    progress_callback(tile_num - 1, total_tiles, f"Loading cached {product_name} tile ({tile_num}/{total_tiles})...")
+                    product_name = "SRTM1 (30m)" if product == "SRTM1" else "SRTM3 (90m)"
+                    progress_callback(
+                        tile_num - 1,
+                        total_tiles,
+                        f"Loading cached {product_name} tile ({tile_num}/{total_tiles})...",
+                    )
                 continue
 
             print(f"  Processing tile {tile_num}/{total_tiles} (lat={lat}, lon={lon})...")
             if progress_callback:
-                product_name = "SRTM1 (30m)" if product == 'SRTM1' else "SRTM3 (90m)"
-                progress_callback(tile_num - 1, total_tiles, f"Processing {product_name} tile ({tile_num}/{total_tiles})...")
+                product_name = "SRTM1 (30m)" if product == "SRTM1" else "SRTM3 (90m)"
+                progress_callback(
+                    tile_num - 1,
+                    total_tiles,
+                    f"Processing {product_name} tile ({tile_num}/{total_tiles})...",
+                )
 
             # Download and process this single 1-degree tile
             try:
@@ -222,7 +239,12 @@ class DEMManager:
 
                 # Run elevation.clip to download and process this single tile
                 # Single 1-degree tile will never hit the "too many tiles" limit
-                elevation.clip(bounds=tile_bounds, output=cache_path, product=product, cache_dir=str(self.cache_dir))
+                elevation.clip(
+                    bounds=tile_bounds,
+                    output=cache_path,
+                    product=product,
+                    cache_dir=str(self.cache_dir),
+                )
                 print(f"  Tile {tile_num}/{total_tiles} processed and cached")
 
             except Exception as e:
@@ -250,7 +272,7 @@ class DEMManager:
 
         # Store in elevation cache under processed_chunks subdirectory
         cache_root = str(self.cache_dir)
-        cache_dir = os.path.join(cache_root, product, 'processed_chunks')
+        cache_dir = os.path.join(cache_root, product, "processed_chunks")
 
         return os.path.join(cache_dir, filename)
 
@@ -303,10 +325,10 @@ class DEMManager:
         import os
         import glob
 
-        cache_dir = os.path.join(cache_root, product, 'cache')
+        cache_dir = os.path.join(cache_root, product, "cache")
 
         # SRTM1 and SRTM3 use different naming conventions
-        if product == 'SRTM1':
+        if product == "SRTM1":
             # SRTM1: Uses geographic names like N48W122.tif in subdirectories
             missing = []
             for lat, lon in tiles:
@@ -325,7 +347,7 @@ class DEMManager:
             # so we just check if ANY tiles exist in the cache directory
             # If cache has tiles, assume coverage is complete for the area
             try:
-                cached_tiles = glob.glob(os.path.join(cache_dir, 'srtm_*.tif'))
+                cached_tiles = glob.glob(os.path.join(cache_dir, "srtm_*.tif"))
                 if len(cached_tiles) > 0:
                     # Cache exists, assume it's complete
                     return []
@@ -368,7 +390,7 @@ class DEMManager:
             Elevation in meters, or None if unavailable
         """
         # Track this query
-        self.stats['total_queries'] += 1
+        self.stats["total_queries"] += 1
 
         # Try primary DEM first
         elev = None
@@ -387,9 +409,9 @@ class DEMManager:
         # Update statistics
         if dem_file_fallback is not None:  # Only track if in SRTM_BEST mode
             if used_fallback:
-                self.stats['srtm3_fallback_queries'] += 1
+                self.stats["srtm3_fallback_queries"] += 1
             elif elev is not None and elev != 0.0:
-                self.stats['srtm1_queries'] += 1
+                self.stats["srtm1_queries"] += 1
 
         return elev
 
@@ -489,13 +511,22 @@ def main():
     """Test/demo the DEM manager."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='Test DEM elevation queries')
-    parser.add_argument('--lat', type=float, required=True, help='Latitude')
-    parser.add_argument('--lon', type=float, required=True, help='Longitude')
-    parser.add_argument('--bounds', nargs=4, type=float, metavar=('MIN_LAT', 'MIN_LON', 'MAX_LAT', 'MAX_LON'),
-                       help='Download DEM for bounding box')
-    parser.add_argument('--product', choices=['SRTM1', 'SRTM3'], default='SRTM3',
-                       help='SRTM product (SRTM1=30m, SRTM3=90m)')
+    parser = argparse.ArgumentParser(description="Test DEM elevation queries")
+    parser.add_argument("--lat", type=float, required=True, help="Latitude")
+    parser.add_argument("--lon", type=float, required=True, help="Longitude")
+    parser.add_argument(
+        "--bounds",
+        nargs=4,
+        type=float,
+        metavar=("MIN_LAT", "MIN_LON", "MAX_LAT", "MAX_LON"),
+        help="Download DEM for bounding box",
+    )
+    parser.add_argument(
+        "--product",
+        choices=["SRTM1", "SRTM3"],
+        default="SRTM3",
+        help="SRTM product (SRTM1=30m, SRTM3=90m)",
+    )
 
     args = parser.parse_args()
 
@@ -504,8 +535,9 @@ def main():
     if args.bounds:
         # Download tiles for bounds
         min_lat, min_lon, max_lat, max_lon = args.bounds
-        dem_file = dem.download_tiles_for_bounds(min_lat, min_lon, max_lat, max_lon,
-                                                  product=args.product)
+        dem_file = dem.download_tiles_for_bounds(
+            min_lat, min_lon, max_lat, max_lon, product=args.product
+        )
         print(f"\nDEM file: {dem_file}")
 
         # Query elevation at specified point
@@ -522,5 +554,5 @@ def main():
     dem.cleanup()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

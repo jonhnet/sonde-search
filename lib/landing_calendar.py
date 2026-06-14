@@ -27,12 +27,12 @@ import time
 
 log = logging.getLogger("landing_calendar")
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from lib.map_utils import setup_contextily_cache
 from data.cache import get_sonde_summaries_as_dataframe
 from lib.data_utils import filter_real_flights, get_landing_rows
 
-matplotlib.use('Agg')
+matplotlib.use("Agg")
 
 # Disable contextily's in-memory tile caching to prevent memory growth
 setup_contextily_cache()
@@ -42,7 +42,7 @@ CALENDAR_COLS = 3
 CALENDAR_ROWS = 4
 
 
-_LANDING_DATA_COLUMNS = ['serial', 'frame', 'lat', 'lon', 'alt', 'datetime']
+_LANDING_DATA_COLUMNS = ["serial", "frame", "lat", "lon", "alt", "datetime"]
 
 
 def _get_landing_data(bottom_lat, left_lon, top_lat, right_lon):
@@ -56,10 +56,10 @@ def _get_landing_data(bottom_lat, left_lon, top_lat, right_lon):
     # Geographic filter first — much cheaper than groupby operations,
     # and dramatically reduces the dataset for the steps that follow
     df = df.loc[
-        (df['lat'] >= bottom_lat)
-        & (df['lat'] <= top_lat)
-        & (df['lon'] >= left_lon)
-        & (df['lon'] <= right_lon)
+        (df["lat"] >= bottom_lat)
+        & (df["lat"] <= top_lat)
+        & (df["lon"] >= left_lon)
+        & (df["lon"] <= right_lon)
     ]
 
     # Filter out ground tests and non-flights
@@ -80,7 +80,7 @@ MONTH_FIGSIZE = (10, 10)
 
 
 # Generate calendar for given bounds
-def generate_calendar(bottom_lat, left_lon, top_lat, right_lon, format='png'):
+def generate_calendar(bottom_lat, left_lon, top_lat, right_lon, format="png"):
     """Generate a 12-month calendar of sonde landings within the given bounds.
 
     Renders each month as an individual matplotlib figure to keep peak memory
@@ -113,8 +113,8 @@ def generate_calendar(bottom_lat, left_lon, top_lat, right_lon, format='png'):
         log.info("project: %.2fs", time.monotonic() - t0)
 
         # Annotate with month if not already present
-        if 'month' not in gdf.columns:
-            gdf['month'] = gdf['datetime'].dt.month
+        if "month" not in gdf.columns:
+            gdf["month"] = gdf["datetime"].dt.month
 
         # Render each month individually and collect as PIL images
         month_images = []
@@ -122,8 +122,9 @@ def generate_calendar(bottom_lat, left_lon, top_lat, right_lon, format='png'):
             month_data = gdf.loc[gdf.month == month + 1]
             t0 = time.monotonic()
             img = _render_one_month(month_data, calendar.month_name[month + 1], gdf.crs)
-            log.info("month %02d: %.2fs (%d points)",
-                     month + 1, time.monotonic() - t0, len(month_data))
+            log.info(
+                "month %02d: %.2fs (%d points)", month + 1, time.monotonic() - t0, len(month_data)
+            )
             month_images.append(img)
 
         # Free the dataframes before compositing
@@ -158,7 +159,7 @@ def _render_one_month(gdf, title, crs):
         fig.tight_layout()
 
         buf = io.BytesIO()
-        fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0)
+        fig.savefig(buf, format="png", bbox_inches="tight", pad_inches=0)
         buf.seek(0)
         img = Image.open(buf).copy()  # .copy() so we own the pixels
         return img
@@ -178,7 +179,7 @@ def _composite_grid(images, format):
     cell_w = max(img.width for img in images)
     cell_h = max(img.height for img in images)
 
-    grid = Image.new('RGB', (cell_w * CALENDAR_COLS, cell_h * CALENDAR_ROWS), 'white')
+    grid = Image.new("RGB", (cell_w * CALENDAR_COLS, cell_h * CALENDAR_ROWS), "white")
 
     for i, img in enumerate(images):
         col = i % CALENDAR_COLS
@@ -201,10 +202,7 @@ def _composite_grid(images, format):
 def _project(df):
     """Convert dataframe to geopandas with Web Mercator projection."""
     # Convert to geodataframe
-    gdf = geopandas.GeoDataFrame(
-        df,
-        geometry=geopandas.points_from_xy(df.lon, df.lat)
-    )
+    gdf = geopandas.GeoDataFrame(df, geometry=geopandas.points_from_xy(df.lon, df.lat))
 
     # Reproject from WGS84 to Web Mercator
     gdf = gdf.set_crs(epsg=4326)
@@ -218,7 +216,7 @@ def _draw_one_map(gdf, ax, title, crs):
     # Plot landing points (skip when empty — geopandas warns on empty plots)
     if not gdf.empty:
         gdf.plot(ax=ax)
-    ax.axis('off')
+    ax.axis("off")
     ax.set_title(title)
 
     # Add basemap (logged separately — usually the slowest step on cold cache)
@@ -227,7 +225,7 @@ def _draw_one_map(gdf, ax, title, crs):
     log.info("  basemap: %.2fs", time.monotonic() - t0)
 
 
-def generate_calendar_to_file(bottom_lat, left_lon, top_lat, right_lon, output_path, format='webp'):
+def generate_calendar_to_file(bottom_lat, left_lon, top_lat, right_lon, output_path, format="webp"):
     """Generate calendar and write directly to a file.
 
     Args:
@@ -239,11 +237,11 @@ def generate_calendar_to_file(bottom_lat, left_lon, top_lat, right_lon, output_p
         format: Output format ('png' or 'webp')
     """
     image_bytes = generate_calendar(bottom_lat, left_lon, top_lat, right_lon, format=format)
-    with open(output_path, 'wb') as f:
+    with open(output_path, "wb") as f:
         f.write(image_bytes)
 
 
-def generate_calendar_subprocess(bottom_lat, left_lon, top_lat, right_lon, format='webp'):
+def generate_calendar_subprocess(bottom_lat, left_lon, top_lat, right_lon, format="webp"):
     """Generate calendar in a subprocess to avoid memory accumulation.
 
     This spawns a separate Python process that loads the data, generates the
@@ -261,7 +259,7 @@ def generate_calendar_subprocess(bottom_lat, left_lon, top_lat, right_lon, forma
         Bytes of the generated image
     """
     # Create a temp file for the output
-    with tempfile.NamedTemporaryFile(suffix=f'.{format}', delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=f".{format}", delete=False) as f:
         output_path = f.name
 
     try:
@@ -270,7 +268,7 @@ def generate_calendar_subprocess(bottom_lat, left_lon, top_lat, right_lon, forma
 
         # Find python executable - sys.executable may be uwsgi in production,
         # but it's in the same conda env so python is in the same directory
-        python_exe = os.path.join(os.path.dirname(sys.executable), 'python')
+        python_exe = os.path.join(os.path.dirname(sys.executable), "python")
 
         # Inherit parent's stdout/stderr (don't capture) so subprocess log lines
         # stream to journald in real time -- survives a mid-render SIGKILL from
@@ -279,14 +277,20 @@ def generate_calendar_subprocess(bottom_lat, left_lon, top_lat, right_lon, forma
         result = subprocess.run(
             [
                 python_exe,
-                '-u',
+                "-u",
                 script_path,
-                '--bottom-lat', str(bottom_lat),
-                '--left-lon', str(left_lon),
-                '--top-lat', str(top_lat),
-                '--right-lon', str(right_lon),
-                '--output', output_path,
-                '--format', format,
+                "--bottom-lat",
+                str(bottom_lat),
+                "--left-lon",
+                str(left_lon),
+                "--top-lat",
+                str(top_lat),
+                "--right-lon",
+                str(right_lon),
+                "--output",
+                output_path,
+                "--format",
+                format,
             ],
             cwd=os.path.dirname(os.path.dirname(script_path)),  # Run from repo root
         )
@@ -295,7 +299,7 @@ def generate_calendar_subprocess(bottom_lat, left_lon, top_lat, right_lon, forma
             raise RuntimeError(f"Calendar generation failed (exit {result.returncode}); see logs")
 
         # Read the result
-        with open(output_path, 'rb') as f:
+        with open(output_path, "rb") as f:
             return f.read()
 
     finally:
@@ -311,13 +315,17 @@ def main():
         stream=sys.stderr,
         format="%(asctime)s %(name)s %(message)s",
     )
-    parser = argparse.ArgumentParser(description='Generate sonde landing calendar')
-    parser.add_argument('--bottom-lat', type=float, required=True, help='Southern boundary latitude')
-    parser.add_argument('--left-lon', type=float, required=True, help='Western boundary longitude')
-    parser.add_argument('--top-lat', type=float, required=True, help='Northern boundary latitude')
-    parser.add_argument('--right-lon', type=float, required=True, help='Eastern boundary longitude')
-    parser.add_argument('--output', type=str, required=True, help='Output file path')
-    parser.add_argument('--format', type=str, default='webp', choices=['png', 'webp'], help='Output format')
+    parser = argparse.ArgumentParser(description="Generate sonde landing calendar")
+    parser.add_argument(
+        "--bottom-lat", type=float, required=True, help="Southern boundary latitude"
+    )
+    parser.add_argument("--left-lon", type=float, required=True, help="Western boundary longitude")
+    parser.add_argument("--top-lat", type=float, required=True, help="Northern boundary latitude")
+    parser.add_argument("--right-lon", type=float, required=True, help="Eastern boundary longitude")
+    parser.add_argument("--output", type=str, required=True, help="Output file path")
+    parser.add_argument(
+        "--format", type=str, default="webp", choices=["png", "webp"], help="Output format"
+    )
 
     args = parser.parse_args()
 
@@ -331,5 +339,5 @@ def main():
     )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

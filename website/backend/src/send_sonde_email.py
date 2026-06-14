@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-EXTERNAL_IMAGES_ROOT = '/mnt/storage/sondemaps'
-EXTERNAL_IMAGES_URL = 'https://maps.sondesearch.lectrobox.com/'
+EXTERNAL_IMAGES_ROOT = "/mnt/storage/sondemaps"
+EXTERNAL_IMAGES_URL = "https://maps.sondesearch.lectrobox.com/"
 
 from boto3.dynamodb.conditions import Key, Attr
 from decimal import Decimal
@@ -27,12 +27,12 @@ import constants
 import table_definitions
 import util
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../"))
 import lib.map_utils as map_utils
 from lib.map_utils import setup_contextily_cache
 from lib.data_utils import filter_real_flights, get_landing_rows
 
-matplotlib.use('Agg')
+matplotlib.use("Agg")
 
 setup_contextily_cache()
 
@@ -42,11 +42,11 @@ METERS_PER_KM = 1000
 METERS_PER_FOOT = 0.3048
 
 # URLs for email body
-SONDEHUB_MAP_URL = 'https://sondehub.org/#!mt=Mapnik&mz=9&qm=12h&f={serial}&q={serial}'
-GMAP_URL = 'https://www.google.com/maps/search/?api=1&query={lat},{lon}'
+SONDEHUB_MAP_URL = "https://sondehub.org/#!mt=Mapnik&mz=9&qm=12h&f={serial}&q={serial}"
+GMAP_URL = "https://www.google.com/maps/search/?api=1&query={lat},{lon}"
 
 # random other constants
-DEV_EMAIL = 'jelson@gmail.com'
+DEV_EMAIL = "jelson@gmail.com"
 SONDE_HISTORY_LOOKBACK_TIME_SEC = 86400
 
 
@@ -54,7 +54,7 @@ class EmailNotifier:
     def __init__(self, args: argparse.Namespace, retriever: util.SondeHubRetrieverBase) -> None:
         self.args = args
         self.retriever = retriever
-        self.ses_client = boto3.client('ses')
+        self.ses_client = boto3.client("ses")
         self.map_utils = map_utils.MapUtils()
 
     #
@@ -65,20 +65,16 @@ class EmailNotifier:
     def annotate_with_distance(self, sondes: pd.DataFrame, sub: pd.Series) -> pd.DataFrame:
         def get_path(sonde):
             # type: ignore[attr-defined] on next line
-            path = Geodesic.WGS84.Inverse(sub['lat'], sub['lon'], sonde['lat'], sonde['lon'])
-            return (
-                path['s12'],
-                (path['azi1'] + 360) % 360
-            )
+            path = Geodesic.WGS84.Inverse(sub["lat"], sub["lon"], sonde["lat"], sonde["lon"])
+            return (path["s12"], (path["azi1"] + 360) % 360)
 
         # Annotate all landing records with distance from home
-        sondes[['dist_from_home_m', 'bearing_from_home']] = sondes.apply(
-            get_path,
-            axis=1,
-            result_type='expand')
+        sondes[["dist_from_home_m", "bearing_from_home"]] = sondes.apply(
+            get_path, axis=1, result_type="expand"
+        )
 
         # sonde still in contact from the ground?
-        sondes['ground_reception'] = (sondes['vel_v'].abs() < 1) & (sondes['vel_h'].abs() < 1)
+        sondes["ground_reception"] = (sondes["vel_v"].abs() < 1) & (sondes["vel_h"].abs() < 1)
 
         return sondes
 
@@ -90,42 +86,42 @@ class EmailNotifier:
         self, sub: pd.Series, size: int, flight: pd.DataFrame, landing: pd.Series
     ) -> matplotlib.figure.Figure:
         fig, ax = plt.subplots(figsize=(size, size))
-        ax.axis('off')
-        ax.set_aspect('equal')
+        ax.axis("off")
+        ax.set_aspect("equal")
 
         # Plot the balloon's path
-        (flight_x, flight_y) = self.map_utils.to_mercator_xy(flight.lat, flight.lon)
-        ax.plot(flight_x, flight_y, color='red')
+        flight_x, flight_y = self.map_utils.to_mercator_xy(flight.lat, flight.lon)
+        ax.plot(flight_x, flight_y, color="red")
 
         # Plot a line from home to the landing point
-        home_x, home_y = self.map_utils.to_mercator_xy(sub['lat'], sub['lon'])
-        sonde_x, sonde_y = self.map_utils.to_mercator_xy(landing['lat'], landing['lon'])
-        ax.plot([home_x, sonde_x], [home_y, sonde_y], color='blue', marker='*')
+        home_x, home_y = self.map_utils.to_mercator_xy(sub["lat"], sub["lon"])
+        sonde_x, sonde_y = self.map_utils.to_mercator_xy(landing["lat"], landing["lon"])
+        ax.plot([home_x, sonde_x], [home_y, sonde_y], color="blue", marker="*")
         ax.annotate(
             xy=(home_x, home_y),
-            text='home',
+            text="home",
             xytext=(10, 0),
-            textcoords='offset points',
-            arrowprops=dict(arrowstyle='-'),
+            textcoords="offset points",
+            arrowprops=dict(arrowstyle="-"),
         )
 
         map_limits = [
-            [sub['lat'], sub['lon']],
-            [landing['lat'], landing['lon']],
+            [sub["lat"], sub["lon"]],
+            [landing["lat"], landing["lon"]],
         ]
 
         # If the last receiver has a report lat/lon, plot a line from it to the
         # landing point
-        if not pd.isna(landing['uploader_position']):
-            rx_lat, rx_lon = [float(f) for f in landing['uploader_position'].split(',')]
+        if not pd.isna(landing["uploader_position"]):
+            rx_lat, rx_lon = [float(f) for f in landing["uploader_position"].split(",")]
             rx_x, rx_y = self.map_utils.to_mercator_xy(rx_lat, rx_lon)
-            ax.plot([rx_x, sonde_x], [rx_y, sonde_y], color='springgreen', marker='*')
+            ax.plot([rx_x, sonde_x], [rx_y, sonde_y], color="springgreen", marker="*")
             ax.annotate(
                 xy=(rx_x, rx_y),
                 text=f"rx ({html.escape(landing['uploader_callsign'])})",
                 xytext=(10, 0),
-                textcoords='offset points',
-                arrowprops=dict(arrowstyle='-'),
+                textcoords="offset points",
+                arrowprops=dict(arrowstyle="-"),
             )
             map_limits.append([rx_lat, rx_lon])
 
@@ -148,7 +144,7 @@ class EmailNotifier:
         return self.retriever.get_elevation_data(lat, lon)
 
     def render_elevation(self, sub: pd.Series, meters: float) -> str:
-        if sub['units'] == 'imperial':
+        if sub["units"] == "imperial":
             feet = meters / METERS_PER_FOOT
             return f"{round(feet):,}'"
         else:
@@ -156,7 +152,7 @@ class EmailNotifier:
 
     def render_distance(self, sub: pd.Series, meters: float) -> str:
         """Render distance in brief format."""
-        if sub['units'] == 'imperial':
+        if sub["units"] == "imperial":
             # If more than 1 mile, use miles; otherwise use feet
             if meters >= METERS_PER_MILE:
                 miles = meters / METERS_PER_MILE
@@ -174,16 +170,21 @@ class EmailNotifier:
     def get_email_text(self, sub: pd.Series, landing: pd.Series) -> tuple[str, str, str]:
         # attempt a geocode and DEM lookup
         geo = geocoder.osm(
-            [landing['lat'], landing['lon']],
-            method='reverse',
-            headers={'User-Agent': 'jelson@gmail.com'}
+            [landing["lat"], landing["lon"]],
+            method="reverse",
+            headers={"User-Agent": "jelson@gmail.com"},
         )
-        elev = self.get_elevation(float(landing['lat']), float(landing['lon']))
+        elev = self.get_elevation(float(landing["lat"]), float(landing["lon"]))
         vel_v: Optional[float] = None
         vel_h: Optional[float] = None
-        raw_vel_v = landing.get('vel_v', None)
-        raw_vel_h = landing.get('vel_h', None)
-        if raw_vel_v is not None and raw_vel_h is not None and not pd.isna(raw_vel_v) and not pd.isna(raw_vel_h):
+        raw_vel_v = landing.get("vel_v", None)
+        raw_vel_h = landing.get("vel_h", None)
+        if (
+            raw_vel_v is not None
+            and raw_vel_h is not None
+            and not pd.isna(raw_vel_v)
+            and not pd.isna(raw_vel_h)
+        ):
             vel_v = float(raw_vel_v)
             vel_h = float(raw_vel_h)
 
@@ -197,26 +198,26 @@ class EmailNotifier:
 
         # get landing time in the subscriber's timezone
         try:
-            landing_localtime = landing['datetime'].tz_convert(sub['tzname'])
+            landing_localtime = landing["datetime"].tz_convert(sub["tzname"])
         except Exception:
             # If timezone conversion fails (invalid timezone), fall back to UTC
-            landing_localtime = landing['datetime'].tz_convert('UTC')
+            landing_localtime = landing["datetime"].tz_convert("UTC")
 
         # Calculate landing estimation parameters (used in subject line and body)
         subj_lest_text: str = ""
         body_lest_text: str = ""
-        if elev is not None and not landing['ground_reception']:
-            body_lest_text += f'''
+        if elev is not None and not landing["ground_reception"]:
+            body_lest_text += f"""
                 <tr>
                     <td>Ground Elev</td>
                     <td>{self.render_elevation(sub, elev)}</td>
                 </tr>
-            '''
+            """
             # If this is not a ground reception but the last-heard altitude is
             # below the ground elevation, indicate near-ground reception
-            if landing['alt'] <= elev:
+            if landing["alt"] <= elev:
                 subj_lest_text += ", small radius"
-                body_lest_text += '''
+                body_lest_text += """
                     <tr>
                         <td>Time to Landing</td>
                         <td>Near-ground reception</td>
@@ -225,12 +226,12 @@ class EmailNotifier:
                         <td>Search Radius</td>
                         <td>Small</td>
                     </tr>
-                '''
+                """
             elif vel_h is not None and vel_v is not None and vel_v <= 0:
-                time_to_landing = (landing['alt'] - elev) / -vel_v
+                time_to_landing = (landing["alt"] - elev) / -vel_v
                 horiz_error = vel_h * time_to_landing
                 subj_lest_text = f", {self.render_distance(sub, horiz_error)} radius"
-                body_lest_text += f'''
+                body_lest_text += f"""
                     <tr>
                         <td>Time to landing</td>
                         <td>{round(time_to_landing)}s</td>
@@ -239,27 +240,29 @@ class EmailNotifier:
                         <td>Search Radius</td>
                         <td>{self.render_distance(sub, horiz_error)}</td>
                     </tr>
-                '''
+                """
 
         # subject line: "Sonde 33mi away, 2,400' radius, bearing 240° (Place Name)"
         subj = "Sonde "
-        subj += self.render_distance(sub, landing['dist_from_home_m'])
+        subj += self.render_distance(sub, landing["dist_from_home_m"])
         subj += " away"
         subj += subj_lest_text
         subj += f", bearing {round(landing['bearing_from_home'])}°"
         if place:
             subj += f" ({place})"
-        if landing['ground_reception']:
-            subj = 'GROUND RECEPTION! ' + subj
+        if landing["ground_reception"]:
+            subj = "GROUND RECEPTION! " + subj
 
         # body
         # Handle uploaders field which may not always be present
-        if 'uploaders' in landing:
-            uploaders_text = ", ".join([html.escape(u['uploader_callsign']) for u in landing['uploaders']])
+        if "uploaders" in landing:
+            uploaders_text = ", ".join(
+                [html.escape(u["uploader_callsign"]) for u in landing["uploaders"]]
+            )
         else:
             uploaders_text = "unknown"
 
-        body = '''
+        body = """
             <html>
             <head>
             <style>
@@ -276,10 +279,10 @@ class EmailNotifier:
             </style>
             </head>
             <body>
-        '''
+        """
 
-        serial_escaped = html.escape(landing['serial'])
-        body += f'''
+        serial_escaped = html.escape(landing["serial"])
+        body += f"""
             <table class="sonde">
                 <tr>
                     <td>Sonde ID</td>
@@ -303,20 +306,20 @@ class EmailNotifier:
                         {landing['lat']}, {landing['lon']}</a>
                     </td>
                 </tr>
-        '''
+        """
 
         if place:
             nearest_addr = html.escape(place)
             if geo and geo.address:
-                nearest_addr += f'<br>{html.escape(geo.address)}'
-            body += f'''
+                nearest_addr += f"<br>{html.escape(geo.address)}"
+            body += f"""
                 <tr>
                     <td>Address</td>
                     <td>{nearest_addr}</td>
                 </tr>
-            '''
+            """
 
-        body += f'''
+        body += f"""
             <tr>
                 <td>Distance</td>
                 <td>
@@ -329,10 +332,10 @@ class EmailNotifier:
                 <td>Bearing</td>
                 <td>{round(landing['bearing_from_home'])}° from home</td>
             </tr>
-        '''
+        """
 
         if vel_h is not None and vel_v is not None:
-            body += f'''
+            body += f"""
                 <tr>
                     <td>Descent Rate</td>
                     <td>
@@ -342,14 +345,14 @@ class EmailNotifier:
                     heading {round(landing['heading'])}°
                     </td>
                 </tr>
-            '''
+            """
 
         if body_lest_text:
-            body += '''
+            body += """
                 <tr>
                     <th colspan="2">Landing Estimation</th>
                 </tr>
-            '''
+            """
             body += body_lest_text
 
         unsub_url = f"https://sondesearch.lectrobox.com/notifier/unsubscribe/?uuid={sub['uuid_subscription']}"
@@ -358,24 +361,25 @@ class EmailNotifier:
 
     def send_email(self, sub: pd.Series, landing: pd.Series) -> str:
         # Query SondeHub for detail on the flight
-        flight, now = self.retriever.get_sonde_data(params={
-            'duration': '1d',
-            'serial': landing['serial'],
-        })
+        flight, now = self.retriever.get_sonde_data(
+            params={
+                "duration": "1d",
+                "serial": landing["serial"],
+            }
+        )
 
         subj, body, unsub_url = self.get_email_text(sub, landing)
 
         # build mime message
-        msg = MIMEMultipart('mixed')
-        msg['Subject'] = subj
-        msg['From'] = constants.FROM_EMAIL_ADDR
-        msg['To'] = sub['email']
-        msg['List-Unsubscribe'] = f'<{unsub_url}>'
+        msg = MIMEMultipart("mixed")
+        msg["Subject"] = subj
+        msg["From"] = constants.FROM_EMAIL_ADDR
+        msg["To"] = sub["email"]
+        msg["List-Unsubscribe"] = f"<{unsub_url}>"
 
         # Generate map filenames
-        t = landing['datetime']
-        map_suffix = \
-            f"{sub['uuid_subscription']}/{t.year}/{t.month:02d}/{t.day:02d}-{t.hour:02d}-{landing['lat']}-{landing['lon']}.jpg"
+        t = landing["datetime"]
+        map_suffix = f"{sub['uuid_subscription']}/{t.year}/{t.month:02d}/{t.day:02d}-{t.hour:02d}-{landing['lat']}-{landing['lon']}.jpg"
         map_url = os.path.join(EXTERNAL_IMAGES_URL) + map_suffix
         map_local_fn = os.path.join(self.args.external_images_root, map_suffix)
 
@@ -387,12 +391,12 @@ class EmailNotifier:
         ground_stats = None
 
         # If this is a ground reception, generate the ground reception map and get stats first
-        if landing['ground_reception']:
-            body += '''
+        if landing["ground_reception"]:
+            body += """
                 <tr>
                     <th colspan="2">Ground Reception</th>
                 </tr>
-            '''
+            """
             ground_points = map_utils.identify_ground_points(flight)
             if ground_points is not None and len(ground_points) > 0:
                 ground_stats = self.map_utils.compute_ground_reception_stats(ground_points)
@@ -407,25 +411,29 @@ class EmailNotifier:
                         f"{landing['lat']}-{landing['lon']}-groundreception.jpg"
                     )
                     ground_map_url = os.path.join(EXTERNAL_IMAGES_URL) + ground_map_suffix
-                    ground_map_local_fn = os.path.join(self.args.external_images_root, ground_map_suffix)
+                    ground_map_local_fn = os.path.join(
+                        self.args.external_images_root, ground_map_suffix
+                    )
 
                     # Generate and save the ground reception map
-                    print(f"{sub['email']}: generating ground reception map with {len(ground_points)} points")
+                    print(
+                        f"{sub['email']}: generating ground reception map with {len(ground_points)} points"
+                    )
                     ground_fig = self.map_utils.draw_ground_reception_map(
-                        ground_points, ground_stats, size=22)
-                    ground_fig.savefig(ground_map_local_fn, bbox_inches='tight')
-                    plt.close('all')
+                        ground_points, ground_stats, size=22
+                    )
+                    ground_fig.savefig(ground_map_local_fn, bbox_inches="tight")
+                    plt.close("all")
 
         # Add ground reception statistics to the table if we have them
         if ground_stats is not None:
             # Calculate distance from average position to last-heard position
             path = Geodesic.WGS84.Inverse(
-                ground_stats.avg_lat, ground_stats.avg_lon,
-                landing['lat'], landing['lon']
+                ground_stats.avg_lat, ground_stats.avg_lon, landing["lat"], landing["lon"]
             )
-            dist_to_last_heard = path['s12']
+            dist_to_last_heard = path["s12"]
 
-            body += f'''
+            body += f"""
                 <tr>
                     <td>Ground Points</td>
                     <td>{ground_stats.num_points} frames</td>
@@ -449,11 +457,11 @@ class EmailNotifier:
                         (±{self.render_elevation(sub, ground_stats.std_dev_alt)})
                     </td>
                 </tr>
-            '''
+            """
             # Add estimated AGL height if we have ground elevation
             if ground_stats.ground_elev is not None:
                 height_agl = ground_stats.avg_alt - ground_stats.ground_elev
-                body += f'''
+                body += f"""
                 <tr>
                     <td>Ground Elev at Avg Pos</td>
                     <td>{self.render_elevation(sub, ground_stats.ground_elev)}</td>
@@ -462,13 +470,13 @@ class EmailNotifier:
                     <td>Est. Sonde Height</td>
                     <td>{self.render_elevation(sub, height_agl)} AGL</td>
                 </tr>
-            '''
+            """
 
         # Close the table
-        body += '</table>'
+        body += "</table>"
 
         # Add footer
-        body += f'''
+        body += f"""
             <p><i>
                 This email was sent from the
                 <a href="https://sondesearch.lectrobox.com/notifier/">Sonde Notification Service</a>.
@@ -477,12 +485,12 @@ class EmailNotifier:
                 To configure your notifications,
                 <a href="https://sondesearch.lectrobox.com/notifier/manage/">click here</a>.
             </i></p>
-        '''
+        """
 
         # Generate and add the main flight map
         fig = self.get_email_image(sub, 22, flight, landing)
-        fig.savefig(map_local_fn, bbox_inches='tight')
-        plt.close('all')
+        fig.savefig(map_local_fn, bbox_inches="tight")
+        plt.close("all")
         body += f'<p><img width="100%" src="{map_url}">'
 
         # Add the ground reception map if we generated one
@@ -490,18 +498,18 @@ class EmailNotifier:
             body += f'<p><img width="100%" src="{ground_map_url}">'
 
         # all done
-        body += '</body></html>'
+        body += "</body></html>"
 
-        alternatives = MIMEMultipart('alternative')
-        alternatives.attach(MIMEText(body, 'html', 'utf-8'))
+        alternatives = MIMEMultipart("alternative")
+        alternatives.attach(MIMEText(body, "html", "utf-8"))
         msg.attach(alternatives)
 
         if self.args.really_send or self.args.live_test or self.args.test_sonde:
             self.ses_client.send_raw_email(
                 Source=constants.FROM_EMAIL_ADDR,
-                Destinations=[constants.FROM_EMAIL_ADDR, sub['email']],
+                Destinations=[constants.FROM_EMAIL_ADDR, sub["email"]],
                 RawMessage={
-                    'Data': msg.as_string(),
+                    "Data": msg.as_string(),
                 },
             )
         else:
@@ -514,10 +522,10 @@ class EmailNotifier:
         sondes = self.annotate_with_distance(sondes, sub)
 
         # Sort all landings by distance-to-home
-        sondes = sondes.sort_values(['dist_from_home_m'])
+        sondes = sondes.sort_values(["dist_from_home_m"])
 
         # Find threshold distance in meters
-        distance_threshold_m = sub['max_distance_mi'] * METERS_PER_MILE
+        distance_threshold_m = sub["max_distance_mi"] * METERS_PER_MILE
 
         # Get the list of sondes that we've already sent a notification for (for
         # this subscription)
@@ -525,33 +533,35 @@ class EmailNotifier:
         sondes_emailed = util.dynamodb_to_dataframe(
             self.tables.notifications.query,
             KeyConditionExpression=(
-                Key('subscription_uuid').eq(sub['uuid_subscription'])
-                & Key('time_sent').gt(time_sent_cutoff)
+                Key("subscription_uuid").eq(sub["uuid_subscription"])
+                & Key("time_sent").gt(time_sent_cutoff)
             ),
-            ProjectionExpression='serial',
+            ProjectionExpression="serial",
         )
         if sondes_emailed.empty or self.args.live_test:
             sondes_emailed = set()
         else:
-            sondes_emailed = set(sondes_emailed['serial'].values)
+            sondes_emailed = set(sondes_emailed["serial"].values)
 
         # Iterate over all sondes, sending notifications for any sonde that's
         # within range and for which we've not yet sent a notification
         num_emails = 0
         for _, sonde in sondes.iterrows():
             # if we've reached sondes that are beyond our desired distance, stop
-            if sonde['dist_from_home_m'] > distance_threshold_m:
+            if sonde["dist_from_home_m"] > distance_threshold_m:
                 break
 
             # if this sonde is still being tracked, do not report -- unless it's
             # a ground reception
-            age = now - sonde['datetime']
-            if age < pd.Timedelta(minutes=10) and not sonde['ground_reception']:
-                print(f"{sub['email']}: Skipping sonde {sonde['serial']}; "
-                      f"tracked {age} ago (at {sonde['datetime']}; curr time: {now})")
+            age = now - sonde["datetime"]
+            if age < pd.Timedelta(minutes=10) and not sonde["ground_reception"]:
+                print(
+                    f"{sub['email']}: Skipping sonde {sonde['serial']}; "
+                    f"tracked {age} ago (at {sonde['datetime']}; curr time: {now})"
+                )
                 continue
 
-            if sonde['serial'] in sondes_emailed:
+            if sonde["serial"] in sondes_emailed:
                 print(f"{sub['email']}: Skipping sonde {sonde['serial']}; already notified")
                 continue
 
@@ -565,22 +575,26 @@ class EmailNotifier:
 
             # Record this notification so we don't re-notify for the same sonde
             if self.args.really_send or self.args.live_test:
-                self.tables.notifications.put_item(Item={
-                    'subscription_uuid': sub['uuid_subscription'],
-                    'time_sent': Decimal(time.time()),
-                    'map_url': map_url,
-                    'serial': sonde['serial'],
-                    'dist_from_home_m': Decimal(round(sonde['dist_from_home_m'])),
-                    'sonde_last_heard': Decimal(sonde['datetime'].timestamp()),
-                })
+                self.tables.notifications.put_item(
+                    Item={
+                        "subscription_uuid": sub["uuid_subscription"],
+                        "time_sent": Decimal(time.time()),
+                        "map_url": map_url,
+                        "serial": sonde["serial"],
+                        "dist_from_home_m": Decimal(round(sonde["dist_from_home_m"])),
+                        "sonde_last_heard": Decimal(sonde["datetime"].timestamp()),
+                    }
+                )
 
             # Sleep after each email sent to avoid hitting various external APIs
             # too quickly
             time.sleep(1)
 
-        print(f"{sub['email']}: Max range {sub['max_distance_mi']:.1f}mi; "
-              f"nearest sonde {sondes.iloc[0]['dist_from_home_m'] / METERS_PER_MILE:.1f}mi; "
-              f"sent {num_emails} emails")
+        print(
+            f"{sub['email']}: Max range {sub['max_distance_mi']:.1f}mi; "
+            f"nearest sonde {sondes.iloc[0]['dist_from_home_m'] / METERS_PER_MILE:.1f}mi; "
+            f"sent {num_emails} emails"
+        )
 
     def get_subscriber_data(self) -> pd.DataFrame:
         self.tables = table_definitions.TableClients()
@@ -590,8 +604,7 @@ class EmailNotifier:
 
         # Get all subscriptions
         subs = util.dynamodb_to_dataframe(
-            self.tables.subscriptions.scan,
-            FilterExpression=Attr('active').eq(True)
+            self.tables.subscriptions.scan, FilterExpression=Attr("active").eq(True)
         )
 
         # If either table was empty, return nothing
@@ -599,56 +612,62 @@ class EmailNotifier:
             return pd.DataFrame()
 
         # Convert subscription fields to proper types
-        subs = subs.astype({
-            'lat': float,
-            'lon': float,
-            'max_distance_mi': float,
-        })
+        subs = subs.astype(
+            {
+                "lat": float,
+                "lon": float,
+                "max_distance_mi": float,
+            }
+        )
 
         # Merge the user data into the subscription data. Each subscription
         # record has a field, "subscriber", which references the uuid field of
         # the user table.
         subs = subs.merge(
             users,
-            left_on='subscriber',
-            right_on='uuid',
-            suffixes=('_subscription', '_user'),
+            left_on="subscriber",
+            right_on="uuid",
+            suffixes=("_subscription", "_user"),
         )
 
         # If we're in "live test" mode, filter out all notifications except for
         # a dev
         if self.args.live_test:
-            subs = subs.loc[subs['email'] == DEV_EMAIL]
+            subs = subs.loc[subs["email"] == DEV_EMAIL]
 
         return subs
 
     def process_test_sonde(self, sonde_id: str) -> None:
         """Test mode: send email for a specific sonde ID to dev email."""
         # Get sonde data from SondeHub for the specific sonde
-        sondes, now = self.retriever.get_sonde_data(params={
-            'duration': '1d',
-            'serial': sonde_id,
-        })
+        sondes, now = self.retriever.get_sonde_data(
+            params={
+                "duration": "1d",
+                "serial": sonde_id,
+            }
+        )
 
         if sondes.empty:
             print(f"Error: No data found for sonde {sonde_id}")
             return
 
         # Get the last frame for this sonde
-        last_frame_idx = sondes['frame'].idxmax()
+        last_frame_idx = sondes["frame"].idxmax()
         landing = sondes.loc[last_frame_idx]
 
         # Create a mock subscription with dev email
         # Set home location 0.5 degrees away to show realistic distance/bearing
-        mock_sub = pd.Series({
-            'email': DEV_EMAIL,
-            'lat': landing['lat'] - 0.5,
-            'lon': landing['lon'] - 0.5,
-            'max_distance_mi': 100.0,
-            'units': 'imperial',
-            'tzname': 'UTC',
-            'uuid_subscription': 'test-sonde-mode',
-        })
+        mock_sub = pd.Series(
+            {
+                "email": DEV_EMAIL,
+                "lat": landing["lat"] - 0.5,
+                "lon": landing["lon"] - 0.5,
+                "max_distance_mi": 100.0,
+                "units": "imperial",
+                "tzname": "UTC",
+                "uuid_subscription": "test-sonde-mode",
+            }
+        )
 
         # Annotate the landing with distance/bearing from mock home location
         sondes_df = pd.DataFrame([landing])
@@ -670,7 +689,7 @@ class EmailNotifier:
 
     def get_sonde_data(self) -> tuple[pd.DataFrame, pd.Timestamp]:
         # Get sonde data from SondeHub
-        sondes, now = self.retriever.get_sonde_data(params={'duration': '6h'})
+        sondes, now = self.retriever.get_sonde_data(params={"duration": "6h"})
 
         # Filter out ground tests and non-flights
         sondes = filter_real_flights(sondes)
@@ -698,27 +717,27 @@ class EmailNotifier:
 def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--really-send',
+        "--really-send",
         default=False,
-        help='Send real notification emails to real people',
-        action='store_true',
+        help="Send real notification emails to real people",
+        action="store_true",
     )
     parser.add_argument(
-        '--external-images-root',
+        "--external-images-root",
         type=str,
-        action='store',
+        action="store",
         default=EXTERNAL_IMAGES_ROOT,
     )
     parser.add_argument(
-        '--live-test',
+        "--live-test",
         default=False,
-        help='Send real email only to developers as a test',
-        action='store_true',
+        help="Send real email only to developers as a test",
+        action="store_true",
     )
     parser.add_argument(
-        '--test-sonde',
+        "--test-sonde",
         type=str,
-        help='Test mode: send email for specific sonde ID to dev email address',
+        help="Test mode: send email for specific sonde ID to dev email address",
     )
     args = parser.parse_args(sys.argv[1:])
 

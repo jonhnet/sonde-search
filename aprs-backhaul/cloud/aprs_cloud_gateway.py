@@ -114,6 +114,7 @@ class ReceptionLogger:
 
     def open(self) -> None:
         from pathlib import Path
+
         Path(self.path).expanduser().parent.mkdir(parents=True, exist_ok=True)
         self._f = open(self.path, "a", buffering=1)  # line-buffered
 
@@ -159,8 +160,9 @@ class SondeHubUploader:
     Safe to substitute in tests by calling `flush_once` directly.
     """
 
-    def __init__(self, cfg: CloudConfig, session: Optional[requests.Session] = None,
-                 now_fn=time.time):
+    def __init__(
+        self, cfg: CloudConfig, session: Optional[requests.Session] = None, now_fn=time.time
+    ):
         self._cfg = cfg
         self._session = session or requests.Session()
         self._queue: list[dict] = []
@@ -211,20 +213,23 @@ class SondeHubUploader:
         for attempt in range(1, 6):
             try:
                 r = self._session.put(
-                    SONDEHUB_TELEMETRY_URL, data=body, headers=headers, timeout=30,
+                    SONDEHUB_TELEMETRY_URL,
+                    data=body,
+                    headers=headers,
+                    timeout=30,
                 )
                 if 200 <= r.status_code < 300:
                     log.info("uploaded %d telemetry records to SondeHub", len(batch))
                     return
                 if 300 <= r.status_code < 500:
-                    log.error("SondeHub rejected batch (%d): %s",
-                              r.status_code, r.text[:500])
+                    log.error("SondeHub rejected batch (%d): %s", r.status_code, r.text[:500])
                     return
-                log.warning("SondeHub 5xx %d (attempt %d): %s",
-                            r.status_code, attempt, r.text[:200])
+                log.warning(
+                    "SondeHub 5xx %d (attempt %d): %s", r.status_code, attempt, r.text[:200]
+                )
             except requests.RequestException as e:
                 log.warning("SondeHub upload error (attempt %d): %s", attempt, e)
-            time.sleep(min(2 ** attempt, 30))
+            time.sleep(min(2**attempt, 30))
         log.error("SondeHub upload failed after retries, dropping %d records", len(batch))
 
     def _run(self) -> None:
@@ -251,7 +256,9 @@ def _hhmmss_to_datetime(hhmmss: str, now_utc: datetime | None = None) -> datetim
     if now_utc is None:
         now_utc = datetime.now(timezone.utc)
     t = datetime.strptime(hhmmss, "%H%M%S").replace(
-        year=now_utc.year, month=now_utc.month, day=now_utc.day,
+        year=now_utc.year,
+        month=now_utc.month,
+        day=now_utc.day,
         tzinfo=timezone.utc,
     )
     if (t - now_utc).total_seconds() > 43200:
@@ -259,10 +266,16 @@ def _hhmmss_to_datetime(hhmmss: str, now_utc: datetime | None = None) -> datetim
     return t
 
 
-def build_sondehub_record(cfg: CloudConfig, serial: str, lat: float, lon: float,
-                          comment: ae.SondeComment, hhmmss: str,
-                          uploader_callsign: str,
-                          now_utc: datetime | None = None) -> dict:
+def build_sondehub_record(
+    cfg: CloudConfig,
+    serial: str,
+    lat: float,
+    lon: float,
+    comment: ae.SondeComment,
+    hhmmss: str,
+    uploader_callsign: str,
+    now_utc: datetime | None = None,
+) -> dict:
     if now_utc is None:
         now_utc = datetime.now(timezone.utc)
     sonde_dt = _hhmmss_to_datetime(hhmmss, now_utc=now_utc)
@@ -285,8 +298,7 @@ def build_sondehub_record(cfg: CloudConfig, serial: str, lat: float, lon: float,
         record["type"] = comment.type_str
     if comment.manufacturer is not None:
         record["manufacturer"] = comment.manufacturer
-    for key in ("vel_v", "vel_h", "heading", "temp", "humidity",
-                "pressure", "batt", "sats"):
+    for key in ("vel_v", "vel_h", "heading", "temp", "humidity", "pressure", "batt", "sats"):
         val = getattr(comment, key, None)
         if val is not None:
             record[key] = val
@@ -301,9 +313,14 @@ class PacketHandler:
     """Parses aprslib packets, logs each reception locally, and optionally
     forwards telemetry to SondeHub."""
 
-    def __init__(self, cfg: CloudConfig, logger: ReceptionLogger,
-                 uploader: Optional[SondeHubUploader],
-                 dedup: FrameDedup, now_fn=lambda: datetime.now(timezone.utc)):
+    def __init__(
+        self,
+        cfg: CloudConfig,
+        logger: ReceptionLogger,
+        uploader: Optional[SondeHubUploader],
+        dedup: FrameDedup,
+        now_fn=lambda: datetime.now(timezone.utc),
+    ):
         self.cfg = cfg
         self.logger = logger
         self.uploader = uploader
@@ -343,25 +360,32 @@ class PacketHandler:
         if pkt.get("altitude") is not None:
             comment.alt_m = int(round(float(pkt["altitude"])))
         if comment.alt_m is None:
-            log.warning("object %s missing altitude (no /A= extension); dropping",
-                        serial)
+            log.warning("object %s missing altitude (no /A= extension); dropping", serial)
             return
         if not self.dedup.should_upload(serial, comment.frame):
             return
 
         aprs_from = str(pkt.get("from", "")).strip()
         uploader_callsign = derive_uploader_callsign(
-            aprs_from, self.cfg.uploader_callsign_suffix,
+            aprs_from,
+            self.cfg.uploader_callsign_suffix,
         )
         if uploader_callsign is None:
-            log.warning("object %s: missing/invalid source callsign %r; dropping",
-                        serial, aprs_from)
+            log.warning(
+                "object %s: missing/invalid source callsign %r; dropping", serial, aprs_from
+            )
             return
 
         hhmmss = str(pkt.get("raw_timestamp", ""))[:6] or self._now().strftime("%H%M%S")
         record = build_sondehub_record(
-            self.cfg, serial, lat, lon, comment, hhmmss,
-            uploader_callsign=uploader_callsign, now_utc=self._now(),
+            self.cfg,
+            serial,
+            lat,
+            lon,
+            comment,
+            hhmmss,
+            uploader_callsign=uploader_callsign,
+            now_utc=self._now(),
         )
 
         log_record = dict(record)
@@ -373,19 +397,36 @@ class PacketHandler:
 
         if self.uploader is not None:
             self.uploader.add(record)
-            log.info("queued %s frame=%d lat=%.4f lon=%.4f uploader=%s",
-                     serial, comment.frame, lat, lon, uploader_callsign)
+            log.info(
+                "queued %s frame=%d lat=%.4f lon=%.4f uploader=%s",
+                serial,
+                comment.frame,
+                lat,
+                lon,
+                uploader_callsign,
+            )
         else:
-            log.info("logged %s frame=%d lat=%.4f lon=%.4f uploader=%s (upload off)",
-                     serial, comment.frame, lat, lon, uploader_callsign)
+            log.info(
+                "logged %s frame=%d lat=%.4f lon=%.4f uploader=%s (upload off)",
+                serial,
+                comment.frame,
+                lat,
+                lon,
+                uploader_callsign,
+            )
 
 
 def _run_aprs_is(cfg: CloudConfig, on_packet) -> None:
     backoff = 1.0
     while True:
         try:
-            log.info("connecting to APRS-IS %s:%d as %s (filter=%r)",
-                     cfg.aprsis_host, cfg.aprsis_port, cfg.aprsis_callsign, cfg.aprsis_filter)
+            log.info(
+                "connecting to APRS-IS %s:%d as %s (filter=%r)",
+                cfg.aprsis_host,
+                cfg.aprsis_port,
+                cfg.aprsis_callsign,
+                cfg.aprsis_filter,
+            )
             conn = aprslib.IS(
                 cfg.aprsis_callsign,
                 passwd=str(cfg.aprsis_passcode),
@@ -409,8 +450,12 @@ def _run_aprs_is(cfg: CloudConfig, on_packet) -> None:
                     conn.close()
                 except Exception:
                     pass
-        except (aprslib.exceptions.ConnectionError, aprslib.exceptions.ConnectionDrop,
-                aprslib.exceptions.LoginError, OSError) as e:
+        except (
+            aprslib.exceptions.ConnectionError,
+            aprslib.exceptions.ConnectionDrop,
+            aprslib.exceptions.LoginError,
+            OSError,
+        ) as e:
             log.warning("APRS-IS disconnected: %s", e)
         except Exception:
             log.exception("APRS-IS loop crashed")
@@ -423,9 +468,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="APRS Backhaul Cloud Gateway")
     parser.add_argument("--config", required=True, help="YAML config file")
     parser.add_argument(
-        "--sondehub-upload", action="store_true",
+        "--sondehub-upload",
+        action="store_true",
         help="Forward parsed telemetry to SondeHub. Off by default; without "
-             "this flag, receptions are only appended to the local reception log.",
+        "this flag, receptions are only appended to the local reception log.",
     )
     args = parser.parse_args()
     cfg = load_cloud_config(args.config)
@@ -448,8 +494,11 @@ def main() -> int:
 
     dedup = FrameDedup(cfg.dedup_ttl_sec)
     handler = PacketHandler(cfg, reception_logger, uploader, dedup)
-    log.info("aprs-backhaul-cloud running (filter=%r, log=%s). Ctrl+C to stop.",
-             cfg.aprsis_filter, cfg.reception_log_path)
+    log.info(
+        "aprs-backhaul-cloud running (filter=%r, log=%s). Ctrl+C to stop.",
+        cfg.aprsis_filter,
+        cfg.reception_log_path,
+    )
     try:
         _run_aprs_is(cfg, handler)
     except KeyboardInterrupt:

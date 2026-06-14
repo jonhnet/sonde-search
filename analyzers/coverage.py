@@ -13,7 +13,7 @@ import pandas as pd
 import sys
 import AltAzRange
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from lib.map_utils import setup_contextily_cache
 
 matplotlib.use("Agg")
@@ -52,7 +52,7 @@ def plot(logfile_dir, listener_lat, listener_lon, listener_alt):
     fig.savefig("az-vs-el.png", bbox_inches="tight")
 
     # Plot all coverage on a map
-    (home_x, home_y) = to_mercator_xy(listener_lat, listener_lon)
+    home_x, home_y = to_mercator_xy(listener_lat, listener_lon)
 
     fig, ax = plt.subplots(figsize=(25, 25))
     ax.axis("off")
@@ -100,7 +100,7 @@ if __name__ == "__main__":
         action="store",
     )
     args = parser.parse_args(sys.argv[1:])
-    (lat, lon) = args.listener_latlon.split(",")
+    lat, lon = args.listener_latlon.split(",")
     lat = float(lat)
     lon = float(lon)
     alt = float(args.listener_alt)

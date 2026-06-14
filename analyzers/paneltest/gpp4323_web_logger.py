@@ -17,7 +17,7 @@ import numpy as np
 from zoneinfo import ZoneInfo
 from flask import Flask, render_template, Response, request, send_file, jsonify
 
-sys.path.insert(0, os.path.expanduser('~/projects/gpp4323'))
+sys.path.insert(0, os.path.expanduser("~/projects/gpp4323"))
 import gpp4323
 from collector import DataCollector, LoadReading
 
@@ -27,13 +27,15 @@ class DataStore:
 
     def __init__(self, logfile_path: str, max_buffer_size: int = 1000):
         self.lock = threading.Lock()
-        self.data = pd.DataFrame({
-            'elapsed': pd.Series(dtype='float64'),
-            'voltage': pd.Series(dtype='float64'),
-            'current': pd.Series(dtype='float64'),
-            'power': pd.Series(dtype='float64'),
-            'energy_wh': pd.Series(dtype='float64')
-        })
+        self.data = pd.DataFrame(
+            {
+                "elapsed": pd.Series(dtype="float64"),
+                "voltage": pd.Series(dtype="float64"),
+                "current": pd.Series(dtype="float64"),
+                "power": pd.Series(dtype="float64"),
+                "energy_wh": pd.Series(dtype="float64"),
+            }
+        )
         self.max_buffer_size = max_buffer_size
         self.start_timestamp: Optional[datetime] = None
         self.logfile_path = logfile_path
@@ -55,17 +57,21 @@ class DataStore:
 
             if len(df) > 0:
                 # Restore start timestamp from Unix epoch before dropping the column
-                self.start_timestamp = datetime.fromtimestamp(df['timestamp'].iloc[0], tz=timezone.utc)
+                self.start_timestamp = datetime.fromtimestamp(
+                    df["timestamp"].iloc[0], tz=timezone.utc
+                )
 
                 # Restore last sample time so energy calculation works for the first new reading
-                self.last_sample_time = datetime.fromtimestamp(df['timestamp'].iloc[-1], tz=timezone.utc)
+                self.last_sample_time = datetime.fromtimestamp(
+                    df["timestamp"].iloc[-1], tz=timezone.utc
+                )
 
                 # Track total count and energy from historical file
                 self.total_sample_count = len(df)
-                self.total_energy_wh = df['energy_wh'].iloc[-1]
+                self.total_energy_wh = df["energy_wh"].iloc[-1]
 
                 # Drop timestamp column - only needed in CSV, not in memory
-                df = df.drop(columns=['timestamp'])
+                df = df.drop(columns=["timestamp"])
 
                 with self.lock:
                     # Keep only last max_buffer_size rows
@@ -87,14 +93,16 @@ class DataStore:
         """
         file_exists = os.path.exists(self.logfile_path)
         try:
-            self.log_file = open(self.logfile_path, 'a', newline='')
+            self.log_file = open(self.logfile_path, "a", newline="")
         except Exception as e:
             raise IOError(f"Failed to open log file {self.logfile_path}: {e}") from e
 
         self.csv_writer = csv.writer(self.log_file)
         # Write header only if file is new
         if not file_exists:
-            self.csv_writer.writerow(['timestamp', 'elapsed', 'voltage', 'current', 'power', 'energy_wh'])
+            self.csv_writer.writerow(
+                ["timestamp", "elapsed", "voltage", "current", "power", "energy_wh"]
+            )
         print(f"Logging to file: {self.logfile_path} (append mode)")
 
     def close_log_file(self) -> None:
@@ -121,13 +129,17 @@ class DataStore:
 
         # Append to data store
         with self.lock:
-            new_row = pd.DataFrame([{
-                'elapsed': elapsed,
-                'voltage': reading.voltage,
-                'current': reading.current,
-                'power': reading.power,
-                'energy_wh': self.total_energy_wh
-            }])
+            new_row = pd.DataFrame(
+                [
+                    {
+                        "elapsed": elapsed,
+                        "voltage": reading.voltage,
+                        "current": reading.current,
+                        "power": reading.power,
+                        "energy_wh": self.total_energy_wh,
+                    }
+                ]
+            )
             self.data = pd.concat([self.data, new_row], ignore_index=True)
 
             # Keep only last max_buffer_size rows
@@ -135,14 +147,16 @@ class DataStore:
                 self.data = self.data.tail(self.max_buffer_size).reset_index(drop=True)
 
             # Write to log file (timestamp as Unix epoch)
-            self.csv_writer.writerow([
-                f'{reading.timestamp.timestamp():.3f}',
-                f'{elapsed:.3f}',
-                f'{reading.voltage:.4f}',
-                f'{reading.current:.4f}',
-                f'{reading.power:.4f}',
-                f'{self.total_energy_wh:.6f}'
-            ])
+            self.csv_writer.writerow(
+                [
+                    f"{reading.timestamp.timestamp():.3f}",
+                    f"{elapsed:.3f}",
+                    f"{reading.voltage:.4f}",
+                    f"{reading.current:.4f}",
+                    f"{reading.power:.4f}",
+                    f"{self.total_energy_wh:.6f}",
+                ]
+            )
             self.log_file.flush()
 
             # Increment total sample count
@@ -158,7 +172,7 @@ class DataStore:
     def get_new_data(self, last_elapsed: float) -> pd.DataFrame:
         """Get new data since last_elapsed as a view"""
         with self.lock:
-            return self.data[self.data['elapsed'] > last_elapsed].copy()
+            return self.data[self.data["elapsed"] > last_elapsed].copy()
 
     def get_total_sample_count(self) -> int:
         """Get total sample count"""
@@ -189,19 +203,22 @@ def decimate_data(df: pd.DataFrame, window_size: int) -> pd.DataFrame:
     # Group data into windows and aggregate
     groups = df_to_process.groupby(np.arange(len(df_to_process)) // window_size)
 
-    decimated = pd.DataFrame({
-        'elapsed': groups['elapsed'].mean(),
-        'voltage': groups['voltage'].mean(),
-        'current': groups['current'].mean(),
-        'power': groups['power'].mean(),
-        'energy_wh': groups['energy_wh'].last()  # Last energy value (cumulative)
-    })
+    decimated = pd.DataFrame(
+        {
+            "elapsed": groups["elapsed"].mean(),
+            "voltage": groups["voltage"].mean(),
+            "current": groups["current"].mean(),
+            "power": groups["power"].mean(),
+            "energy_wh": groups["energy_wh"].last(),  # Last energy value (cumulative)
+        }
+    )
 
     return decimated
 
 
-def data_collection_thread(host: str, port: int, rate: float, store: DataStore,
-                           load_voltage: float) -> None:
+def data_collection_thread(
+    host: str, port: int, rate: float, store: DataStore, load_voltage: float
+) -> None:
     """Background thread for data collection with automatic reconnection"""
     RETRY_DELAY = 5  # seconds between reconnection attempts
 
@@ -216,10 +233,7 @@ def data_collection_thread(host: str, port: int, rate: float, store: DataStore,
             g = gpp4323.GPP4323(host=(host, port))
 
             collector = DataCollector(
-                g.channel(1),
-                rate=rate,
-                callback=store.handle_reading,
-                load_voltage=load_voltage
+                g.channel(1), rate=rate, callback=store.handle_reading, load_voltage=load_voltage
             )
 
             collector.start()
@@ -241,21 +255,21 @@ class WebServer:
     def __init__(self, data_store):
         self.data_store = data_store
         self.app = Flask(__name__)
-        self.app.config['TEMPLATES_AUTO_RELOAD'] = True
+        self.app.config["TEMPLATES_AUTO_RELOAD"] = True
         self._setup_routes()
 
     def _setup_routes(self):
         """Setup Flask routes using decorators"""
-        self.app.add_url_rule('/', view_func=self.index)
-        self.app.add_url_rule('/api/timeseries', view_func=self.stream_timeseries)
-        self.app.add_url_rule('/api/stats', view_func=self.stream_stats)
-        self.app.add_url_rule('/api/download', view_func=self.download_csv)
-        self.app.add_url_rule('/daily', view_func=self.daily)
-        self.app.add_url_rule('/api/daily_summary', view_func=self.daily_summary)
+        self.app.add_url_rule("/", view_func=self.index)
+        self.app.add_url_rule("/api/timeseries", view_func=self.stream_timeseries)
+        self.app.add_url_rule("/api/stats", view_func=self.stream_stats)
+        self.app.add_url_rule("/api/download", view_func=self.download_csv)
+        self.app.add_url_rule("/daily", view_func=self.daily)
+        self.app.add_url_rule("/api/daily_summary", view_func=self.daily_summary)
 
     def index(self):
         """Serve the main page"""
-        return render_template('gpp4323_chart.html')
+        return render_template("gpp4323_chart.html")
 
     def stream_timeseries(self):
         """Server-Sent Events stream for real-time timeseries data updates
@@ -266,37 +280,36 @@ class WebServer:
 
         All modes are live-updating. The range determines the time window and decimation rate.
         """
-        range_param = request.args.get('range', '1m')
-        max_points = int(request.args.get('max_points', 500))
-        date_param = request.args.get('date')  # e.g. "2025-03-21"
+        range_param = request.args.get("range", "1m")
+        max_points = int(request.args.get("max_points", 500))
+        date_param = request.args.get("date")  # e.g. "2025-03-21"
 
         def event_stream():
             last_elapsed_sent = -1
 
             # Define time range mappings
-            RANGE_SECONDS = {
-                '1m': 60,
-                '10m': 600,
-                '1h': 3600,
-                '6h': 6 * 3600,
-                '24h': 24 * 3600
-            }
+            RANGE_SECONDS = {"1m": 60, "10m": 600, "1h": 3600, "6h": 6 * 3600, "24h": 24 * 3600}
 
             # Load and send initial historical data from log file
             decimation_window = 1
             if os.path.exists(self.data_store.logfile_path):
                 try:
-                    df = pd.read_csv(self.data_store.logfile_path, on_bad_lines='skip')
+                    df = pd.read_csv(self.data_store.logfile_path, on_bad_lines="skip")
 
                     # Filter by date if requested (historical day view)
                     if date_param:
-                        tz = ZoneInfo('America/Los_Angeles')
-                        target = datetime.strptime(date_param, '%Y-%m-%d')
-                        day_start = datetime(target.year, target.month, target.day, tzinfo=tz).timestamp()
-                        day_end = (datetime(target.year, target.month, target.day, tzinfo=tz) + timedelta(days=1)).timestamp()
-                        df = df[(df['timestamp'] >= day_start) & (df['timestamp'] < day_end)]
+                        tz = ZoneInfo("America/Los_Angeles")
+                        target = datetime.strptime(date_param, "%Y-%m-%d")
+                        day_start = datetime(
+                            target.year, target.month, target.day, tzinfo=tz
+                        ).timestamp()
+                        day_end = (
+                            datetime(target.year, target.month, target.day, tzinfo=tz)
+                            + timedelta(days=1)
+                        ).timestamp()
+                        df = df[(df["timestamp"] >= day_start) & (df["timestamp"] < day_end)]
 
-                    df = df.drop(columns=['timestamp'])
+                    df = df.drop(columns=["timestamp"])
 
                     if len(df) > 0:
                         if date_param:
@@ -304,8 +317,8 @@ class WebServer:
                             filtered_df = df
                         elif range_param in RANGE_SECONDS:
                             range_seconds = RANGE_SECONDS[range_param]
-                            latest_elapsed = df['elapsed'].iloc[-1]
-                            filtered_df = df[df['elapsed'] >= latest_elapsed - range_seconds]
+                            latest_elapsed = df["elapsed"].iloc[-1]
+                            filtered_df = df[df["elapsed"] >= latest_elapsed - range_seconds]
                         else:
                             filtered_df = df
 
@@ -313,14 +326,15 @@ class WebServer:
                         decimation_window = max(1, len(filtered_df) // max_points)
                         decimated_df = decimate_data(filtered_df, decimation_window)
 
-                        decimated_data = decimated_df.to_dict('records')
+                        decimated_data = decimated_df.to_dict("records")
                         start_time = (
                             self.data_store.start_timestamp.isoformat()
-                            if self.data_store.start_timestamp else None
+                            if self.data_store.start_timestamp
+                            else None
                         )
                         yield f"data: {json.dumps({'type': 'initial', 'data': decimated_data, 'start_time': start_time})}\n\n"
 
-                        last_elapsed_sent = df['elapsed'].iloc[-1]
+                        last_elapsed_sent = df["elapsed"].iloc[-1]
 
                 except Exception as e:
                     yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
@@ -341,19 +355,20 @@ class WebServer:
 
                     if len(decimated_new) > 0:
                         # Send as batch in same format as initial data
-                        update_batch = decimated_new.to_dict('records')
+                        update_batch = decimated_new.to_dict("records")
                         yield f"data: {json.dumps({'type': 'update', 'data': update_batch})}\n\n"
 
                         # Update last_elapsed_sent to last point of last complete window
                         # (incomplete tail is preserved for next iteration)
                         num_complete_windows = len(new_data) // decimation_window
                         rows_processed = num_complete_windows * decimation_window
-                        last_elapsed_sent = new_data.iloc[rows_processed - 1]['elapsed']
+                        last_elapsed_sent = new_data.iloc[rows_processed - 1]["elapsed"]
 
-        return Response(event_stream(), mimetype='text/event-stream')
+        return Response(event_stream(), mimetype="text/event-stream")
 
     def stream_stats(self):
         """Server-Sent Events stream for stats updates (always active)"""
+
         def event_stream():
             while True:
                 time.sleep(1.0)  # Update stats every second
@@ -361,60 +376,67 @@ class WebServer:
                 if latest_point is not None:
                     start_time = (
                         self.data_store.start_timestamp.isoformat()
-                        if self.data_store.start_timestamp else None
+                        if self.data_store.start_timestamp
+                        else None
                     )
                     stats = {
-                        'voltage': latest_point['voltage'],
-                        'current': latest_point['current'],
-                        'power': latest_point['power'],
-                        'energy_wh': latest_point['energy_wh'],
-                        'elapsed': latest_point['elapsed'],
-                        'total_sample_count': self.data_store.get_total_sample_count(),
-                        'start_time': start_time
+                        "voltage": latest_point["voltage"],
+                        "current": latest_point["current"],
+                        "power": latest_point["power"],
+                        "energy_wh": latest_point["energy_wh"],
+                        "elapsed": latest_point["elapsed"],
+                        "total_sample_count": self.data_store.get_total_sample_count(),
+                        "start_time": start_time,
                     }
                     yield f"data: {json.dumps(stats)}\n\n"
 
-        return Response(event_stream(), mimetype='text/event-stream')
+        return Response(event_stream(), mimetype="text/event-stream")
 
     def daily(self):
         """Serve the daily summary page"""
-        return render_template('gpp4323_daily.html')
+        return render_template("gpp4323_daily.html")
 
     def daily_summary(self):
         """Return JSON summary of energy collected per day"""
         if not os.path.exists(self.data_store.logfile_path):
             return jsonify([])
 
-        df = pd.read_csv(self.data_store.logfile_path, on_bad_lines='skip')
+        df = pd.read_csv(self.data_store.logfile_path, on_bad_lines="skip")
         if len(df) == 0:
             return jsonify([])
 
-        tz = ZoneInfo('America/Los_Angeles')
-        df['datetime'] = pd.to_datetime(df['timestamp'], unit='s', utc=True)
-        df['date'] = df['datetime'].dt.tz_convert(tz).dt.date
+        tz = ZoneInfo("America/Los_Angeles")
+        df["datetime"] = pd.to_datetime(df["timestamp"], unit="s", utc=True)
+        df["date"] = df["datetime"].dt.tz_convert(tz).dt.date
 
-        summary = df.groupby('date').agg(
-            energy_start=('energy_wh', 'first'),
-            energy_end=('energy_wh', 'last'),
-            peak_power=('power', 'max'),
-            num_samples=('timestamp', 'count'),
-        ).reset_index()
+        summary = (
+            df.groupby("date")
+            .agg(
+                energy_start=("energy_wh", "first"),
+                energy_end=("energy_wh", "last"),
+                peak_power=("power", "max"),
+                num_samples=("timestamp", "count"),
+            )
+            .reset_index()
+        )
 
-        summary['energy_wh'] = summary['energy_end'] - summary['energy_start']
-        summary['date'] = summary['date'].astype(str)
-        summary = summary.sort_values('date', ascending=False)
+        summary["energy_wh"] = summary["energy_end"] - summary["energy_start"]
+        summary["date"] = summary["date"].astype(str)
+        summary = summary.sort_values("date", ascending=False)
 
-        return jsonify(summary[['date', 'energy_wh', 'peak_power', 'num_samples']].to_dict('records'))
+        return jsonify(
+            summary[["date", "energy_wh", "peak_power", "num_samples"]].to_dict("records")
+        )
 
     def download_csv(self):
         """Serve the raw CSV log file for download"""
         return send_file(
             self.data_store.logfile_path,
-            mimetype='text/csv',
+            mimetype="text/csv",
             as_attachment=True,
         )
 
-    def run(self, host='0.0.0.0', port=5000, debug=False):
+    def run(self, host="0.0.0.0", port=5000, debug=False):
         """Run the Flask web server"""
         self.app.run(host=host, port=port, debug=debug, threaded=True)
 
@@ -428,12 +450,12 @@ def daemonize(daemon_log: str) -> None:
     import subprocess
 
     # Build new argv without --daemon/-d
-    args = [a for a in sys.argv if a not in ('--daemon', '-d')]
+    args = [a for a in sys.argv if a not in ("--daemon", "-d")]
 
     env = os.environ.copy()
-    env['PYTHONUNBUFFERED'] = '1'
+    env["PYTHONUNBUFFERED"] = "1"
 
-    with open(daemon_log, 'a') as log_fd:
+    with open(daemon_log, "a") as log_fd:
         subprocess.Popen(
             [sys.executable] + args,
             stdin=subprocess.DEVNULL,
@@ -448,54 +470,36 @@ def daemonize(daemon_log: str) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description='GPP4323 Web Logger with Streaming Chart'
+    parser = argparse.ArgumentParser(description="GPP4323 Web Logger with Streaming Chart")
+    parser.add_argument(
+        "--host", default="gpp4323", help="Hostname or IP address of GPP4323 (default: gpp4323)"
+    )
+    parser.add_argument("--port", type=int, default=1026, help="TCP port (default: 1026)")
+    parser.add_argument(
+        "--rate", type=float, default=1.0, help="Sampling rate in Hz (default: 1.0)"
     )
     parser.add_argument(
-        '--host',
-        default='gpp4323',
-        help='Hostname or IP address of GPP4323 (default: gpp4323)'
+        "--logfile",
+        "-l",
+        default="gpp4323_log.csv",
+        help="CSV log file path (default: gpp4323_log.csv)",
     )
     parser.add_argument(
-        '--port',
-        type=int,
-        default=1026,
-        help='TCP port (default: 1026)'
+        "--web-port", type=int, default=14005, help="Web server port (default: 14005)"
     )
     parser.add_argument(
-        '--rate',
-        type=float,
-        default=1.0,
-        help='Sampling rate in Hz (default: 1.0)'
-    )
-    parser.add_argument(
-        '--logfile',
-        '-l',
-        default='gpp4323_log.csv',
-        help='CSV log file path (default: gpp4323_log.csv)'
-    )
-    parser.add_argument(
-        '--web-port',
-        type=int,
-        default=14005,
-        help='Web server port (default: 14005)'
-    )
-    parser.add_argument(
-        '--load-voltage',
+        "--load-voltage",
         type=float,
         default=12.5,
-        help='CV-load voltage to set on the channel, simulating a battery '
-             '(default: 12.5)'
+        help="CV-load voltage to set on the channel, simulating a battery " "(default: 12.5)",
     )
     parser.add_argument(
-        '--daemon', '-d',
-        action='store_true',
-        help='Run as a background daemon (use kill to stop)'
+        "--daemon", "-d", action="store_true", help="Run as a background daemon (use kill to stop)"
     )
     parser.add_argument(
-        '--daemon-log',
-        default='gpp4323_web_logger.log',
-        help='Daemon stdout/stderr log file (default: gpp4323_web_logger.log)'
+        "--daemon-log",
+        default="gpp4323_web_logger.log",
+        help="Daemon stdout/stderr log file (default: gpp4323_web_logger.log)",
     )
 
     args = parser.parse_args()
@@ -515,7 +519,7 @@ def main():
     collection_thread = threading.Thread(
         target=data_collection_thread,
         args=(args.host, args.port, args.rate, data_store, args.load_voltage),
-        daemon=True
+        daemon=True,
     )
     collection_thread.start()
 
@@ -525,5 +529,5 @@ def main():
     web_server.run(port=args.web_port)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

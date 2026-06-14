@@ -15,6 +15,7 @@ from typing import Callable, Optional
 @dataclass
 class LoadReading:
     """A single timestamped reading from one channel."""
+
     voltage: float
     current: float
     power: float
@@ -24,11 +25,13 @@ class LoadReading:
 class DataCollector:
     """Polls a gpp4323 Channel at a fixed rate, delivering LoadReadings."""
 
-    def __init__(self,
-                 channel,
-                 rate: float = 10.0,
-                 callback: Optional[Callable[[LoadReading], None]] = None,
-                 load_voltage: Optional[float] = None):
+    def __init__(
+        self,
+        channel,
+        rate: float = 10.0,
+        callback: Optional[Callable[[LoadReading], None]] = None,
+        load_voltage: Optional[float] = None,
+    ):
         """
         Args:
             channel: gpp4323 Channel to monitor.
@@ -60,8 +63,9 @@ class DataCollector:
         while self.is_running:
             try:
                 d = self.channel.meas()
-                reading = LoadReading(d['voltage'], d['current'], d['power'],
-                                      datetime.now(timezone.utc))
+                reading = LoadReading(
+                    d["voltage"], d["current"], d["power"], datetime.now(timezone.utc)
+                )
                 if self.callback:
                     self.callback(reading)
             except TimeoutError:

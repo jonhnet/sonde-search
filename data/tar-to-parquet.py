@@ -24,13 +24,33 @@ import time
 from collections import Counter
 from datetime import timedelta
 
-
 NUMERIC_COLUMNS = [
-    'alt', 'altErr', 'batt', 'burst_timer', 'crdErr', 'frame', 'freq',
-    'frequency', 'fwver', 'heading', 'humidity', 'invalid_temp', 'lat',
-    'launch_site_range_estimate', 'lon', 'mnfdate', 'pressure', 'rssi',
-    'sats', 'snr', 'temp', 'tx_frequency', 'upload_time_delta',
-    'uploader_alt', 'vel_h', 'vel_v',
+    "alt",
+    "altErr",
+    "batt",
+    "burst_timer",
+    "crdErr",
+    "frame",
+    "freq",
+    "frequency",
+    "fwver",
+    "heading",
+    "humidity",
+    "invalid_temp",
+    "lat",
+    "launch_site_range_estimate",
+    "lon",
+    "mnfdate",
+    "pressure",
+    "rssi",
+    "sats",
+    "snr",
+    "temp",
+    "tx_frequency",
+    "upload_time_delta",
+    "uploader_alt",
+    "vel_h",
+    "vel_v",
 ]
 
 
@@ -47,26 +67,26 @@ class TarToParquetConverter:
 
     def _is_valid_record(self, recs, fname):
         if len(recs) % 3 != 0:
-            return self._drop('invalid record count (not multiple of 3)')
+            return self._drop("invalid record count (not multiple of 3)")
 
         try:
-            frame_nums = [int(rec['frame']) for rec in recs]
+            frame_nums = [int(rec["frame"]) for rec in recs]
         except (ValueError, KeyError):
-            return self._drop('missing or non-numeric frame')
+            return self._drop("missing or non-numeric frame")
 
         for frame_num in frame_nums:
             if frame_num < 0 or frame_num > 4_000_000_000:
-                return self._drop('frame number out of range')
+                return self._drop("frame number out of range")
 
         # Basic datetime sanity check — full parsing is done in bulk later,
         # which is ~100x faster than per-record pd.to_datetime() calls
         for rec in recs:
-            dt = rec.get('datetime', '')
+            dt = rec.get("datetime", "")
             if not isinstance(dt, str) or len(dt) < 10:
-                return self._drop('invalid datetime')
+                return self._drop("invalid datetime")
 
         for rec in recs:
-            rec['archive_source'] = fname
+            rec["archive_source"] = fname
 
         return True
 
@@ -83,7 +103,7 @@ class TarToParquetConverter:
                 try:
                     j = json.load(archive.extractfile(member))
                 except json.decoder.JSONDecodeError:
-                    self._drop('JSON parse error')
+                    self._drop("JSON parse error")
                     continue
 
                 if not self._is_valid_record(j, member.name):
@@ -95,10 +115,12 @@ class TarToParquetConverter:
 
                 if self.num_files % 10000 == 0:
                     dur = time.time() - start_time
-                    print(f"{self.num_files:>7,} files  "
-                          f"{self.num_recs:>7,} records  "
-                          f"{dur:>5.1f}s  "
-                          f"{self.num_files / dur:>7,.0f} files/sec")
+                    print(
+                        f"{self.num_files:>7,} files  "
+                        f"{self.num_recs:>7,} records  "
+                        f"{dur:>5.1f}s  "
+                        f"{self.num_files / dur:>7,.0f} files/sec"
+                    )
 
     def convert(self):
         print(f"Converting {self.infilename}")
@@ -109,46 +131,46 @@ class TarToParquetConverter:
         basename = os.path.splitext(self.infilename)[0]
 
         # Normalize column names
-        if 'freq' in df.columns:
-            if 'frequency' not in df.columns:
-                df = df.rename(columns={'freq': 'frequency'})
+        if "freq" in df.columns:
+            if "frequency" not in df.columns:
+                df = df.rename(columns={"freq": "frequency"})
             else:
-                df['frequency'] = df['frequency'].fillna(df['freq'])
-                df = df.drop(columns=['freq'])
+                df["frequency"] = df["frequency"].fillna(df["freq"])
+                df = df.drop(columns=["freq"])
 
         # Convert numeric columns, coercing bad values (empty strings, etc.)
         # to NaN
         for col in NUMERIC_COLUMNS:
             if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
+                df[col] = pd.to_numeric(df[col], errors="coerce")
 
-        df['datetime'] = pd.to_datetime(
-            df['datetime'], format='ISO8601', utc=True, errors='coerce'
-        )
-        num_bad_dt = df['datetime'].isna().sum()
+        df["datetime"] = pd.to_datetime(df["datetime"], format="ISO8601", utc=True, errors="coerce")
+        num_bad_dt = df["datetime"].isna().sum()
         if num_bad_dt > 0:
-            df = df.dropna(subset=['datetime'])
-            self.drop_reasons['unparseable datetime'] = int(num_bad_dt)
+            df = df.dropna(subset=["datetime"])
+            self.drop_reasons["unparseable datetime"] = int(num_bad_dt)
 
         # Drop sonde-reuse records: files where the time span between
         # records exceeds 24 hours indicate a sonde heard again days/months
         # later, making the landing position invalid.
-        grouped = df.groupby('archive_source')['datetime']
-        span = grouped.transform('max') - grouped.transform('min')
+        grouped = df.groupby("archive_source")["datetime"]
+        span = grouped.transform("max") - grouped.transform("min")
         reuse_mask = span > timedelta(hours=24)
         num_reuse = reuse_mask.sum()
         if num_reuse > 0:
             df = df[~reuse_mask]
-            self.drop_reasons['time span > 24h (likely sonde reuse)'] = num_reuse
+            self.drop_reasons["time span > 24h (likely sonde reuse)"] = num_reuse
 
         df.to_parquet(basename + ".parquet")
         total_dur = time.time() - start_time
 
         # Print summary
         total_dropped = sum(self.drop_reasons.values())
-        print(f"\nProcessed {self.num_files:,} files -> "
-              f"{self.num_recs:,} records in {total_dur:.1f}s "
-              f"({self.num_files / extract_dur:.0f} files/sec)")
+        print(
+            f"\nProcessed {self.num_files:,} files -> "
+            f"{self.num_recs:,} records in {total_dur:.1f}s "
+            f"({self.num_files / extract_dur:.0f} files/sec)"
+        )
         if total_dropped:
             print(f"Dropped {total_dropped:,} files:")
             for reason, count in self.drop_reasons.most_common():
@@ -158,8 +180,7 @@ class TarToParquetConverter:
 
 def main():
     if len(sys.argv) < 2:
-        print(f"Usage: {sys.argv[0]} <input.tgz> [input2.tgz ...]",
-              file=sys.stderr)
+        print(f"Usage: {sys.argv[0]} <input.tgz> [input2.tgz ...]", file=sys.stderr)
         sys.exit(1)
 
     for infilename in sys.argv[1:]:

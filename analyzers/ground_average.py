@@ -9,10 +9,10 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import sondehub
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import lib.map_utils as map_utils
 
-matplotlib.use('Agg')
+matplotlib.use("Agg")
 
 
 def get_listeners(sondeid):
@@ -32,8 +32,8 @@ def get_listeners(sondeid):
     stats = mu.compute_ground_reception_stats(ground_points)
     fig = mu.draw_ground_reception_map(ground_points, stats)
     output_filename = f"ground_points_{sondeid}.png"
-    fig.savefig(output_filename, bbox_inches='tight', dpi=150)
-    plt.close('all')
+    fig.savefig(output_filename, bbox_inches="tight", dpi=150)
+    plt.close("all")
     print(f"Map saved to {output_filename}")
     print(f"Average position: {stats.avg_lat:.6f}, {stats.avg_lon:.6f}")
     print(f"Position error: ±{stats.std_dev_combined:.1f}m")

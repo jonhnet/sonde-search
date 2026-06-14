@@ -9,15 +9,13 @@ sys.path.insert(0, "..")
 from data.cache import get_sonde_summaries_as_dataframe, years_covered
 from lib.data_utils import filter_real_flights, get_landing_rows
 
-EXTRA_STYLE = branca.element.Element(
-    """
+EXTRA_STYLE = branca.element.Element("""
 <style>
   .leaflet-heatmap-layer {
      opacity: 0.7;
   }
 </style>
-"""
-)
+""")
 
 
 def draw_map(df, name, **kwargs):
@@ -32,7 +30,7 @@ def draw_map(df, name, **kwargs):
 def main():
     # Read summaries
     df = get_sonde_summaries_as_dataframe(
-        columns=['serial', 'frame', 'lat', 'lon', 'alt', 'datetime']
+        columns=["serial", "frame", "lat", "lon", "alt", "datetime"]
     )
     years = years_covered(df)
     range_string = f"{years[0]}-{years[-1]}"

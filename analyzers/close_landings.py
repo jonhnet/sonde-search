@@ -29,8 +29,7 @@ def get_close_landings(lat_min, lat_max, lon_min, lon_max):
 
     # Geographic filter first, then expensive flight validation
     df = df.loc[
-        (df.lat >= lat_min) & (df.lat <= lat_max)
-        & (df.lon >= lon_min) & (df.lon < lon_max)
+        (df.lat >= lat_min) & (df.lat <= lat_max) & (df.lon >= lon_min) & (df.lon < lon_max)
     ]
     df = filter_real_flights(df)
     near = get_landing_rows(df)

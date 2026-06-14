@@ -24,7 +24,9 @@ def enrich_time_epoch(msg: dict, now_utc: datetime | None = None) -> None:
         now_utc = datetime.now(timezone.utc)
     try:
         t = datetime.strptime(time_str, "%H:%M:%S").replace(
-            year=now_utc.year, month=now_utc.month, day=now_utc.day,
+            year=now_utc.year,
+            month=now_utc.month,
+            day=now_utc.day,
             tzinfo=timezone.utc,
         )
     except ValueError:

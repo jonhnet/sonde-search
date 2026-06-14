@@ -15,7 +15,8 @@ import cherrypy
 import io
 import json
 import matplotlib
-matplotlib.use('Agg')
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -32,34 +33,37 @@ from dem_manager import DEMManager
 
 # Configuration
 PORT = 6565
-HOST = '0.0.0.0'
-OUTPUT_DIR = Path('/tmp/viewshed_outputs')
+HOST = "0.0.0.0"
+OUTPUT_DIR = Path("/tmp/viewshed_outputs")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 # Favorites storage (persistent across restarts)
 # Use /cache/srtm for Docker volume persistence, fallback to ~/.cache for local dev
-CACHE_BASE = os.environ.get('ELEVATION_CACHE_DIR', os.path.expanduser('~/.cache/elevation'))
-FAVORITES_FILE = os.path.join(CACHE_BASE, 'favorites.json')
+CACHE_BASE = os.environ.get("ELEVATION_CACHE_DIR", os.path.expanduser("~/.cache/elevation"))
+FAVORITES_FILE = os.path.join(CACHE_BASE, "favorites.json")
 favorites_lock = threading.Lock()
+
 
 def load_favorites():
     """Load favorites from persistent storage."""
     try:
         if os.path.exists(FAVORITES_FILE):
-            with open(FAVORITES_FILE, 'r') as f:
+            with open(FAVORITES_FILE, "r") as f:
                 return json.load(f)
     except Exception as e:
         print(f"Error loading favorites: {e}")
     return []
 
+
 def save_favorites(favorites):
     """Save favorites to persistent storage."""
     try:
         os.makedirs(os.path.dirname(FAVORITES_FILE), exist_ok=True)
-        with open(FAVORITES_FILE, 'w') as f:
+        with open(FAVORITES_FILE, "w") as f:
             json.dump(favorites, f, indent=2)
     except Exception as e:
         print(f"Error saving favorites: {e}")
+
 
 # Job storage (in-memory for now)
 jobs = {}
@@ -72,8 +76,8 @@ class ViewshedServer:
     @cherrypy.expose
     def optimize_ui(self):
         """Serve the optimization UI."""
-        html_path = Path(__file__).parent / 'optimize.html'
-        with open(html_path, 'r') as f:
+        html_path = Path(__file__).parent / "optimize.html"
+        with open(html_path, "r") as f:
             return f.read()
 
     @cherrypy.expose
@@ -1118,12 +1122,12 @@ class ViewshedServer:
 
         # Validate parameters
         try:
-            lat = float(params['lat'])
-            lon = float(params['lon'])
-            height = float(params['height'])
-            radius = float(params['radius'])
-            grid_points = int(params.get('grid_points', 25))
-            dem_product = params.get('dem_product', 'SRTM3')
+            lat = float(params["lat"])
+            lon = float(params["lon"])
+            height = float(params["height"])
+            radius = float(params["radius"])
+            grid_points = int(params.get("grid_points", 25))
+            dem_product = params.get("dem_product", "SRTM3")
 
             if not (-90 <= lat <= 90):
                 raise ValueError("Latitude out of range")
@@ -1145,41 +1149,45 @@ class ViewshedServer:
 
         with jobs_lock:
             jobs[job_id] = {
-                'status': 'queued',
-                'params': params,
-                'created': time.time(),
+                "status": "queued",
+                "params": params,
+                "created": time.time(),
             }
 
         # Start computation in background thread
         thread = threading.Thread(
             target=self._compute_viewshed_worker,
-            args=(job_id, lat, lon, height, radius, grid_points, dem_product)
+            args=(job_id, lat, lon, height, radius, grid_points, dem_product),
         )
         thread.daemon = True
         thread.start()
 
         return {"job_id": job_id}
 
-    def _compute_viewshed_worker(self, job_id, lat, lon, height, radius,
-                                  grid_points, dem_product):
+    def _compute_viewshed_worker(self, job_id, lat, lon, height, radius, grid_points, dem_product):
         """Background worker to compute viewshed."""
         try:
             with jobs_lock:
-                jobs[job_id]['status'] = 'running'
-                jobs[job_id]['progress'] = 'Initializing...'
+                jobs[job_id]["status"] = "running"
+                jobs[job_id]["progress"] = "Initializing..."
 
             # Define progress callback
             def update_progress(completed, total, message):
                 with jobs_lock:
-                    jobs[job_id]['progress_completed'] = completed
-                    jobs[job_id]['progress_total'] = total
-                    jobs[job_id]['progress_message'] = message
+                    jobs[job_id]["progress_completed"] = completed
+                    jobs[job_id]["progress_total"] = total
+                    jobs[job_id]["progress_message"] = message
 
             # Compute viewshed
             viewshed = compute_viewshed(
-                lat, lon, height, radius,
-                use_local_dem=True, dem_product=dem_product, grid_points=grid_points,
-                progress_callback=update_progress
+                lat,
+                lon,
+                height,
+                radius,
+                use_local_dem=True,
+                dem_product=dem_product,
+                grid_points=grid_points,
+                progress_callback=update_progress,
             )
 
             if viewshed is None:
@@ -1189,84 +1197,78 @@ class ViewshedServer:
             # Calculate grid spacing in meters for circle radius
             # Grid covers radius (in km) in each direction with grid_points samples
             # Use approximate: 1 degree latitude = 111 km
-            grid_spacing_km = (radius * 2) / (grid_points - 1)  # -1 because N points = N-1 intervals
+            grid_spacing_km = (radius * 2) / (
+                grid_points - 1
+            )  # -1 because N points = N-1 intervals
             grid_spacing_meters = grid_spacing_km * 1000  # convert km to meters
 
             geojson_data = {
-                'type': 'FeatureCollection',
-                'properties': {
-                    'grid_spacing_meters': grid_spacing_meters
-                },
-                'features': []
+                "type": "FeatureCollection",
+                "properties": {"grid_spacing_meters": grid_spacing_meters},
+                "features": [],
             }
 
             # Add visible points
-            for lat_point, lon_point in viewshed['visible_points']:
-                geojson_data['features'].append({
-                    'type': 'Feature',
-                    'geometry': {
-                        'type': 'Point',
-                        'coordinates': [lon_point, lat_point]
-                    },
-                    'properties': {
-                        'visible': True
+            for lat_point, lon_point in viewshed["visible_points"]:
+                geojson_data["features"].append(
+                    {
+                        "type": "Feature",
+                        "geometry": {"type": "Point", "coordinates": [lon_point, lat_point]},
+                        "properties": {"visible": True},
                     }
-                })
+                )
 
             # Add blocked points
-            for lat_point, lon_point in viewshed['blocked_points']:
-                geojson_data['features'].append({
-                    'type': 'Feature',
-                    'geometry': {
-                        'type': 'Point',
-                        'coordinates': [lon_point, lat_point]
-                    },
-                    'properties': {
-                        'visible': False
+            for lat_point, lon_point in viewshed["blocked_points"]:
+                geojson_data["features"].append(
+                    {
+                        "type": "Feature",
+                        "geometry": {"type": "Point", "coordinates": [lon_point, lat_point]},
+                        "properties": {"visible": False},
                     }
-                })
+                )
 
             # Add observer location
-            geojson_data['features'].append({
-                'type': 'Feature',
-                'geometry': {
-                    'type': 'Point',
-                    'coordinates': [lon, lat]
-                },
-                'properties': {
-                    'type': 'observer',
-                    'height_agl': viewshed['observer_height_agl'],
-                    'elevation_msl': viewshed['observer_elevation']
+            geojson_data["features"].append(
+                {
+                    "type": "Feature",
+                    "geometry": {"type": "Point", "coordinates": [lon, lat]},
+                    "properties": {
+                        "type": "observer",
+                        "height_agl": viewshed["observer_height_agl"],
+                        "elevation_msl": viewshed["observer_elevation"],
+                    },
                 }
-            })
+            )
 
             # Update job status
-            total = len(viewshed['visible_points']) + len(viewshed['blocked_points'])
-            visibility_pct = 100 * len(viewshed['visible_points']) / total if total > 0 else 0
+            total = len(viewshed["visible_points"]) + len(viewshed["blocked_points"])
+            visibility_pct = 100 * len(viewshed["visible_points"]) / total if total > 0 else 0
 
             with jobs_lock:
-                jobs[job_id]['status'] = 'completed'
-                jobs[job_id]['geojson'] = geojson_data
-                jobs[job_id]['observer_lat'] = lat
-                jobs[job_id]['observer_lon'] = lon
-                jobs[job_id]['observer_elevation'] = viewshed['observer_elevation']
-                jobs[job_id]['observer_height_agl'] = viewshed['observer_height_agl']
-                jobs[job_id]['visible_count'] = len(viewshed['visible_points'])
-                jobs[job_id]['blocked_count'] = len(viewshed['blocked_points'])
-                jobs[job_id]['visibility_pct'] = visibility_pct
-                jobs[job_id]['max_range_km'] = viewshed['max_range_km']
-                jobs[job_id]['completed'] = time.time()
+                jobs[job_id]["status"] = "completed"
+                jobs[job_id]["geojson"] = geojson_data
+                jobs[job_id]["observer_lat"] = lat
+                jobs[job_id]["observer_lon"] = lon
+                jobs[job_id]["observer_elevation"] = viewshed["observer_elevation"]
+                jobs[job_id]["observer_height_agl"] = viewshed["observer_height_agl"]
+                jobs[job_id]["visible_count"] = len(viewshed["visible_points"])
+                jobs[job_id]["blocked_count"] = len(viewshed["blocked_points"])
+                jobs[job_id]["visibility_pct"] = visibility_pct
+                jobs[job_id]["max_range_km"] = viewshed["max_range_km"]
+                jobs[job_id]["completed"] = time.time()
                 # Include DEM statistics if available
-                if 'dem_stats' in viewshed:
-                    jobs[job_id]['dem_stats'] = viewshed['dem_stats']
+                if "dem_stats" in viewshed:
+                    jobs[job_id]["dem_stats"] = viewshed["dem_stats"]
 
         except Exception as e:
             print(f"Error in viewshed computation: {e}")
             import traceback
+
             traceback.print_exc()
             with jobs_lock:
-                jobs[job_id]['status'] = 'failed'
-                jobs[job_id]['error'] = str(e)
+                jobs[job_id]["status"] = "failed"
+                jobs[job_id]["error"] = str(e)
 
     @cherrypy.expose
     @cherrypy.tools.json_out()
@@ -1291,11 +1293,11 @@ class ViewshedServer:
                 return {"error": "Job not found"}
 
             job = jobs[job_id]
-            if job['status'] != 'completed':
+            if job["status"] != "completed":
                 cherrypy.response.status = 400
                 return {"error": "Job not completed"}
 
-            return job.get('geojson', {})
+            return job.get("geojson", {})
 
     @cherrypy.expose
     @cherrypy.tools.json_in()
@@ -1306,14 +1308,14 @@ class ViewshedServer:
 
         # Validate parameters
         try:
-            lat = float(params['lat'])
-            lon = float(params['lon'])
-            height = float(params['height'])
-            radius = float(params['radius'])
-            grid_points = int(params.get('grid_points', 25))
-            dem_product = params.get('dem_product', 'SRTM3')
-            hill_climb_steps = int(params.get('hill_climb_steps', 4))
-            step_size = float(params.get('step_size', 0.005))
+            lat = float(params["lat"])
+            lon = float(params["lon"])
+            height = float(params["height"])
+            radius = float(params["radius"])
+            grid_points = int(params.get("grid_points", 25))
+            dem_product = params.get("dem_product", "SRTM3")
+            hill_climb_steps = int(params.get("hill_climb_steps", 4))
+            step_size = float(params.get("step_size", 0.005))
 
             if not (-90 <= lat <= 90):
                 raise ValueError("Latitude out of range")
@@ -1337,38 +1339,58 @@ class ViewshedServer:
 
         with jobs_lock:
             jobs[job_id] = {
-                'status': 'queued',
-                'params': params,
-                'created': time.time(),
+                "status": "queued",
+                "params": params,
+                "created": time.time(),
             }
 
         # Start computation in background thread
         thread = threading.Thread(
             target=self._hill_climb_worker,
-            args=(job_id, lat, lon, height, radius, grid_points, dem_product, hill_climb_steps, step_size)
+            args=(
+                job_id,
+                lat,
+                lon,
+                height,
+                radius,
+                grid_points,
+                dem_product,
+                hill_climb_steps,
+                step_size,
+            ),
         )
         thread.daemon = True
         thread.start()
 
         return {"job_id": job_id}
 
-    def _hill_climb_worker(self, job_id, start_lat, start_lon, height, radius,
-                          grid_points, dem_product, max_steps, initial_step_size):
+    def _hill_climb_worker(
+        self,
+        job_id,
+        start_lat,
+        start_lon,
+        height,
+        radius,
+        grid_points,
+        dem_product,
+        max_steps,
+        initial_step_size,
+    ):
         """Background worker to perform hill climb optimization."""
         try:
             with jobs_lock:
-                jobs[job_id]['status'] = 'running'
-                jobs[job_id]['progress'] = 'Starting hill climb...'
+                jobs[job_id]["status"] = "running"
+                jobs[job_id]["progress"] = "Starting hill climb..."
 
             # Define progress callback
             def update_progress(completed, total, message, lat=None, lon=None):
                 with jobs_lock:
-                    jobs[job_id]['progress_completed'] = completed
-                    jobs[job_id]['progress_total'] = total
-                    jobs[job_id]['progress_message'] = message
+                    jobs[job_id]["progress_completed"] = completed
+                    jobs[job_id]["progress_total"] = total
+                    jobs[job_id]["progress_message"] = message
                     if lat is not None and lon is not None:
-                        jobs[job_id]['current_lat'] = lat
-                        jobs[job_id]['current_lon'] = lon
+                        jobs[job_id]["current_lat"] = lat
+                        jobs[job_id]["current_lon"] = lon
 
             # Hill climb algorithm
             current_lat, current_lon = start_lat, start_lon
@@ -1377,19 +1399,28 @@ class ViewshedServer:
             # Compute initial viewshed
             update_progress(0, max_steps, f"Computing initial viewshed...")
             best_viewshed = compute_viewshed(
-                current_lat, current_lon, height, radius,
-                use_local_dem=True, dem_product=dem_product, grid_points=grid_points
+                current_lat,
+                current_lon,
+                height,
+                radius,
+                use_local_dem=True,
+                dem_product=dem_product,
+                grid_points=grid_points,
             )
 
             if best_viewshed is None:
                 raise Exception("Initial viewshed computation failed")
 
             # Calculate coverage from visible/blocked point lists
-            visible_count = len(best_viewshed['visible_points'])
-            total_count = len(best_viewshed['visible_points']) + len(best_viewshed['blocked_points'])
+            visible_count = len(best_viewshed["visible_points"])
+            total_count = len(best_viewshed["visible_points"]) + len(
+                best_viewshed["blocked_points"]
+            )
             best_coverage = visible_count / total_count if total_count > 0 else 0.0
 
-            print(f"Hill climb starting from ({current_lat:.4f}, {current_lon:.4f}): {best_coverage*100:.1f}% coverage")
+            print(
+                f"Hill climb starting from ({current_lat:.4f}, {current_lon:.4f}): {best_coverage*100:.1f}% coverage"
+            )
 
             # Try to improve in each step
             for step in range(max_steps):
@@ -1397,8 +1428,14 @@ class ViewshedServer:
 
                 # Try 8 directions (N, NE, E, SE, S, SW, W, NW)
                 directions = [
-                    (step_size, 0), (step_size, step_size), (0, step_size), (-step_size, step_size),
-                    (-step_size, 0), (-step_size, -step_size), (0, -step_size), (step_size, -step_size)
+                    (step_size, 0),
+                    (step_size, step_size),
+                    (0, step_size),
+                    (-step_size, step_size),
+                    (-step_size, 0),
+                    (-step_size, -step_size),
+                    (0, -step_size),
+                    (step_size, -step_size),
                 ]
 
                 for dlat, dlon in directions:
@@ -1407,16 +1444,23 @@ class ViewshedServer:
 
                     # Compute viewshed for test location
                     test_viewshed = compute_viewshed(
-                        test_lat, test_lon, height, radius,
-                        use_local_dem=True, dem_product=dem_product, grid_points=grid_points
+                        test_lat,
+                        test_lon,
+                        height,
+                        radius,
+                        use_local_dem=True,
+                        dem_product=dem_product,
+                        grid_points=grid_points,
                     )
 
                     if test_viewshed is None:
                         continue
 
                     # Calculate coverage from visible/blocked point lists
-                    visible_count = len(test_viewshed['visible_points'])
-                    total_count = len(test_viewshed['visible_points']) + len(test_viewshed['blocked_points'])
+                    visible_count = len(test_viewshed["visible_points"])
+                    total_count = len(test_viewshed["visible_points"]) + len(
+                        test_viewshed["blocked_points"]
+                    )
                     test_coverage = visible_count / total_count if total_count > 0 else 0.0
 
                     # If better, move here
@@ -1425,13 +1469,19 @@ class ViewshedServer:
                         best_coverage = test_coverage
                         best_viewshed = test_viewshed
                         improved = True
-                        print(f"  Step {step+1}: Improved to ({current_lat:.4f}, {current_lon:.4f}): {best_coverage*100:.1f}%")
+                        print(
+                            f"  Step {step+1}: Improved to ({current_lat:.4f}, {current_lon:.4f}): {best_coverage*100:.1f}%"
+                        )
                         break
 
                 # Update progress
-                update_progress(step + 1, max_steps,
-                              f"Step {step + 1}/{max_steps}: Hill climbing... {best_coverage*100:.1f}% coverage",
-                              current_lat, current_lon)
+                update_progress(
+                    step + 1,
+                    max_steps,
+                    f"Step {step + 1}/{max_steps}: Hill climbing... {best_coverage*100:.1f}% coverage",
+                    current_lat,
+                    current_lon,
+                )
 
                 # If no improvement, reduce step size
                 if not improved:
@@ -1443,101 +1493,96 @@ class ViewshedServer:
                         print(f"  Step size too small, stopping early")
                         break
 
-            print(f"Hill climb complete: ({current_lat:.4f}, {current_lon:.4f}): {best_coverage*100:.1f}% coverage")
+            print(
+                f"Hill climb complete: ({current_lat:.4f}, {current_lon:.4f}): {best_coverage*100:.1f}% coverage"
+            )
 
             # Convert to GeoJSON using the SAME logic as regular viewshed (single code path!)
             # Calculate grid spacing in meters
-            grid_spacing_km = (radius * 2) / (grid_points - 1)  # -1 because N points = N-1 intervals
+            grid_spacing_km = (radius * 2) / (
+                grid_points - 1
+            )  # -1 because N points = N-1 intervals
             grid_spacing_meters = grid_spacing_km * 1000
 
             geojson_data = {
-                'type': 'FeatureCollection',
-                'properties': {
-                    'grid_spacing_meters': grid_spacing_meters
-                },
-                'features': []
+                "type": "FeatureCollection",
+                "properties": {"grid_spacing_meters": grid_spacing_meters},
+                "features": [],
             }
 
             # Add visible points
-            for lat_point, lon_point in best_viewshed['visible_points']:
-                geojson_data['features'].append({
-                    'type': 'Feature',
-                    'geometry': {
-                        'type': 'Point',
-                        'coordinates': [lon_point, lat_point]
-                    },
-                    'properties': {
-                        'visible': True
+            for lat_point, lon_point in best_viewshed["visible_points"]:
+                geojson_data["features"].append(
+                    {
+                        "type": "Feature",
+                        "geometry": {"type": "Point", "coordinates": [lon_point, lat_point]},
+                        "properties": {"visible": True},
                     }
-                })
+                )
 
             # Add blocked points
-            for lat_point, lon_point in best_viewshed['blocked_points']:
-                geojson_data['features'].append({
-                    'type': 'Feature',
-                    'geometry': {
-                        'type': 'Point',
-                        'coordinates': [lon_point, lat_point]
-                    },
-                    'properties': {
-                        'visible': False
+            for lat_point, lon_point in best_viewshed["blocked_points"]:
+                geojson_data["features"].append(
+                    {
+                        "type": "Feature",
+                        "geometry": {"type": "Point", "coordinates": [lon_point, lat_point]},
+                        "properties": {"visible": False},
                     }
-                })
+                )
 
             # Add observer location (optimized position)
-            geojson_data['features'].append({
-                'type': 'Feature',
-                'geometry': {
-                    'type': 'Point',
-                    'coordinates': [current_lon, current_lat]
-                },
-                'properties': {
-                    'type': 'observer',
-                    'height_agl': best_viewshed['observer_height_agl'],
-                    'elevation_msl': best_viewshed['observer_elevation']
+            geojson_data["features"].append(
+                {
+                    "type": "Feature",
+                    "geometry": {"type": "Point", "coordinates": [current_lon, current_lat]},
+                    "properties": {
+                        "type": "observer",
+                        "height_agl": best_viewshed["observer_height_agl"],
+                        "elevation_msl": best_viewshed["observer_elevation"],
+                    },
                 }
-            })
+            )
 
             # Store results in the same format as regular viewshed
             with jobs_lock:
-                jobs[job_id].update({
-                    'status': 'completed',
-                    'progress': 'Complete',
-                    'completed': time.time(),
-                    'geojson': geojson_data,
-                    'observer_lat': current_lat,
-                    'observer_lon': current_lon,
-                    'observer_elevation': float(best_viewshed['observer_elevation']),
-                    'observer_height_agl': float(height),
-                    'visible_count': len(best_viewshed['visible_points']),
-                    'blocked_count': len(best_viewshed['blocked_points']),
-                    'visibility_pct': best_coverage * 100,
-                    'max_range_km': float(best_viewshed['max_range_km']),
-                    # Hill climb-specific data in result object
-                    'result': {
-                        'optimized_lat': current_lat,
-                        'optimized_lon': current_lon,
-                        'initial_lat': start_lat,
-                        'initial_lon': start_lon,
-                        'coverage_pct': best_coverage * 100,
-                        'visible_count': len(best_viewshed['visible_points']),
-                        'total_count': len(best_viewshed['visible_points']) + len(best_viewshed['blocked_points']),
-                        'max_range_km': float(best_viewshed['max_range_km']),
-                        'observer_elevation': float(best_viewshed['observer_elevation']),
-                        'observer_height_agl': float(height),
+                jobs[job_id].update(
+                    {
+                        "status": "completed",
+                        "progress": "Complete",
+                        "completed": time.time(),
+                        "geojson": geojson_data,
+                        "observer_lat": current_lat,
+                        "observer_lon": current_lon,
+                        "observer_elevation": float(best_viewshed["observer_elevation"]),
+                        "observer_height_agl": float(height),
+                        "visible_count": len(best_viewshed["visible_points"]),
+                        "blocked_count": len(best_viewshed["blocked_points"]),
+                        "visibility_pct": best_coverage * 100,
+                        "max_range_km": float(best_viewshed["max_range_km"]),
+                        # Hill climb-specific data in result object
+                        "result": {
+                            "optimized_lat": current_lat,
+                            "optimized_lon": current_lon,
+                            "initial_lat": start_lat,
+                            "initial_lon": start_lon,
+                            "coverage_pct": best_coverage * 100,
+                            "visible_count": len(best_viewshed["visible_points"]),
+                            "total_count": len(best_viewshed["visible_points"])
+                            + len(best_viewshed["blocked_points"]),
+                            "max_range_km": float(best_viewshed["max_range_km"]),
+                            "observer_elevation": float(best_viewshed["observer_elevation"]),
+                            "observer_height_agl": float(height),
+                        },
                     }
-                })
+                )
 
         except Exception as e:
             print(f"Error in hill climb: {e}")
             import traceback
+
             traceback.print_exc()
             with jobs_lock:
-                jobs[job_id].update({
-                    'status': 'failed',
-                    'error': str(e),
-                    'completed': time.time()
-                })
+                jobs[job_id].update({"status": "failed", "error": str(e), "completed": time.time()})
 
     @cherrypy.expose
     @cherrypy.tools.json_out()
@@ -1548,56 +1593,60 @@ class ViewshedServer:
             import re
 
             tiles = []
-            cache_root = os.path.expanduser(os.environ.get('ELEVATION_CACHE_DIR', '~/.cache/srtm'))
+            cache_root = os.path.expanduser(os.environ.get("ELEVATION_CACHE_DIR", "~/.cache/srtm"))
 
             # Check SRTM1 cached tiles (1-degree tiles with geographic naming)
-            srtm1_cache = os.path.join(cache_root, 'SRTM1', 'cache')
+            srtm1_cache = os.path.join(cache_root, "SRTM1", "cache")
             if os.path.exists(srtm1_cache):
                 # SRTM1 tiles are in subdirectories by latitude: N47/N47W122.tif
-                for filepath in glob.glob(os.path.join(srtm1_cache, '*', '*.tif')):
+                for filepath in glob.glob(os.path.join(srtm1_cache, "*", "*.tif")):
                     filename = os.path.basename(filepath)
                     # Parse SRTM1 filename: N47W122.tif (1-degree tile)
-                    match = re.match(r'([NS])(\d+)([EW])(\d+)\.tif$', filename)
+                    match = re.match(r"([NS])(\d+)([EW])(\d+)\.tif$", filename)
                     if match:
                         lat_dir, lat_val, lon_dir, lon_val = match.groups()
-                        lat = int(lat_val) * (1 if lat_dir == 'N' else -1)
-                        lon = int(lon_val) * (-1 if lon_dir == 'W' else 1)
+                        lat = int(lat_val) * (1 if lat_dir == "N" else -1)
+                        lon = int(lon_val) * (-1 if lon_dir == "W" else 1)
                         # Each tile is 1 degree square
-                        tiles.append({
-                            'product': 'SRTM1',
-                            'bounds': {
-                                'min_lon': lon,
-                                'min_lat': lat,
-                                'max_lon': lon + 1,
-                                'max_lat': lat + 1
+                        tiles.append(
+                            {
+                                "product": "SRTM1",
+                                "bounds": {
+                                    "min_lon": lon,
+                                    "min_lat": lat,
+                                    "max_lon": lon + 1,
+                                    "max_lat": lat + 1,
+                                },
                             }
-                        })
+                        )
 
             # Check SRTM3 cached tiles (5x5 degree tiles with grid naming)
-            srtm3_cache = os.path.join(cache_root, 'SRTM3', 'cache')
+            srtm3_cache = os.path.join(cache_root, "SRTM3", "cache")
             if os.path.exists(srtm3_cache):
                 # SRTM3 tiles use grid coordinates: srtm_12_03.tif
-                for filepath in glob.glob(os.path.join(srtm3_cache, 'srtm_*.tif')):
+                for filepath in glob.glob(os.path.join(srtm3_cache, "srtm_*.tif")):
                     filename = os.path.basename(filepath)
                     # Parse SRTM3 filename: srtm_12_03.tif (grid coordinates)
-                    match = re.match(r'srtm_(\d+)_(\d+)\.tif$', filename)
+                    match = re.match(r"srtm_(\d+)_(\d+)\.tif$", filename)
                     if match:
                         x, y = map(int, match.groups())
                         # SRTM3 grid: each tile is 5x5 degrees
                         # Grid origin: x=1 starts at -180°, y=1 starts at 60°
                         lon = -180 + ((x - 1) * 5)
                         lat = 60 - ((y - 1) * 5)
-                        tiles.append({
-                            'product': 'SRTM3',
-                            'bounds': {
-                                'min_lon': lon,
-                                'min_lat': lat - 5,
-                                'max_lon': lon + 5,
-                                'max_lat': lat
+                        tiles.append(
+                            {
+                                "product": "SRTM3",
+                                "bounds": {
+                                    "min_lon": lon,
+                                    "min_lat": lat - 5,
+                                    "max_lon": lon + 5,
+                                    "max_lat": lat,
+                                },
                             }
-                        })
+                        )
 
-            return {'tiles': tiles, 'count': len(tiles)}
+            return {"tiles": tiles, "count": len(tiles)}
 
         except Exception as e:
             cherrypy.response.status = 500
@@ -1608,7 +1657,7 @@ class ViewshedServer:
     def favorites(self):
         """Get all favorite locations."""
         with favorites_lock:
-            return {'favorites': load_favorites()}
+            return {"favorites": load_favorites()}
 
     @cherrypy.expose
     @cherrypy.tools.json_in()
@@ -1619,9 +1668,9 @@ class ViewshedServer:
             params = cherrypy.request.json
 
             # Validate parameters
-            lat = float(params['lat'])
-            lon = float(params['lon'])
-            name = params.get('name', f"{lat:.4f}, {lon:.4f}")
+            lat = float(params["lat"])
+            lon = float(params["lon"])
+            name = params.get("name", f"{lat:.4f}, {lon:.4f}")
 
             if not (-90 <= lat <= 90):
                 cherrypy.response.status = 400
@@ -1635,11 +1684,11 @@ class ViewshedServer:
                 favorites = load_favorites()
                 favorite_id = str(uuid.uuid4())
                 favorite = {
-                    'id': favorite_id,
-                    'lat': lat,
-                    'lon': lon,
-                    'name': name,
-                    'created': time.time()
+                    "id": favorite_id,
+                    "lat": lat,
+                    "lon": lon,
+                    "name": name,
+                    "created": time.time(),
                 }
                 favorites.append(favorite)
                 save_favorites(favorites)
@@ -1657,7 +1706,7 @@ class ViewshedServer:
         try:
             with favorites_lock:
                 favorites = load_favorites()
-                favorites = [f for f in favorites if f['id'] != favorite_id]
+                favorites = [f for f in favorites if f["id"] != favorite_id]
                 save_favorites(favorites)
 
             return {"success": True}
@@ -1689,16 +1738,16 @@ class ViewshedServer:
             params = cherrypy.request.json
 
             # Validate required parameters
-            required = ['target_bounds', 'search_bounds', 'height']
+            required = ["target_bounds", "search_bounds", "height"]
             for field in required:
                 if field not in params:
                     cherrypy.response.status = 400
                     return {"error": f"Missing required field: {field}"}
 
             # Validate bounds structure
-            for bounds_name in ['target_bounds', 'search_bounds']:
+            for bounds_name in ["target_bounds", "search_bounds"]:
                 bounds = params[bounds_name]
-                required_keys = ['min_lat', 'max_lat', 'min_lon', 'max_lon']
+                required_keys = ["min_lat", "max_lat", "min_lon", "max_lon"]
                 for key in required_keys:
                     if key not in bounds:
                         cherrypy.response.status = 400
@@ -1708,10 +1757,10 @@ class ViewshedServer:
             job_id = str(uuid.uuid4())
             with jobs_lock:
                 jobs[job_id] = {
-                    'id': job_id,
-                    'status': 'running',
-                    'type': 'optimization',
-                    'params': params
+                    "id": job_id,
+                    "status": "running",
+                    "type": "optimization",
+                    "params": params,
                 }
 
             # Start background thread
@@ -1729,24 +1778,24 @@ class ViewshedServer:
         """Background worker for coverage optimization."""
         try:
             with jobs_lock:
-                params = jobs[job_id]['params']
+                params = jobs[job_id]["params"]
 
             # Extract parameters
-            target_bounds = params['target_bounds']
-            search_bounds = params['search_bounds']
-            height = float(params['height'])
-            target_grid_size = int(params.get('target_grid_size', 20))
-            search_grid_size = int(params.get('search_grid_size', 10))
-            top_k = int(params.get('top_k', 5))
-            hill_climb_steps = int(params.get('hill_climb_steps', 10))
-            dem_product = params.get('dem_product', 'SRTM3')
+            target_bounds = params["target_bounds"]
+            search_bounds = params["search_bounds"]
+            height = float(params["height"])
+            target_grid_size = int(params.get("target_grid_size", 20))
+            search_grid_size = int(params.get("search_grid_size", 10))
+            top_k = int(params.get("top_k", 5))
+            hill_climb_steps = int(params.get("hill_climb_steps", 10))
+            dem_product = params.get("dem_product", "SRTM3")
 
             # Progress callback to update job status
             def update_progress(completed, total, message):
                 with jobs_lock:
-                    jobs[job_id]['progress_completed'] = completed
-                    jobs[job_id]['progress_total'] = total
-                    jobs[job_id]['progress_message'] = message
+                    jobs[job_id]["progress_completed"] = completed
+                    jobs[job_id]["progress_total"] = total
+                    jobs[job_id]["progress_message"] = message
 
             # Run optimization
             result = optimize_coverage(
@@ -1758,21 +1807,21 @@ class ViewshedServer:
                 top_k=top_k,
                 hill_climb_steps=hill_climb_steps,
                 dem_product=dem_product,
-                progress_callback=update_progress
+                progress_callback=update_progress,
             )
 
             # Store results
             with jobs_lock:
-                jobs[job_id]['status'] = 'completed'
-                jobs[job_id]['best_location'] = result['best_location']
-                jobs[job_id]['best_coverage_pct'] = result['best_coverage_pct']
-                jobs[job_id]['all_candidates'] = result['all_candidates']
-                jobs[job_id]['target_points'] = result['target_points']
+                jobs[job_id]["status"] = "completed"
+                jobs[job_id]["best_location"] = result["best_location"]
+                jobs[job_id]["best_coverage_pct"] = result["best_coverage_pct"]
+                jobs[job_id]["all_candidates"] = result["all_candidates"]
+                jobs[job_id]["target_points"] = result["target_points"]
 
         except Exception as e:
             with jobs_lock:
-                jobs[job_id]['status'] = 'failed'
-                jobs[job_id]['error'] = str(e)
+                jobs[job_id]["status"] = "failed"
+                jobs[job_id]["error"] = str(e)
 
 
 def main():
@@ -1784,24 +1833,21 @@ def main():
     print("Press Ctrl+C to stop")
     print("=" * 70)
 
-    cherrypy.config.update({
-        'server.socket_host': HOST,
-        'server.socket_port': PORT,
-        'log.screen': True,
-        'engine.autoreload.on': False,
-    })
+    cherrypy.config.update(
+        {
+            "server.socket_host": HOST,
+            "server.socket_port": PORT,
+            "log.screen": True,
+            "engine.autoreload.on": False,
+        }
+    )
 
     # Configure static file serving
-    static_dir = os.path.join(os.path.dirname(__file__), 'static')
-    config = {
-        '/static': {
-            'tools.staticdir.on': True,
-            'tools.staticdir.dir': static_dir
-        }
-    }
+    static_dir = os.path.join(os.path.dirname(__file__), "static")
+    config = {"/static": {"tools.staticdir.on": True, "tools.staticdir.dir": static_dir}}
 
-    cherrypy.quickstart(ViewshedServer(), '/', config)
+    cherrypy.quickstart(ViewshedServer(), "/", config)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

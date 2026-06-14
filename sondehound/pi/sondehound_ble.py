@@ -65,8 +65,9 @@ class BleGattServer:
 
         # Power on the adapter and make it discoverable
         adapter = self.bus.get_proxy_object(
-            BLUEZ_SERVICE, self.adapter_path,
-            await self.bus.introspect(BLUEZ_SERVICE, self.adapter_path)
+            BLUEZ_SERVICE,
+            self.adapter_path,
+            await self.bus.introspect(BLUEZ_SERVICE, self.adapter_path),
         )
         adapter_props = adapter.get_interface("org.freedesktop.DBus.Properties")
         await adapter_props.call_set(ADAPTER_IFACE, "Powered", Variant("b", True))
@@ -86,8 +87,9 @@ class BleGattServer:
 
         # Register with BlueZ GATT manager
         gatt_mgr = self.bus.get_proxy_object(
-            BLUEZ_SERVICE, self.adapter_path,
-            await self.bus.introspect(BLUEZ_SERVICE, self.adapter_path)
+            BLUEZ_SERVICE,
+            self.adapter_path,
+            await self.bus.introspect(BLUEZ_SERVICE, self.adapter_path),
         )
         manager = gatt_mgr.get_interface(GATT_MANAGER_IFACE)
         await manager.call_register_application("/com/sondehound", {})
@@ -100,8 +102,9 @@ class BleGattServer:
         self.bus.export("/com/sondehound/adv0", adv)
 
         adv_mgr = self.bus.get_proxy_object(
-            BLUEZ_SERVICE, self.adapter_path,
-            await self.bus.introspect(BLUEZ_SERVICE, self.adapter_path)
+            BLUEZ_SERVICE,
+            self.adapter_path,
+            await self.bus.introspect(BLUEZ_SERVICE, self.adapter_path),
         )
         manager = adv_mgr.get_interface(LE_ADVERTISING_MANAGER_IFACE)
         await manager.call_register_advertisement("/com/sondehound/adv0", {})
@@ -119,7 +122,9 @@ class BleGattServer:
             # Fragment into ~180 byte chunks (conservative for default MTU)
             data = json_bytes + b"\n"
             chunk_size = 180
-            log.debug(f"Sending {len(data)} bytes in {(len(data) + chunk_size - 1) // chunk_size} chunk(s) via BLE notify")
+            log.debug(
+                f"Sending {len(data)} bytes in {(len(data) + chunk_size - 1) // chunk_size} chunk(s) via BLE notify"
+            )
             for i in range(0, len(data), chunk_size):
                 chunk = data[i : i + chunk_size]
                 try:
@@ -340,8 +345,7 @@ class AutoRxProtocol(asyncio.DatagramProtocol):
                 try:
                     now_utc = datetime.now(timezone.utc)
                     t = datetime.strptime(time_str, "%H:%M:%S").replace(
-                        year=now_utc.year, month=now_utc.month, day=now_utc.day,
-                        tzinfo=timezone.utc
+                        year=now_utc.year, month=now_utc.month, day=now_utc.day, tzinfo=timezone.utc
                     )
                     # Handle midnight rollover: if parsed time is more than
                     # 12 hours ahead of now, assume it was yesterday

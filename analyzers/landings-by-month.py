@@ -5,7 +5,7 @@ import os
 import subprocess
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from lib.map_utils import setup_contextily_cache
 from lib.landing_calendar import generate_calendar
 
@@ -43,9 +43,9 @@ def draw_calendar(title, config):
     right_lon = config["topright"][1]
 
     # Generate PNG
-    png_bytes = generate_calendar(bottom_lat, left_lon, top_lat, right_lon, format='png')
+    png_bytes = generate_calendar(bottom_lat, left_lon, top_lat, right_lon, format="png")
     png_filename = f"{title}-landings-by-month.png"
-    with open(png_filename, 'wb') as f:
+    with open(png_filename, "wb") as f:
         f.write(png_bytes)
     print(f"Generated {png_filename}")
 
@@ -56,11 +56,20 @@ def draw_calendar(title, config):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Generate landing calendars for predefined regions or custom bounds')
-    parser.add_argument('--region', choices=list(MAPS.keys()), help='Predefined region name')
-    parser.add_argument('--bounds', nargs=4, type=float, metavar=('BOTTOM_LAT', 'LEFT_LON', 'TOP_LAT', 'RIGHT_LON'),
-                        help='Custom bounds: bottom_lat left_lon top_lat right_lon')
-    parser.add_argument('--output', default='calendar', help='Output filename base (default: calendar)')
+    parser = argparse.ArgumentParser(
+        description="Generate landing calendars for predefined regions or custom bounds"
+    )
+    parser.add_argument("--region", choices=list(MAPS.keys()), help="Predefined region name")
+    parser.add_argument(
+        "--bounds",
+        nargs=4,
+        type=float,
+        metavar=("BOTTOM_LAT", "LEFT_LON", "TOP_LAT", "RIGHT_LON"),
+        help="Custom bounds: bottom_lat left_lon top_lat right_lon",
+    )
+    parser.add_argument(
+        "--output", default="calendar", help="Output filename base (default: calendar)"
+    )
 
     args = parser.parse_args()
 

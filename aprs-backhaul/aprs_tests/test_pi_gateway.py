@@ -18,8 +18,16 @@ WINDOW = 0.05
 WAIT = WINDOW * 2.0
 
 
-def make_msg(serial="S4310587", lat=40.05, lon=-105.25, alt=25310.0,
-             frame=2345, snr=12.3, freq="403.000 MHz", model="RS41"):
+def make_msg(
+    serial="S4310587",
+    lat=40.05,
+    lon=-105.25,
+    alt=25310.0,
+    frame=2345,
+    snr=12.3,
+    freq="403.000 MHz",
+    model="RS41",
+):
     return {
         "callsign": serial,
         "latitude": lat,
@@ -32,10 +40,13 @@ def make_msg(serial="S4310587", lat=40.05, lon=-105.25, alt=25310.0,
     }
 
 
-def make_cfg(min_interval=WINDOW, idle_windows_before_eof=1,
-             final_redundancy=2, final_spacing_sec=0.0):
+def make_cfg(
+    min_interval=WINDOW, idle_windows_before_eof=1, final_redundancy=2, final_spacing_sec=0.0
+):
     return Config(
-        callsign="KK7YBO", tocall="APZSDH", path=[],
+        callsign="KK7YBO",
+        tocall="APZSDH",
+        path=[],
         min_interval_sec=min_interval,
         idle_windows_before_eof=idle_windows_before_eof,
         final_redundancy=final_redundancy,
@@ -58,7 +69,7 @@ async def test_coalescer_subsequent_buffered_not_transmitted_on_arrival():
     await c.new_observation({"serial": "S1", "frame": 1})
     await c.new_observation({"serial": "S1", "frame": 2})
     await c.new_observation({"serial": "S1", "frame": 3})
-    assert tx.await_count == 1   # only the first-ever
+    assert tx.await_count == 1  # only the first-ever
     await c.stop()
 
 
@@ -87,8 +98,9 @@ async def test_coalescer_exits_after_idle_windows():
     killed-object, since last_data is the first obs already TXed) and the
     task exits."""
     tx = AsyncMock()
-    c = LatestCoalescer(WINDOW, transmit=tx, idle_window_threshold=1,
-                        final_redundancy=0, final_spacing_sec=0.0)
+    c = LatestCoalescer(
+        WINDOW, transmit=tx, idle_window_threshold=1, final_redundancy=0, final_spacing_sec=0.0
+    )
     await c.new_observation({"serial": "S1", "frame": 1})
     await asyncio.sleep(WINDOW * 3)
     # First TX (live), then EOF killed-object.
@@ -100,9 +112,10 @@ async def test_coalescer_exits_after_idle_windows():
 async def test_coalescer_end_of_flight_flushes_then_exits():
     """Last heard observation still goes out on the next timer tick."""
     tx = AsyncMock()
-    c = LatestCoalescer(WINDOW, transmit=tx, idle_window_threshold=1,
-                        final_redundancy=0, final_spacing_sec=0.0)
-    await c.new_observation({"serial": "S1", "frame": 1})   # TX immediately
+    c = LatestCoalescer(
+        WINDOW, transmit=tx, idle_window_threshold=1, final_redundancy=0, final_spacing_sec=0.0
+    )
+    await c.new_observation({"serial": "S1", "frame": 1})  # TX immediately
     await c.new_observation({"serial": "S1", "frame": 99})  # buffered
     # Sonde goes silent here.
     await asyncio.sleep(WINDOW * 4)
@@ -117,10 +130,11 @@ async def test_coalescer_end_of_flight_flushes_then_exits():
 async def test_coalescer_resumes_after_silence():
     """A new observation after the task has exited starts a fresh cycle."""
     tx = AsyncMock()
-    c = LatestCoalescer(WINDOW, transmit=tx, idle_window_threshold=1,
-                        final_redundancy=0, final_spacing_sec=0.0)
+    c = LatestCoalescer(
+        WINDOW, transmit=tx, idle_window_threshold=1, final_redundancy=0, final_spacing_sec=0.0
+    )
     await c.new_observation({"serial": "S1", "frame": 1})
-    await asyncio.sleep(WINDOW * 3)     # EOF (killed) + task exits
+    await asyncio.sleep(WINDOW * 3)  # EOF (killed) + task exits
     assert "S1" not in c._tasks
     await c.new_observation({"serial": "S1", "frame": 100})
     # Fresh cycle: TX live for frame 100.
@@ -133,22 +147,24 @@ async def test_coalescer_idle_threshold_counts_consecutive_silent_windows():
     """With idle_threshold=3, one quiet window then an observation resets the
     counter, so no EOF fires (no killed-object TX)."""
     tx = AsyncMock()
-    c = LatestCoalescer(WINDOW, transmit=tx, idle_window_threshold=3,
-                        final_redundancy=0, final_spacing_sec=0.0)
+    c = LatestCoalescer(
+        WINDOW, transmit=tx, idle_window_threshold=3, final_redundancy=0, final_spacing_sec=0.0
+    )
     await c.new_observation({"serial": "S1", "frame": 1})
-    await asyncio.sleep(WAIT)                # 1 silent window
-    await c.new_observation({"serial": "S1", "frame": 2})   # reset counter
-    await asyncio.sleep(WAIT)                # pending flushed
-    await c.new_observation({"serial": "S1", "frame": 3})   # reset counter
-    assert False not in _live_flags(tx)   # no killed-object was emitted
+    await asyncio.sleep(WAIT)  # 1 silent window
+    await c.new_observation({"serial": "S1", "frame": 2})  # reset counter
+    await asyncio.sleep(WAIT)  # pending flushed
+    await c.new_observation({"serial": "S1", "frame": 3})  # reset counter
+    assert False not in _live_flags(tx)  # no killed-object was emitted
     await c.stop()
 
 
 async def test_coalescer_eof_redundant_finals_plus_killed():
     """With final_redundancy=2, EOF sends 2 live finals + 1 killed."""
     tx = AsyncMock()
-    c = LatestCoalescer(WINDOW, transmit=tx, idle_window_threshold=1,
-                        final_redundancy=2, final_spacing_sec=0.0)
+    c = LatestCoalescer(
+        WINDOW, transmit=tx, idle_window_threshold=1, final_redundancy=2, final_spacing_sec=0.0
+    )
     await c.new_observation({"serial": "S1", "frame": 1})
     await c.new_observation({"serial": "S1", "frame": 99})
     await asyncio.sleep(WAIT * 2)
@@ -252,8 +268,7 @@ async def test_gateway_latest_flushed_after_window():
 
 async def test_gateway_end_of_flight_emits_redundant_finals_plus_killed():
     """After idle threshold, gateway emits N live finals + 1 killed-object."""
-    cfg = make_cfg(final_redundancy=2, final_spacing_sec=0.0,
-                   idle_windows_before_eof=1)
+    cfg = make_cfg(final_redundancy=2, final_spacing_sec=0.0, idle_windows_before_eof=1)
     kiss = AsyncMock()
     kiss.send = AsyncMock(return_value=True)
     gw = AprsPiGateway(cfg, kiss, now_fn=lambda: 1_700_000_000.0)
@@ -294,8 +309,9 @@ async def test_coalescer_eof_no_op_when_no_last_data():
     saw a first observation — shouldn't happen in normal flow), the
     coalescer emits nothing."""
     tx = AsyncMock()
-    c = LatestCoalescer(WINDOW, transmit=tx, idle_window_threshold=1,
-                        final_redundancy=0, final_spacing_sec=0.0)
+    c = LatestCoalescer(
+        WINDOW, transmit=tx, idle_window_threshold=1, final_redundancy=0, final_spacing_sec=0.0
+    )
     # Directly invoke _run_eof with no recorded last_data.
     interrupted = await c._run_eof("never-seen")
     assert interrupted is False
@@ -308,8 +324,13 @@ async def test_coalescer_resumes_normal_loop_when_obs_arrives_during_eof():
     tx = AsyncMock()
     # final_spacing=WINDOW gives us a real gap during EOF where we can
     # inject a new observation.
-    c = LatestCoalescer(WINDOW, transmit=tx, idle_window_threshold=1,
-                        final_redundancy=2, final_spacing_sec=WINDOW * 2)
+    c = LatestCoalescer(
+        WINDOW,
+        transmit=tx,
+        idle_window_threshold=1,
+        final_redundancy=2,
+        final_spacing_sec=WINDOW * 2,
+    )
     await c.new_observation({"serial": "S1", "frame": 1})
     # Wait for idle window (EOF starts) + one final TX + into the sleep.
     await asyncio.sleep(WINDOW * 2)
@@ -346,9 +367,7 @@ async def test_gateway_filters_autorx_sensor_sentinels():
         msg["sats"] = -1
         msg["heading"] = -1
         await gw.on_payload_summary(msg)
-        info = ae.parse_ui_frame(ae.kiss_unframe(
-            kiss.send.await_args[0][0]
-        )[0])[3]
+        info = ae.parse_ui_frame(ae.kiss_unframe(kiss.send.await_args[0][0])[0])[3]
         # Strip the always-emitted /A= and !Wxx! extensions, then look at
         # the comment-internal tokens.
         pkt = parse_info(info)
@@ -398,6 +417,7 @@ async def test_gateway_two_serials_both_fire_immediately():
 
 def test_load_config_requires_callsign(tmp_path):
     from pi.aprs_pi_gateway import load_config
+
     p = tmp_path / "c.yaml"
     p.write_text("tocall: APZSDH\n")
     with pytest.raises(ValueError, match="callsign"):
@@ -406,6 +426,7 @@ def test_load_config_requires_callsign(tmp_path):
 
 def test_load_config_happy_path(tmp_path):
     from pi.aprs_pi_gateway import load_config
+
     p = tmp_path / "c.yaml"
     p.write_text("callsign: kk7ybo\npath: [WIDE2-1]\n")
     cfg = load_config(str(p))

@@ -35,10 +35,10 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(__file__))
 from dem_manager import DEMManager
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 from lib.map_utils import setup_contextily_cache
 
-matplotlib.use('Agg')
+matplotlib.use("Agg")
 
 setup_contextily_cache()
 
@@ -48,8 +48,8 @@ METERS_PER_KM = 1000
 METERS_PER_MILE = 1609.34
 
 # Coordinate transformations
-wgs84_to_mercator = Transformer.from_crs(crs_from='EPSG:4326', crs_to='EPSG:3857')
-mercator_to_wgs84 = Transformer.from_crs(crs_from='EPSG:3857', crs_to='EPSG:4326')
+wgs84_to_mercator = Transformer.from_crs(crs_from="EPSG:4326", crs_to="EPSG:3857")
+mercator_to_wgs84 = Transformer.from_crs(crs_from="EPSG:3857", crs_to="EPSG:4326")
 
 
 def to_mercator_xy(lat, lon):
@@ -116,13 +116,23 @@ def compute_point_at_bearing_distance(lat, lon, bearing_deg, distance_m):
         Tuple of (lat, lon) in decimal degrees
     """
     result = Geodesic.WGS84.Direct(lat, lon, bearing_deg, distance_m)
-    return result['lat2'], result['lon2']
+    return result["lat2"], result["lon2"]
 
 
-def is_visible(observer_lat, observer_lon, observer_elevation_agl,
-               target_lat, target_lon, target_elevation_msl,
-               observer_elevation_msl, num_samples=20,
-               dem_manager=None, dem_file=None, dem_file_fallback=None, debug=False):
+def is_visible(
+    observer_lat,
+    observer_lon,
+    observer_elevation_agl,
+    target_lat,
+    target_lon,
+    target_elevation_msl,
+    observer_elevation_msl,
+    num_samples=20,
+    dem_manager=None,
+    dem_file=None,
+    dem_file_fallback=None,
+    debug=False,
+):
     """
     Determine if a target location is visible from an observer location.
 
@@ -148,7 +158,7 @@ def is_visible(observer_lat, observer_lon, observer_elevation_agl,
 
     # Get distance between observer and target
     geo = Geodesic.WGS84.Inverse(observer_lat, observer_lon, target_lat, target_lon)
-    total_distance_m = geo['s12']
+    total_distance_m = geo["s12"]
 
     # If target is extremely close, assume visible
     if total_distance_m < 10:
@@ -171,14 +181,19 @@ def is_visible(observer_lat, observer_lon, observer_elevation_agl,
         sample_distance_m = (i / num_samples) * total_distance_m
 
         # Compute lat/lon of sample point along the great circle
-        bearing = geo['azi1']
+        bearing = geo["azi1"]
         sample_lat, sample_lon = compute_point_at_bearing_distance(
-            observer_lat, observer_lon, bearing, sample_distance_m)
+            observer_lat, observer_lon, bearing, sample_distance_m
+        )
 
         # Get elevation at sample point
-        sample_elevation = get_elevation(sample_lat, sample_lon,
-                                        dem_manager=dem_manager, dem_file=dem_file,
-                                        dem_file_fallback=dem_file_fallback)
+        sample_elevation = get_elevation(
+            sample_lat,
+            sample_lon,
+            dem_manager=dem_manager,
+            dem_file=dem_file,
+            dem_file_fallback=dem_file_fallback,
+        )
         if sample_elevation is None:
             # No elevation data (likely water or out of bounds)
             # Treat as sea level (0m) for visibility purposes
@@ -193,7 +208,7 @@ def is_visible(observer_lat, observer_lon, observer_elevation_agl,
 
         # Account for Earth curvature - terrain drops away as we go further
         # Curvature correction: h = d^2 / (2*R) where d is distance, R is Earth radius
-        curvature_drop = (sample_distance_m ** 2) / (2 * EARTH_RADIUS_M)
+        curvature_drop = (sample_distance_m**2) / (2 * EARTH_RADIUS_M)
         los_elevation_corrected = los_elevation + curvature_drop
 
         # Check if terrain obstructs the line of sight
@@ -211,10 +226,18 @@ def is_visible(observer_lat, observer_lon, observer_elevation_agl,
     return True
 
 
-def compute_viewshed(observer_lat, observer_lon, observer_height_agl,
-                     radius_km, resolution_km=1.0, num_radials=36,
-                     use_local_dem=True, dem_product='SRTM3', grid_points=25,
-                     progress_callback=None):
+def compute_viewshed(
+    observer_lat,
+    observer_lon,
+    observer_height_agl,
+    radius_km,
+    resolution_km=1.0,
+    num_radials=36,
+    use_local_dem=True,
+    dem_product="SRTM3",
+    grid_points=25,
+    progress_callback=None,
+):
     """
     Compute viewshed from an observer location.
 
@@ -249,7 +272,7 @@ def compute_viewshed(observer_lat, observer_lon, observer_height_agl,
     if use_local_dem:
         print(f"  Using local DEM tiles ({dem_product})")
         # Use environment variable for cache dir if set, otherwise use default
-        cache_dir = os.environ.get('ELEVATION_CACHE_DIR', '~/.cache/srtm')
+        cache_dir = os.environ.get("ELEVATION_CACHE_DIR", "~/.cache/srtm")
         dem_manager = DEMManager(cache_dir=cache_dir)
 
         # Calculate bounding box for the analysis area
@@ -268,8 +291,13 @@ def compute_viewshed(observer_lat, observer_lon, observer_height_agl,
 
         # Download DEM tiles for the area
         dem_file = dem_manager.download_tiles_for_bounds(
-            min_lat, min_lon, max_lat, max_lon, product=dem_product,
-            progress_callback=progress_callback)
+            min_lat,
+            min_lon,
+            max_lat,
+            max_lon,
+            product=dem_product,
+            progress_callback=progress_callback,
+        )
 
         # Handle SRTM_BEST mode (returns tuple of two DEM files)
         dem_file_fallback = None
@@ -281,9 +309,13 @@ def compute_viewshed(observer_lat, observer_lon, observer_height_agl,
 
     # Get observer elevation
     print("  Fetching observer elevation...")
-    observer_elevation_msl = get_elevation(observer_lat, observer_lon,
-                                          dem_manager=dem_manager, dem_file=dem_file,
-                                          dem_file_fallback=dem_file_fallback)
+    observer_elevation_msl = get_elevation(
+        observer_lat,
+        observer_lon,
+        dem_manager=dem_manager,
+        dem_file=dem_file,
+        dem_file_fallback=dem_file_fallback,
+    )
     if observer_elevation_msl is None:
         print("  ERROR: Could not determine observer elevation")
         if dem_manager:
@@ -322,15 +354,18 @@ def compute_viewshed(observer_lat, observer_lon, observer_height_agl,
 
             # Show progress
             if point_count % 100 == 0:
-                print(f"    Progress: {point_count}/{total_points} points", end='\r')
+                print(f"    Progress: {point_count}/{total_points} points", end="\r")
                 if progress_callback:
-                    progress_callback(point_count, total_points, f"Testing point {point_count}/{total_points}")
+                    progress_callback(
+                        point_count, total_points, f"Testing point {point_count}/{total_points}"
+                    )
 
             # Calculate distance from observer to determine if within radius
             from geographiclib.geodesic import Geodesic
+
             geod = Geodesic.WGS84
             result = geod.Inverse(observer_lat, observer_lon, target_lat, target_lon)
-            distance_m = result['s12']
+            distance_m = result["s12"]
             distance_km = distance_m / METERS_PER_KM
 
             # Skip points outside the circular radius
@@ -338,17 +373,31 @@ def compute_viewshed(observer_lat, observer_lon, observer_height_agl,
                 continue
 
             # Get target elevation
-            target_elevation = get_elevation(target_lat, target_lon, cache=elevation_cache,
-                                            dem_manager=dem_manager, dem_file=dem_file,
-                                            dem_file_fallback=dem_file_fallback)
+            target_elevation = get_elevation(
+                target_lat,
+                target_lon,
+                cache=elevation_cache,
+                dem_manager=dem_manager,
+                dem_file=dem_file,
+                dem_file_fallback=dem_file_fallback,
+            )
             if target_elevation is None:
                 # No elevation data (likely water) - assume sea level
                 target_elevation = 0.0
 
             # Check visibility
-            if is_visible(observer_lat, observer_lon, observer_height_agl,
-                         target_lat, target_lon, target_elevation, observer_elevation_msl,
-                         dem_manager=dem_manager, dem_file=dem_file, dem_file_fallback=dem_file_fallback):
+            if is_visible(
+                observer_lat,
+                observer_lon,
+                observer_height_agl,
+                target_lat,
+                target_lon,
+                target_elevation,
+                observer_elevation_msl,
+                dem_manager=dem_manager,
+                dem_file=dem_file,
+                dem_file_fallback=dem_file_fallback,
+            ):
                 visible_points.append((target_lat, target_lon))
                 max_visible_range_km = max(max_visible_range_km, distance_km)
             else:
@@ -363,13 +412,23 @@ def compute_viewshed(observer_lat, observer_lon, observer_height_agl,
 
     # Get DEM statistics if using SRTM_BEST
     dem_stats = None
-    if dem_manager and dem_product == 'SRTM_BEST':
+    if dem_manager and dem_product == "SRTM_BEST":
         dem_stats = dem_manager.stats.copy()
-        srtm1_pct = (dem_stats['srtm1_queries'] / dem_stats['total_queries'] * 100) if dem_stats['total_queries'] > 0 else 0
-        srtm3_pct = (dem_stats['srtm3_fallback_queries'] / dem_stats['total_queries'] * 100) if dem_stats['total_queries'] > 0 else 0
+        srtm1_pct = (
+            (dem_stats["srtm1_queries"] / dem_stats["total_queries"] * 100)
+            if dem_stats["total_queries"] > 0
+            else 0
+        )
+        srtm3_pct = (
+            (dem_stats["srtm3_fallback_queries"] / dem_stats["total_queries"] * 100)
+            if dem_stats["total_queries"] > 0
+            else 0
+        )
         print(f"\n  DEM Resolution Statistics:")
         print(f"    SRTM1 (30m): {dem_stats['srtm1_queries']} queries ({srtm1_pct:.1f}%)")
-        print(f"    SRTM3 (90m fallback): {dem_stats['srtm3_fallback_queries']} queries ({srtm3_pct:.1f}%)")
+        print(
+            f"    SRTM3 (90m fallback): {dem_stats['srtm3_fallback_queries']} queries ({srtm3_pct:.1f}%)"
+        )
         print(f"    Total: {dem_stats['total_queries']} queries")
 
     # Cleanup DEM manager
@@ -377,20 +436,20 @@ def compute_viewshed(observer_lat, observer_lon, observer_height_agl,
         dem_manager.cleanup()
 
     result = {
-        'visible_points': visible_points,
-        'blocked_points': blocked_points,
-        'observer_elevation': observer_elevation_msl,
-        'observer_height_agl': observer_height_agl,
-        'max_range_km': max_visible_range_km,
+        "visible_points": visible_points,
+        "blocked_points": blocked_points,
+        "observer_elevation": observer_elevation_msl,
+        "observer_height_agl": observer_height_agl,
+        "max_range_km": max_visible_range_km,
     }
 
     if dem_stats:
-        result['dem_stats'] = dem_stats
+        result["dem_stats"] = dem_stats
 
     return result
 
 
-def plot_viewshed(observer_lat, observer_lon, viewshed_data, output_file='viewshed.png'):
+def plot_viewshed(observer_lat, observer_lon, viewshed_data, output_file="viewshed.png"):
     """
     Visualize viewshed on a map.
 
@@ -401,8 +460,8 @@ def plot_viewshed(observer_lat, observer_lon, viewshed_data, output_file='viewsh
     """
     print(f"\nGenerating viewshed visualization...")
 
-    visible_points = viewshed_data['visible_points']
-    blocked_points = viewshed_data['blocked_points']
+    visible_points = viewshed_data["visible_points"]
+    blocked_points = viewshed_data["blocked_points"]
 
     # Create figure
     fig, ax = plt.subplots(figsize=(20, 20))
@@ -414,48 +473,72 @@ def plot_viewshed(observer_lat, observer_lon, viewshed_data, output_file='viewsh
     if blocked_points:
         blocked_lats, blocked_lons = zip(*blocked_points)
         blocked_x, blocked_y = to_mercator_xy(blocked_lats, blocked_lons)
-        ax.scatter(blocked_x, blocked_y, c='grey', alpha=0.3, s=50, marker='s',
-                  label='Blocked by terrain')
+        ax.scatter(
+            blocked_x, blocked_y, c="grey", alpha=0.3, s=50, marker="s", label="Blocked by terrain"
+        )
 
     # Plot visible areas (green)
     if visible_points:
         visible_lats, visible_lons = zip(*visible_points)
         visible_x, visible_y = to_mercator_xy(visible_lats, visible_lons)
-        ax.scatter(visible_x, visible_y, c='green', alpha=0.5, s=50, marker='o',
-                  label='Line-of-sight visible')
+        ax.scatter(
+            visible_x,
+            visible_y,
+            c="green",
+            alpha=0.5,
+            s=50,
+            marker="o",
+            label="Line-of-sight visible",
+        )
 
     # Plot observer location (red star)
-    ax.scatter(obs_x, obs_y, c='red', s=500, marker='*',
-              label=f'Antenna ({viewshed_data["observer_height_agl"]}m AGL)',
-              zorder=10, edgecolors='black', linewidths=2)
+    ax.scatter(
+        obs_x,
+        obs_y,
+        c="red",
+        s=500,
+        marker="*",
+        label=f'Antenna ({viewshed_data["observer_height_agl"]}m AGL)',
+        zorder=10,
+        edgecolors="black",
+        linewidths=2,
+    )
 
     # Add basemap
     print("  Downloading basemap tiles...")
-    cx.add_basemap(ax, source=cx.providers.OpenStreetMap.Mapnik, zoom='auto')
+    cx.add_basemap(ax, source=cx.providers.OpenStreetMap.Mapnik, zoom="auto")
 
     # Labels and legend
     ax.set_title(
-        f'Viewshed Analysis: {observer_lat:.4f}°, {observer_lon:.4f}°\n'
+        f"Viewshed Analysis: {observer_lat:.4f}°, {observer_lon:.4f}°\n"
         f'Antenna: {viewshed_data["observer_height_agl"]}m AGL '
         f'(Ground: {viewshed_data["observer_elevation"]:.0f}m MSL)\n'
         f'Max visible range: {viewshed_data["max_range_km"]:.1f}km',
-        fontsize=16, pad=20
+        fontsize=16,
+        pad=20,
     )
-    ax.legend(loc='upper right', fontsize=12)
-    ax.set_xlabel('Longitude', fontsize=12)
-    ax.set_ylabel('Latitude', fontsize=12)
+    ax.legend(loc="upper right", fontsize=12)
+    ax.set_xlabel("Longitude", fontsize=12)
+    ax.set_ylabel("Latitude", fontsize=12)
 
     # Save
     fig.tight_layout()
     print(f"  Saving to {output_file}...")
-    fig.savefig(output_file, bbox_inches='tight', dpi=150)
+    fig.savefig(output_file, bbox_inches="tight", dpi=150)
     print(f"  Done!")
 
     return output_file
 
 
-def compute_coverage(observer_lat, observer_lon, observer_height_agl,
-                     target_points, dem_manager=None, dem_file=None, dem_file_fallback=None):
+def compute_coverage(
+    observer_lat,
+    observer_lon,
+    observer_height_agl,
+    target_points,
+    dem_manager=None,
+    dem_file=None,
+    dem_file_fallback=None,
+):
     """
     Compute what fraction of target points are visible from an observer location.
 
@@ -480,17 +563,21 @@ def compute_coverage(observer_lat, observer_lon, observer_height_agl,
             - 'observer_elevation': Observer ground elevation MSL
     """
     # Get observer elevation
-    observer_elevation_msl = get_elevation(observer_lat, observer_lon,
-                                          dem_manager=dem_manager, dem_file=dem_file,
-                                          dem_file_fallback=dem_file_fallback)
+    observer_elevation_msl = get_elevation(
+        observer_lat,
+        observer_lon,
+        dem_manager=dem_manager,
+        dem_file=dem_file,
+        dem_file_fallback=dem_file_fallback,
+    )
     if observer_elevation_msl is None:
         # Can't determine elevation - return zero coverage
         return {
-            'visible_count': 0,
-            'total_count': len(target_points),
-            'coverage_pct': 0.0,
-            'visible_indices': [],
-            'observer_elevation': None
+            "visible_count": 0,
+            "total_count": len(target_points),
+            "coverage_pct": 0.0,
+            "visible_indices": [],
+            "observer_elevation": None,
         }
 
     visible_indices = []
@@ -498,16 +585,30 @@ def compute_coverage(observer_lat, observer_lon, observer_height_agl,
 
     for idx, (target_lat, target_lon) in enumerate(target_points):
         # Get target elevation
-        target_elevation = get_elevation(target_lat, target_lon, cache=elevation_cache,
-                                        dem_manager=dem_manager, dem_file=dem_file,
-                                        dem_file_fallback=dem_file_fallback)
+        target_elevation = get_elevation(
+            target_lat,
+            target_lon,
+            cache=elevation_cache,
+            dem_manager=dem_manager,
+            dem_file=dem_file,
+            dem_file_fallback=dem_file_fallback,
+        )
         if target_elevation is None:
             target_elevation = 0.0  # Assume sea level for water/missing data
 
         # Check visibility
-        if is_visible(observer_lat, observer_lon, observer_height_agl,
-                     target_lat, target_lon, target_elevation, observer_elevation_msl,
-                     dem_manager=dem_manager, dem_file=dem_file, dem_file_fallback=dem_file_fallback):
+        if is_visible(
+            observer_lat,
+            observer_lon,
+            observer_height_agl,
+            target_lat,
+            target_lon,
+            target_elevation,
+            observer_elevation_msl,
+            dem_manager=dem_manager,
+            dem_file=dem_file,
+            dem_file_fallback=dem_file_fallback,
+        ):
             visible_indices.append(idx)
 
     visible_count = len(visible_indices)
@@ -515,18 +616,25 @@ def compute_coverage(observer_lat, observer_lon, observer_height_agl,
     coverage_pct = 100.0 * visible_count / total_count if total_count > 0 else 0.0
 
     return {
-        'visible_count': visible_count,
-        'total_count': total_count,
-        'coverage_pct': coverage_pct,
-        'visible_indices': visible_indices,
-        'observer_elevation': observer_elevation_msl
+        "visible_count": visible_count,
+        "total_count": total_count,
+        "coverage_pct": coverage_pct,
+        "visible_indices": visible_indices,
+        "observer_elevation": observer_elevation_msl,
     }
 
 
-def optimize_coverage(target_bounds, search_bounds, observer_height_agl,
-                     target_grid_size=20, search_grid_size=10,
-                     top_k=5, hill_climb_steps=10,
-                     dem_product='SRTM3', progress_callback=None):
+def optimize_coverage(
+    target_bounds,
+    search_bounds,
+    observer_height_agl,
+    target_grid_size=20,
+    search_grid_size=10,
+    top_k=5,
+    hill_climb_steps=10,
+    dem_product="SRTM3",
+    progress_callback=None,
+):
     """
     Find optimal observer locations to maximize coverage of a target area.
 
@@ -574,31 +682,35 @@ def optimize_coverage(target_bounds, search_bounds, observer_height_agl,
     dem_manager = DEMManager()
 
     # Download DEM tiles for entire area (target + search)
-    all_min_lat = min(target_bounds['min_lat'], search_bounds['min_lat'])
-    all_max_lat = max(target_bounds['max_lat'], search_bounds['max_lat'])
-    all_min_lon = min(target_bounds['min_lon'], search_bounds['min_lon'])
-    all_max_lon = max(target_bounds['max_lon'], search_bounds['max_lon'])
+    all_min_lat = min(target_bounds["min_lat"], search_bounds["min_lat"])
+    all_max_lat = max(target_bounds["max_lat"], search_bounds["max_lat"])
+    all_min_lon = min(target_bounds["min_lon"], search_bounds["min_lon"])
+    all_max_lon = max(target_bounds["max_lon"], search_bounds["max_lon"])
 
     # Add padding
     lat_padding = (all_max_lat - all_min_lat) * 0.1
     lon_padding = (all_max_lon - all_min_lon) * 0.1
 
     dem_file = dem_manager.download_tiles_for_bounds(
-        all_min_lat - lat_padding, all_min_lon - lon_padding,
-        all_max_lat + lat_padding, all_max_lon + lon_padding,
-        product=dem_product, progress_callback=progress_callback)
+        all_min_lat - lat_padding,
+        all_min_lon - lon_padding,
+        all_max_lat + lat_padding,
+        all_max_lon + lon_padding,
+        product=dem_product,
+        progress_callback=progress_callback,
+    )
 
     # Create fixed target grid
     print("  Creating target point grid...")
-    target_lats = np.linspace(target_bounds['min_lat'], target_bounds['max_lat'], target_grid_size)
-    target_lons = np.linspace(target_bounds['min_lon'], target_bounds['max_lon'], target_grid_size)
+    target_lats = np.linspace(target_bounds["min_lat"], target_bounds["max_lat"], target_grid_size)
+    target_lons = np.linspace(target_bounds["min_lon"], target_bounds["max_lon"], target_grid_size)
     target_points = [(lat, lon) for lat in target_lats for lon in target_lons]
     print(f"  Target points: {len(target_points)}")
 
     # Coarse grid search
     print("  Running coarse grid search...")
-    search_lats = np.linspace(search_bounds['min_lat'], search_bounds['max_lat'], search_grid_size)
-    search_lons = np.linspace(search_bounds['min_lon'], search_bounds['max_lon'], search_grid_size)
+    search_lats = np.linspace(search_bounds["min_lat"], search_bounds["max_lat"], search_grid_size)
+    search_lons = np.linspace(search_bounds["min_lon"], search_bounds["max_lon"], search_grid_size)
 
     candidates = []  # List of (lat, lon, coverage_pct)
     total_search = search_grid_size * search_grid_size
@@ -610,11 +722,17 @@ def optimize_coverage(target_bounds, search_bounds, observer_height_agl,
         for lon in search_lons:
             count += 1
             if count % 10 == 0:
-                print(f"    Progress: {count}/{total_search} candidates", end='\r')
+                print(f"    Progress: {count}/{total_search} candidates", end="\r")
 
-            result = compute_coverage(lat, lon, observer_height_agl, target_points,
-                                     dem_manager=dem_manager, dem_file=dem_file)
-            candidates.append((lat, lon, result['coverage_pct']))
+            result = compute_coverage(
+                lat,
+                lon,
+                observer_height_agl,
+                target_points,
+                dem_manager=dem_manager,
+                dem_file=dem_file,
+            )
+            candidates.append((lat, lon, result["coverage_pct"]))
 
             completed_steps += 1
             report_progress(f"Coarse search: {count}/{total_search} candidates")
@@ -633,8 +751,8 @@ def optimize_coverage(target_bounds, search_bounds, observer_height_agl,
     print(f"  Hill climbing ({hill_climb_steps} steps per candidate)...")
 
     # Estimate step size based on search area
-    lat_step = (search_bounds['max_lat'] - search_bounds['min_lat']) / (search_grid_size * 2)
-    lon_step = (search_bounds['max_lon'] - search_bounds['min_lon']) / (search_grid_size * 2)
+    lat_step = (search_bounds["max_lat"] - search_bounds["min_lat"]) / (search_grid_size * 2)
+    lon_step = (search_bounds["max_lon"] - search_bounds["min_lon"]) / (search_grid_size * 2)
 
     best_overall = None
     best_coverage = 0
@@ -664,23 +782,34 @@ def optimize_coverage(target_bounds, search_bounds, observer_height_agl,
             ]
 
             # Filter to stay within search bounds
-            neighbors = [(lat, lon) for lat, lon in neighbors
-                        if search_bounds['min_lat'] <= lat <= search_bounds['max_lat']
-                        and search_bounds['min_lon'] <= lon <= search_bounds['max_lon']]
+            neighbors = [
+                (lat, lon)
+                for lat, lon in neighbors
+                if search_bounds["min_lat"] <= lat <= search_bounds["max_lat"]
+                and search_bounds["min_lon"] <= lon <= search_bounds["max_lon"]
+            ]
 
             # Evaluate neighbors
             best_neighbor = None
             best_neighbor_cov = current_cov
 
             for lat, lon in neighbors:
-                result = compute_coverage(lat, lon, observer_height_agl, target_points,
-                                         dem_manager=dem_manager, dem_file=dem_file)
-                if result['coverage_pct'] > best_neighbor_cov:
+                result = compute_coverage(
+                    lat,
+                    lon,
+                    observer_height_agl,
+                    target_points,
+                    dem_manager=dem_manager,
+                    dem_file=dem_file,
+                )
+                if result["coverage_pct"] > best_neighbor_cov:
                     best_neighbor = (lat, lon)
-                    best_neighbor_cov = result['coverage_pct']
+                    best_neighbor_cov = result["coverage_pct"]
 
                 completed_steps += 1
-                report_progress(f"Hill climbing: candidate {candidate_idx+1}/{top_k}, step {step+1}/{hill_climb_steps}")
+                report_progress(
+                    f"Hill climbing: candidate {candidate_idx+1}/{top_k}, step {step+1}/{hill_climb_steps}"
+                )
 
             # Move to best neighbor if better, otherwise stop
             if best_neighbor is not None:
@@ -707,16 +836,16 @@ def optimize_coverage(target_bounds, search_bounds, observer_height_agl,
     print(f"  Coverage: {best_coverage:.1f}%")
 
     return {
-        'best_location': best_overall,
-        'best_coverage_pct': best_coverage,
-        'all_candidates': candidates,
-        'target_points': target_points
+        "best_location": best_overall,
+        "best_coverage_pct": best_coverage,
+        "all_candidates": candidates,
+        "target_points": target_points,
     }
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Compute and visualize viewshed for antenna placement planning',
+        description="Compute and visualize viewshed for antenna placement planning",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -728,63 +857,48 @@ Examples:
 
   # Quick low-resolution preview
   %(prog)s --lat 47.6 --lon -122.3 --height 10 --radius 30 --resolution 2 --radials 24
-        """
+        """,
     )
 
     parser.add_argument(
-        '--lat',
-        type=float,
-        required=True,
-        help='Latitude of antenna location (decimal degrees)'
+        "--lat", type=float, required=True, help="Latitude of antenna location (decimal degrees)"
     )
     parser.add_argument(
-        '--lon',
-        type=float,
-        required=True,
-        help='Longitude of antenna location (decimal degrees)'
+        "--lon", type=float, required=True, help="Longitude of antenna location (decimal degrees)"
     )
     parser.add_argument(
-        '--height',
-        type=float,
-        required=True,
-        help='Antenna height above ground level (meters)'
+        "--height", type=float, required=True, help="Antenna height above ground level (meters)"
     )
     parser.add_argument(
-        '--radius',
-        type=float,
-        default=50,
-        help='Analysis radius (km, default: 50)'
+        "--radius", type=float, default=50, help="Analysis radius (km, default: 50)"
     )
     parser.add_argument(
-        '--resolution',
+        "--resolution",
         type=float,
         default=1.0,
-        help='Radial resolution - spacing between range rings (km, default: 1.0)'
+        help="Radial resolution - spacing between range rings (km, default: 1.0)",
     )
     parser.add_argument(
-        '--radials',
+        "--radials",
         type=int,
         default=36,
-        help='Number of radial bearings to test (default: 36, i.e., every 10 degrees)'
+        help="Number of radial bearings to test (default: 36, i.e., every 10 degrees)",
     )
     parser.add_argument(
-        '--output',
-        type=str,
-        default='viewshed.png',
-        help='Output filename (default: viewshed.png)'
+        "--output", type=str, default="viewshed.png", help="Output filename (default: viewshed.png)"
     )
     parser.add_argument(
-        '--use-api',
-        action='store_true',
+        "--use-api",
+        action="store_true",
         default=False,
-        help='Use USGS API instead of local DEM tiles (slower, US-only)'
+        help="Use USGS API instead of local DEM tiles (slower, US-only)",
     )
     parser.add_argument(
-        '--dem-product',
+        "--dem-product",
         type=str,
-        choices=['SRTM1', 'SRTM3'],
-        default='SRTM3',
-        help='DEM product: SRTM1 (30m resolution) or SRTM3 (90m resolution, default)'
+        choices=["SRTM1", "SRTM3"],
+        default="SRTM3",
+        help="DEM product: SRTM1 (30m resolution) or SRTM3 (90m resolution, default)",
     )
 
     args = parser.parse_args()
@@ -809,10 +923,14 @@ Examples:
     print("=" * 70)
 
     viewshed = compute_viewshed(
-        args.lat, args.lon, args.height,
-        args.radius, args.resolution, args.radials,
+        args.lat,
+        args.lon,
+        args.height,
+        args.radius,
+        args.resolution,
+        args.radials,
         use_local_dem=not args.use_api,
-        dem_product=args.dem_product
+        dem_product=args.dem_product,
     )
 
     if viewshed is None:
@@ -828,12 +946,14 @@ Examples:
     print(f"  Observer: {args.lat:.4f}°, {args.lon:.4f}°")
     print(f"  Ground elevation: {viewshed['observer_elevation']:.1f}m MSL")
     print(f"  Antenna height: {viewshed['observer_height_agl']:.1f}m AGL")
-    print(f"  Total antenna elevation: {viewshed['observer_elevation'] + viewshed['observer_height_agl']:.1f}m MSL")
+    print(
+        f"  Total antenna elevation: {viewshed['observer_elevation'] + viewshed['observer_height_agl']:.1f}m MSL"
+    )
     print(f"  Visible points: {len(viewshed['visible_points'])}")
     print(f"  Blocked points: {len(viewshed['blocked_points'])}")
-    total = len(viewshed['visible_points']) + len(viewshed['blocked_points'])
+    total = len(viewshed["visible_points"]) + len(viewshed["blocked_points"])
     if total > 0:
-        pct = 100 * len(viewshed['visible_points']) / total
+        pct = 100 * len(viewshed["visible_points"]) / total
         print(f"  Visibility: {pct:.1f}%")
     print(f"  Maximum visible range: {viewshed['max_range_km']:.1f}km")
     print(f"  Output saved to: {args.output}")

@@ -14,7 +14,7 @@ from collector import LoadReading
 @pytest.fixture
 def data_store():
     """Create a temporary data store for testing"""
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
         logfile = f.name
 
     store = DataStore(logfile_path=logfile)
@@ -26,7 +26,7 @@ def data_store():
             voltage=5.0,
             current=2.0,
             power=10.0,
-            timestamp=datetime(2025, 1, 1, 0, 0, i, tzinfo=timezone.utc)
+            timestamp=datetime(2025, 1, 1, 0, 0, i, tzinfo=timezone.utc),
         )
         store.handle_reading(reading)
 
@@ -45,15 +45,15 @@ def web_server(data_store):
 @pytest.fixture
 def client(web_server):
     """Create a Flask test client"""
-    web_server.app.config['TESTING'] = True
+    web_server.app.config["TESTING"] = True
     return web_server.app.test_client()
 
 
 def test_index_route(client):
     """Test that the index route returns the HTML page"""
-    response = client.get('/')
+    response = client.get("/")
     assert response.status_code == 200
-    assert b'GPP4323 Power Monitor' in response.data
+    assert b"GPP4323 Power Monitor" in response.data
 
 
 def test_stats_stream(data_store):
@@ -65,10 +65,10 @@ def test_stats_stream(data_store):
     assert latest is not None
 
     # Verify we can access fields with dictionary syntax
-    assert latest['elapsed'] >= 0
-    assert latest['voltage'] == 5.0
-    assert latest['current'] == 2.0
-    assert latest['power'] == 10.0
+    assert latest["elapsed"] >= 0
+    assert latest["voltage"] == 5.0
+    assert latest["current"] == 2.0
+    assert latest["power"] == 10.0
 
     # Verify get_total_sample_count works
     assert data_store.get_total_sample_count() == 10
@@ -87,10 +87,8 @@ def test_get_new_data(data_store):
 
     # Should have 4 points (6.0, 7.0, 8.0, 9.0 elapsed seconds)
     assert len(new_data) == 4
-    assert new_data.iloc[0]['elapsed'] > 5.0
-    assert new_data.iloc[0]['elapsed'] == 6.0
-
-
+    assert new_data.iloc[0]["elapsed"] > 5.0
+    assert new_data.iloc[0]["elapsed"] == 6.0
 
 
 def test_get_latest_with_series(data_store):
@@ -102,14 +100,14 @@ def test_get_latest_with_series(data_store):
     assert latest is not None
 
     # Accessing with dictionary-style indexing should work
-    assert latest['voltage'] == 5.0
-    assert latest['current'] == 2.0
-    assert latest['power'] == 10.0
+    assert latest["voltage"] == 5.0
+    assert latest["current"] == 2.0
+    assert latest["power"] == 10.0
 
 
 def test_empty_data_store():
     """Test that empty data store handles get_latest gracefully"""
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
         logfile = f.name
 
     try:
@@ -130,5 +128,5 @@ def test_empty_data_store():
         os.unlink(logfile)
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

@@ -66,8 +66,7 @@ def load_config(path: str) -> Config:
     callsign = raw.get("callsign")
     if not callsign:
         raise ValueError(
-            f"{path}: `callsign` is required "
-            "(amateur-radio callsign of the RF gateway)"
+            f"{path}: `callsign` is required " "(amateur-radio callsign of the RF gateway)"
         )
     return Config(
         callsign=str(callsign).upper(),
@@ -105,11 +104,14 @@ class LatestCoalescer:
     killed-object beacon broadcast for it.
     """
 
-    def __init__(self, min_interval_sec: float,
-                 transmit: TransmitFn,
-                 idle_window_threshold: int = 3,
-                 final_redundancy: int = 2,
-                 final_spacing_sec: float = 10.0):
+    def __init__(
+        self,
+        min_interval_sec: float,
+        transmit: TransmitFn,
+        idle_window_threshold: int = 3,
+        final_redundancy: int = 2,
+        final_spacing_sec: float = 10.0,
+    ):
         # `transmit` is invoked as `await transmit(data, live=True)` for
         # every normal/redundant-final beacon and `await transmit(data,
         # live=False)` for the single killed-object packet at EOF.
@@ -167,8 +169,7 @@ class LatestCoalescer:
         last = self._last_data.get(serial)
         if last is None:
             return False
-        log.info("end-of-flight %s: %d final(s) + killed-object",
-                 serial, self._final_redundancy)
+        log.info("end-of-flight %s: %d final(s) + killed-object", serial, self._final_redundancy)
         for i in range(self._final_redundancy):
             if i > 0 and self._final_spacing > 0:
                 await asyncio.sleep(self._final_spacing)
@@ -248,8 +249,7 @@ class KissTncClient:
 
 
 class AprsPiGateway:
-    def __init__(self, cfg: Config, kiss: KissTncClient,
-                 now_fn=time.time):
+    def __init__(self, cfg: Config, kiss: KissTncClient, now_fn=time.time):
         self.cfg = cfg
         self.kiss = kiss
         self._now = now_fn
@@ -325,10 +325,16 @@ class AprsPiGateway:
             info=info,
         )
         wrapped = ae.kiss_wrap(frame)
-        log.info("TX %s %s frame=%d -> %s: %s",
-                 "killed" if not live else "object",
-                 data["serial"], data.get("frame", 0), self.cfg.tocall, info)
+        log.info(
+            "TX %s %s frame=%d -> %s: %s",
+            "killed" if not live else "object",
+            data["serial"],
+            data.get("frame", 0),
+            self.cfg.tocall,
+            info,
+        )
         await self.kiss.send(wrapped)
+
 
 def _parse_freq_mhz(freq) -> Optional[float]:
     """auto_rx emits freq as either a number or a string like '403.500 MHz'.
@@ -397,8 +403,12 @@ async def async_main(cfg: Config) -> int:
     loop = asyncio.get_event_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, stop_event.set)
-    log.info("aprs-backhaul-pi running (callsign=%s-%d, tocall=%s). Ctrl+C to stop.",
-             cfg.callsign, GATEWAY_SSID, cfg.tocall)
+    log.info(
+        "aprs-backhaul-pi running (callsign=%s-%d, tocall=%s). Ctrl+C to stop.",
+        cfg.callsign,
+        GATEWAY_SSID,
+        cfg.tocall,
+    )
     await stop_event.wait()
     log.info("Shutting down.")
     await gateway.coalescer.stop()

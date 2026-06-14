@@ -91,24 +91,24 @@ UNKNOWN_SONDE_CODE = "?"
 # while pre-deployment.
 SONDE_TYPES: dict[str, tuple[str, str]] = {
     # --- Vaisala ---
-    "A": ("Vaisala", "RS41"),          # base / no subtype reported
-    "B": ("Vaisala", "RS41-SG"),       # GPS, by far the most common
-    "C": ("Vaisala", "RS41-SGP"),      # with pressure sensor
-    "D": ("Vaisala", "RS41-SGM"),      # military (typically encrypted)
-    "E": ("Vaisala", "RS41-SGPE"),     # extended
-    "F": ("Vaisala", "RS92"),          # base / no subtype reported
-    "G": ("Vaisala", "RS92-NGP"),      # 1680 MHz
+    "A": ("Vaisala", "RS41"),  # base / no subtype reported
+    "B": ("Vaisala", "RS41-SG"),  # GPS, by far the most common
+    "C": ("Vaisala", "RS41-SGP"),  # with pressure sensor
+    "D": ("Vaisala", "RS41-SGM"),  # military (typically encrypted)
+    "E": ("Vaisala", "RS41-SGPE"),  # extended
+    "F": ("Vaisala", "RS92"),  # base / no subtype reported
+    "G": ("Vaisala", "RS92-NGP"),  # 1680 MHz
     "H": ("Vaisala", "RS92-SGP"),
-    "I": ("Vaisala", "RD41"),          # dropsonde
-    "J": ("Vaisala", "RD94"),          # dropsonde
+    "I": ("Vaisala", "RD41"),  # dropsonde
+    "J": ("Vaisala", "RD94"),  # dropsonde
     # --- Graw ---
-    "K": ("Graw", "DFM"),              # base / no subtype guess
+    "K": ("Graw", "DFM"),  # base / no subtype guess
     "L": ("Graw", "DFM06"),
     "M": ("Graw", "DFM09"),
     "N": ("Graw", "DFM09P"),
     "O": ("Graw", "DFM17"),
     "P": ("Graw", "DFM17P"),
-    "Q": ("Graw", "DFM-Unknown"),      # explicit sentinel from sonde_specific.py
+    "Q": ("Graw", "DFM-Unknown"),  # explicit sentinel from sonde_specific.py
     # --- Meteomodem ---
     "R": ("Meteomodem", "M10"),
     "S": ("Meteomodem", "M20"),
@@ -116,10 +116,10 @@ SONDE_TYPES: dict[str, tuple[str, str]] = {
     "T": ("Lockheed Martin", "LMS6"),
     "U": ("Lockheed Martin", "MK2LMS"),
     # --- Intermet Systems ---
-    "V": ("Intermet Systems", "IMET"),    # iMet-1 / iMet-4
-    "W": ("Intermet Systems", "IMET5"),   # iMet-54
+    "V": ("Intermet Systems", "IMET"),  # iMet-1 / iMet-4
+    "W": ("Intermet Systems", "IMET5"),  # iMet-54
     # --- Meisei ---
-    "X": ("Meisei", "MEISEI"),         # base / no subtype reported
+    "X": ("Meisei", "MEISEI"),  # base / no subtype reported
     "Y": ("Meisei", "IMS100"),
     "Z": ("Meisei", "RS11G"),
     # --- Meteo-Radiy ---
@@ -184,13 +184,11 @@ def _ddm_with_dao(value: float, is_lat: bool) -> tuple[str, int]:
     # come out as 36479.999...). The third digit is then the units of
     # min_micro % 10, the lower two decimals are min_micro // 10.
     min_micro = int(round(min_full * 1000))
-    min_int_part = min_micro // 10            # e.g. 3648 (means 36.48)
-    dao_digit = min_micro % 10                # e.g. 7
+    min_int_part = min_micro // 10  # e.g. 3648 (means 36.48)
+    dao_digit = min_micro % 10  # e.g. 7
     direction = hemi[0] if value >= 0 else hemi[1]
     pos = (
-        f"{deg:0{deg_width}d}"
-        f"{min_int_part // 100:02d}.{min_int_part % 100:02d}"
-        f"{direction}"
+        f"{deg:0{deg_width}d}" f"{min_int_part // 100:02d}.{min_int_part % 100:02d}" f"{direction}"
     )
     return pos, dao_digit
 
@@ -253,6 +251,7 @@ class SondeComment:
     handler reads them from the aprslib-parsed `pkt` and attaches them to
     a SondeComment after the fact (see PacketHandler).
     """
+
     frame: int
     snr: float
     alt_m: int | None = None
@@ -314,19 +313,31 @@ def parse_sonde_comment(comment: str) -> SondeComment | None:
     if frame is None or snr is None:
         return None
     return SondeComment(
-        frame=frame, snr=snr, freq_mhz=freq,
-        type_str=type_str, manufacturer=manufacturer,
-        vel_v=vel_v, temp=temp, humidity=humidity,
-        pressure=pressure, batt=batt, sats=sats,
+        frame=frame,
+        snr=snr,
+        freq_mhz=freq,
+        type_str=type_str,
+        manufacturer=manufacturer,
+        vel_v=vel_v,
+        temp=temp,
+        humidity=humidity,
+        pressure=pressure,
+        batt=batt,
+        sats=sats,
     )
 
 
-def format_object_line(serial: str, lat: float, lon: float,
-                       ts_utc: datetime, comment: str,
-                       live: bool = True,
-                       course_deg: int | None = None,
-                       speed_knots: float | None = None,
-                       altitude_m: float | None = None) -> str:
+def format_object_line(
+    serial: str,
+    lat: float,
+    lon: float,
+    ts_utc: datetime,
+    comment: str,
+    live: bool = True,
+    course_deg: int | None = None,
+    speed_knots: float | None = None,
+    altitude_m: float | None = None,
+) -> str:
     """Build an APRS object info-field.
 
     Standard APRS extensions emitted (each parsed natively by aprs.fi /
@@ -410,7 +421,7 @@ def build_ui_frame(source: str, dest: str, path: list[str], info: str) -> bytes:
     dst_call, dst_ssid = _parse_address(dest)
 
     addresses: list[bytes] = []
-    is_last = (len(path) == 0)
+    is_last = len(path) == 0
     addresses.append(encode_callsign(dst_call, dst_ssid, last=False))
     addresses.append(encode_callsign(src_call, src_ssid, last=is_last))
     for i, hop in enumerate(path):
@@ -496,7 +507,7 @@ def parse_ui_frame(frame: bytes) -> tuple[str, str, list[str], str] | None:
     addresses: list[tuple[str, int, bool]] = []
     i = 0
     while i + 7 <= len(frame):
-        addr = decode_callsign(frame[i:i + 7])
+        addr = decode_callsign(frame[i : i + 7])
         addresses.append(addr)
         i += 7
         if addr[2]:
@@ -509,7 +520,7 @@ def parse_ui_frame(frame: bytes) -> tuple[str, str, list[str], str] | None:
         return None
     if frame[i] != AX25_CONTROL_UI or frame[i + 1] != AX25_PID_NO_LAYER3:
         return None
-    info = frame[i + 2:].decode("ascii", errors="replace")
+    info = frame[i + 2 :].decode("ascii", errors="replace")
 
     def fmt(a: tuple[str, int, bool]) -> str:
         return f"{a[0]}-{a[1]}" if a[1] else a[0]

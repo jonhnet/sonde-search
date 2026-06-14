@@ -17,7 +17,7 @@ import sys
 import os
 
 # Add project root to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from lib import listeners
 
@@ -34,13 +34,13 @@ def main():
     try:
         result = listeners.get_listener_stats(sondeid)
 
-        if result['warning']:
+        if result["warning"]:
             print(f"Warning: {result['warning']}")
 
-        print(result['stats'].to_string())
+        print(result["stats"].to_string())
 
         print("\nNumber of points heard by:")
-        print(result['coverage'].to_string())
+        print(result["coverage"].to_string())
 
     except ValueError as e:
         sys.exit(str(e))

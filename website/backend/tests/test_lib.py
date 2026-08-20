@@ -118,6 +118,29 @@ class Test_GroundPoints:
         flight = self._flight([(5.0, 8.0), (6.0, 7.0), (nan, nan)])
         assert identify_ground_points(flight) is None
 
+    def test_absent_velocity_columns_is_not_ground_reception(self):
+        """A sonde that never reports velocity has no vel_v/vel_h columns at all.
+
+        That must degrade to "cannot confirm ground reception" rather than
+        raising KeyError. The crash cost affected subscribers their whole
+        notification: process_one_sub() catches per subscriber, so the sonde was
+        silently dropped for them (seen in production as
+        "Error notifying <user>: 'vel_v'").
+        """
+        flight = self._flight([(0.1, 0.2), (0.0, 0.1)]).drop(columns=["vel_v", "vel_h"])
+        assert identify_ground_points(flight) is None
+
+    def test_one_absent_velocity_column_is_not_ground_reception(self):
+        """Half the velocity data is still not a confirmed measurement."""
+        for missing in ("vel_v", "vel_h"):
+            flight = self._flight([(0.1, 0.2), (0.0, 0.1)]).drop(columns=[missing])
+            assert identify_ground_points(flight) is None, f"missing {missing} not handled"
+
+    def test_absent_velocity_columns_on_airborne_sonde(self):
+        """The absent-column path must not depend on the trace looking grounded."""
+        flight = self._flight([(5.0, 8.0), (6.0, 7.0)]).drop(columns=["vel_v", "vel_h"])
+        assert identify_ground_points(flight) is None
+
 
 class Test_GetMapLimits:
     """Tests for map boundary/zoom calculation, including degenerate inputs."""

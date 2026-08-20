@@ -423,8 +423,9 @@ def identify_ground_points(flight_df: pd.DataFrame) -> Optional[pd.DataFrame]:
     are less than 1 m/s.
 
     Args:
-        flight_df: DataFrame with flight telemetry including 'vel_v', 'vel_h',
-                   and 'frame' columns
+        flight_df: DataFrame with flight telemetry including a 'frame' column.
+                   'vel_v' and 'vel_h' are optional: sonde models that never
+                   report velocity have no such columns at all.
 
     Returns:
         DataFrame containing only the ground points, or None if no ground
@@ -433,15 +434,22 @@ def identify_ground_points(flight_df: pd.DataFrame) -> Optional[pd.DataFrame]:
     # Sort by frame to ensure proper ordering
     flight_df = flight_df.sort_values("frame").reset_index(drop=True)
 
+    # A sonde model that never reports velocity has no vel_v/vel_h columns at
+    # all, rather than columns full of nulls -- SondeHub omits the field instead
+    # of sending it empty. That is the same "no measurement" condition as a NaN,
+    # only spelled differently, so normalize it to NaN and let the reasoning
+    # below treat the two alike.
+    no_measurements = pd.Series(np.nan, index=flight_df.index)
+    vel_v = flight_df.get("vel_v", no_measurements)
+    vel_h = flight_df.get("vel_h", no_measurements)
+
     # Treat a missing velocity as zero rather than disqualifying the frame.
     # Velocity is synthetic for sonde models that don't transmit it -- it's
     # derived by differencing successive frame positions -- so a NaN is a gap in
     # that synthesis, not evidence of motion. Zero-filling keeps those frames in
     # the trailing ground run instead of chopping it (NaN compares False) or, if
     # the last frame is NaN, discarding the whole landing.
-    vel_v = flight_df["vel_v"].fillna(0)
-    vel_h = flight_df["vel_h"].fillna(0)
-    is_ground = (vel_v.abs() < 1) & (vel_h.abs() < 1)
+    is_ground = (vel_v.fillna(0).abs() < 1) & (vel_h.fillna(0).abs() < 1)
 
     # The trace must end with ground points
     if not is_ground.iloc[-1]:
@@ -456,8 +464,11 @@ def identify_ground_points(flight_df: pd.DataFrame) -> Optional[pd.DataFrame]:
     # Guard against a data error: a run made up entirely of NaN velocities is not
     # real evidence of a stationary sonde (zero-filling would otherwise let an
     # all-NaN trace look like one long ground reception). Require at least one
-    # actually-measured velocity in the run.
-    if not (ground["vel_v"].notna() & ground["vel_h"].notna()).any():
+    # actually-measured velocity in the run. A sonde that reports no velocity at
+    # all fails here too, which is the intent: without a real measurement we
+    # cannot claim ground reception, so the caller falls back to notifying
+    # without a ground-reception map.
+    if not (vel_v.notna() & vel_h.notna()).iloc[first_ground_idx:].any():
         return None
 
     return ground

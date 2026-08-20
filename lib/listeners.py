@@ -9,6 +9,8 @@ import pandas as pd
 import requests
 import sondehub
 
+from lib.data_utils import parse_sondehub_datetimes
+
 
 def get_listener_stats(sondeid):
     """
@@ -39,7 +41,7 @@ def get_listener_stats(sondeid):
     # Get only the first instance of each frame returned by each uploader
     df = df.groupby(["uploader_callsign", "frame"]).first().reset_index()
 
-    df["date"] = pd.to_datetime(df["datetime"]).dt.round("s")  # type: ignore[call-overload]
+    df["date"] = parse_sondehub_datetimes(df["datetime"]).dt.round("s")
     df["time"] = df["date"].dt.strftime("%H:%M:%SZ")
     df["alt"] = df["alt"].astype(int)
     df["vel_v"] = df["vel_v"].astype(float).round(1)

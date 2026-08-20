@@ -8,7 +8,13 @@ import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from lib.data_utils import filter_real_flights, get_landing_rows, MIN_MAX_ALT, MIN_ALT_DROP
+from lib.data_utils import (
+    filter_real_flights,
+    get_landing_rows,
+    parse_sondehub_datetimes,
+    MIN_MAX_ALT,
+    MIN_ALT_DROP,
+)
 
 
 def _make_sonde(serial, max_alt, final_alt):
@@ -168,3 +174,70 @@ def test_get_landing_rows_all_na_frame():
     result = get_landing_rows(df)
     assert set(result["serial"]) == {"A"}
     assert result.loc[result["serial"] == "A", "frame"].iloc[0] == 200
+
+
+# The exact timestamps behind the 2026-08-20 notifier outage. Most uploaders
+# emit fractional seconds; SondeFox 0.12.1 emits none. pandas infers the format
+# from the FIRST element, so the fractional one must come first to reproduce.
+WITH_SUBSECONDS = "2026-08-20T10:29:59.005000Z"
+NO_SUBSECONDS = "2026-08-20T12:21:59Z"
+
+
+def test_parse_mixed_subsecond_precision():
+    """A non-fractional timestamp among fractional ones must parse, not raise."""
+    result = parse_sondehub_datetimes(pd.Series([WITH_SUBSECONDS, NO_SUBSECONDS]))
+    assert list(result) == [
+        pd.Timestamp("2026-08-20 10:29:59.005000", tz="UTC"),
+        pd.Timestamp("2026-08-20 12:21:59", tz="UTC"),
+    ]
+
+
+def test_parse_single_odd_record_among_many():
+    """One malformed record must not poison a large otherwise-uniform batch.
+
+    This is the production shape: on 2026-08-20 exactly one record out of 4046
+    in the 6-hour telemetry window lacked fractional seconds, and it aborted the
+    entire notifier run before any subscriber was processed.
+    """
+    stamps = [WITH_SUBSECONDS] * 4045 + [NO_SUBSECONDS]
+    result = parse_sondehub_datetimes(pd.Series(stamps))
+    assert len(result) == 4046
+    assert result.notna().all()
+    assert result.iloc[-1] == pd.Timestamp("2026-08-20 12:21:59", tz="UTC")
+
+
+def test_parse_uniform_precision_still_works():
+    """Both uniform spellings must keep working."""
+    for stamp in (WITH_SUBSECONDS, NO_SUBSECONDS):
+        result = parse_sondehub_datetimes(pd.Series([stamp, stamp]))
+        assert len(result) == 2
+        assert result.notna().all()
+
+
+def test_parse_result_is_utc_datetime64():
+    """The result must be a real tz-aware datetime64 column, not object dtype."""
+    result = parse_sondehub_datetimes(pd.Series([WITH_SUBSECONDS, NO_SUBSECONDS]))
+    assert str(result.dtype).endswith("UTC]")
+    # .dt accessors are used by callers (kml_generator resamples, listeners
+    # rounds and strftimes); they only exist on a true datetime column.
+    assert result.dt.round("s").dt.strftime("%H:%M:%SZ").tolist() == [
+        "10:29:59Z",
+        "12:21:59Z",
+    ]
+
+
+def test_parse_scalar():
+    """FakeSondeHub parses one record at a time, so scalars must work too."""
+    assert parse_sondehub_datetimes(NO_SUBSECONDS) == pd.Timestamp("2026-08-20 12:21:59", tz="UTC")
+
+
+def test_parse_empty():
+    """An empty series must not raise."""
+    result = parse_sondehub_datetimes(pd.Series([], dtype=object))
+    assert len(result) == 0
+
+
+def test_parse_already_parsed_passes_through():
+    """landing_calendar feeds in a column that is already datetime64."""
+    already = parse_sondehub_datetimes(pd.Series([WITH_SUBSECONDS, NO_SUBSECONDS]))
+    assert list(parse_sondehub_datetimes(already)) == list(already)

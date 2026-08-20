@@ -9,6 +9,7 @@ from functools import lru_cache
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../"))
 from lib.map_utils import get_elevation
+from lib.data_utils import parse_sondehub_datetimes
 
 # Module-level cache for singlesonde API requests
 SONDEHUB_ONESONDE_URL = "https://api.v2.sondehub.org/sonde/"
@@ -63,7 +64,7 @@ class SondeHubRetrieverBase:
             print(sondes.iloc[0])
             raise
 
-        sondes["datetime"] = pd.to_datetime(sondes["datetime"])
+        sondes["datetime"] = parse_sondehub_datetimes(sondes["datetime"])
 
         return sondes
 
@@ -149,7 +150,7 @@ class FakeSondeHub(SondeHubRetrieverBase):
         for serial, timeblocks in self._data.items():
             for timestamp, record in timeblocks.items():
                 if "datetime" in record:
-                    ts = pd.to_datetime(record["datetime"])
+                    ts = parse_sondehub_datetimes(record["datetime"])
                     if not self._time or ts > self._time:
                         self._time = ts
         print(f"{filename} fake time: {self._time}")

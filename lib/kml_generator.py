@@ -6,6 +6,8 @@ import pandas as pd
 import simplekml
 import sondehub
 
+from lib.data_utils import parse_sondehub_datetimes
+
 
 # Given a sonde serial number, generate a KML file.
 def generate_kml(serial: str) -> str:
@@ -17,7 +19,7 @@ def generate_kml(serial: str) -> str:
         raise ValueError(f"Sonde {serial} does not exist or has no data")
 
     # Convert datetime column to pandas datetime
-    sonde["datetime"] = pd.to_datetime(sonde["datetime"])
+    sonde["datetime"] = parse_sondehub_datetimes(sonde["datetime"])
 
     # Index by datetime and drop all columns other than lat, lon, alt
     sonde = sonde.set_index("datetime")[["lon", "lat", "alt"]]

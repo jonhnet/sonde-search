@@ -1,5 +1,7 @@
 """Shared utilities for processing sonde data."""
 
+import pandas as pd
+
 # Minimum peak altitude (meters) to be considered a real flight.
 # Rejects ground-based transmitters and bench tests.
 MIN_MAX_ALT = 5000
@@ -61,3 +63,28 @@ def get_landing_rows(df):
         return df.iloc[:0]
 
     return df.loc[usable.groupby("serial")["frame"].idxmax()]
+
+
+def parse_sondehub_datetimes(values):
+    """Parse SondeHub ISO8601 timestamps into tz-aware UTC datetimes.
+
+    SondeHub telemetry mixes timestamp precision between uploaders. Most emit
+    fractional seconds ("2026-08-20T10:29:59.005000Z"), but some -- SondeFox
+    0.12.1, for one -- omit them ("2026-08-20T12:21:59Z"). Bare pd.to_datetime()
+    infers a single format from the first element and then applies it strictly
+    to every other element, so one odd record among thousands raises ValueError
+    and takes down the whole batch.
+
+    format="ISO8601" accepts any valid ISO8601 spelling, so mixed precision
+    parses cleanly. utc=True guarantees a real datetime64 column rather than an
+    object column of mixed-offset Timestamps, should an uploader ever send an
+    offset other than Z.
+
+    Args:
+        values: A scalar, list, or Series of ISO8601 timestamp strings. Values
+            that are already datetime64 pass through unchanged.
+
+    Returns:
+        The same shape as the input, as tz-aware UTC datetimes.
+    """
+    return pd.to_datetime(values, format="ISO8601", utc=True)

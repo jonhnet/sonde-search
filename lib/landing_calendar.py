@@ -30,7 +30,7 @@ log = logging.getLogger("landing_calendar")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from lib.map_utils import setup_contextily_cache
 from data.cache import get_sonde_summaries_as_dataframe
-from lib.data_utils import filter_real_flights, get_landing_rows
+from lib.data_utils import filter_real_flights, get_landing_rows, parse_sondehub_datetimes
 
 matplotlib.use("Agg")
 
@@ -69,7 +69,7 @@ def _get_landing_data(bottom_lat, left_lon, top_lat, right_lon):
     df = get_landing_rows(df)
 
     # Annotate with datetime and month
-    df["datetime"] = pd.to_datetime(df["datetime"])
+    df["datetime"] = parse_sondehub_datetimes(df["datetime"])
     df["month"] = df["datetime"].dt.month
 
     return df

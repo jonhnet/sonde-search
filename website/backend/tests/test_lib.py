@@ -9,7 +9,7 @@ import pandas as pd
 
 import lib.map_utils as map_utils
 from lib.map_utils import MapUtils, get_elevation, identify_ground_points
-from website.backend.src.util import FakeSondeHub
+from website.backend.src.util import FakeSondeHub, SondeHubRetrieverBase
 
 
 class Test_Elevation:
@@ -215,3 +215,69 @@ class Test_AddBasemap:
         # Must not raise -- a tile failure should not abort the whole run.
         assert map_utils.add_basemap(ax=None, zoom=10, attempts=3) is False
         assert len(calls) == 3
+
+
+class Test_SondeHubDatetimeParsing:
+    """Regression tests for mixed-precision timestamps in SondeHub telemetry.
+
+    On 2026-08-20 a new uploader (SondeFox 0.12.1) began emitting ISO8601
+    timestamps without fractional seconds. Every other uploader includes them.
+    pandas infers a datetime format from the first element and applies it
+    strictly to the rest, so a single such record raised ValueError inside
+    cleanup_sonde_data(). That call sits outside the retry loop in
+    get_sonde_data() and outside the per-subscriber try/except in
+    process_all_subs(), so one bad record out of 4046 killed every hourly
+    notifier run before a single subscriber was processed.
+    """
+
+    # Fractional-seconds record must come first: that is what pandas infers
+    # the format from, and what makes the non-fractional one fail.
+    WITH_SUBSECONDS = "2026-08-20T10:29:59.005000Z"
+    NO_SUBSECONDS = "2026-08-20T12:21:59Z"
+
+    def _telemetry(self, datetimes):
+        """Build a minimal telemetry frame in the shape cleanup_sonde_data expects."""
+        return pd.DataFrame(
+            [
+                {
+                    "serial": f"S{i}",
+                    "datetime": dt,
+                    "alt": "1000.5",  # SondeHub sometimes sends these as strings
+                    "lat": "47.5",
+                    "lon": "-122.3",
+                    "vel_v": "-5.0",
+                    "vel_h": "3.0",
+                }
+                for i, dt in enumerate(datetimes)
+            ]
+        )
+
+    def test_mixed_subsecond_precision_does_not_raise(self):
+        """The exact production failure: one non-fractional record among many."""
+        sondes = self._telemetry([self.WITH_SUBSECONDS] * 5 + [self.NO_SUBSECONDS])
+
+        cleaned = SondeHubRetrieverBase().cleanup_sonde_data(sondes)
+
+        assert len(cleaned) == 6
+        assert cleaned["datetime"].notna().all()
+        assert cleaned["datetime"].iloc[-1] == pd.Timestamp("2026-08-20 12:21:59", tz="UTC")
+        # Downstream code sorts and compares these, so they must be a real
+        # datetime column rather than object-dtype Timestamps.
+        assert str(cleaned["datetime"].dtype).endswith("UTC]")
+
+    def test_uniform_precision_still_works(self):
+        """Neither uniform spelling may regress."""
+        for stamp in (self.WITH_SUBSECONDS, self.NO_SUBSECONDS):
+            cleaned = SondeHubRetrieverBase().cleanup_sonde_data(self._telemetry([stamp] * 3))
+            assert cleaned["datetime"].notna().all()
+            assert cleaned["alt"].dtype == float
+
+    def test_missing_velocity_columns_tolerated(self):
+        """vel_v/vel_h are optional; their absence must not break parsing."""
+        sondes = self._telemetry([self.WITH_SUBSECONDS, self.NO_SUBSECONDS]).drop(
+            columns=["vel_v", "vel_h"]
+        )
+
+        cleaned = SondeHubRetrieverBase().cleanup_sonde_data(sondes)
+
+        assert cleaned["datetime"].notna().all()

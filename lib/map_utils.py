@@ -18,6 +18,22 @@ import pandas as pd
 import requests
 from pyproj import Transformer
 
+from lib.data_utils import USER_AGENT
+
+# Identify ourselves to OSM's tile server. contextily otherwise sends
+# "contextily-<random uuid>", regenerated every process, and OSM answers an
+# unrecognized client with an "Access blocked" placeholder image -- served as a
+# perfectly valid HTTP 200 PNG, so nothing downstream can tell it from a map.
+#
+# Patch contextily's module-level default rather than passing headers= to
+# add_basemap(). contextily memoizes tiles with joblib keyed on the *arguments*
+# to its fetch function, and headers is one of them, so passing it would change
+# every cache key at once and orphan the whole on-disk tile cache -- re-fetching
+# ~170k tiles, which is exactly the bulk download OSM's policy forbids. Setting
+# the global leaves the memoized arguments untouched, so the existing cache
+# stays valid and only genuinely new tiles are fetched.
+cx.tile.USER_AGENT = USER_AGENT
+
 # Default cache directory for contextily map tiles
 DEFAULT_CONTEXTILY_CACHE_DIR = os.path.expanduser("~/.cache/geotiles")
 CONTEXTILY_CONFIG_FILE = os.path.expanduser("~/.config/contextily/cache-dir-name")
@@ -325,6 +341,10 @@ def add_basemap(ax, zoom, attempts: int = 3) -> bool:
     'NoneType'"). Retry a few times; if it still fails, leave the plot without
     a basemap rather than aborting the whole map render.
 
+    Requests carry our User-Agent via the module-level patch above, without
+    which OSM returns an "Access blocked" placeholder as a valid HTTP 200 PNG
+    that no retry here could detect.
+
     Returns True if the basemap was added, False if it was skipped.
     """
     for attempt in range(attempts):
@@ -375,6 +395,7 @@ def _get_elevation_cached(lat: float, lon: float) -> Optional[float]:
                     "wkid": "4326",
                     "includeDate": "True",
                 },
+                headers={"User-Agent": USER_AGENT},
                 timeout=10,
             )
             resp.raise_for_status()
@@ -400,6 +421,7 @@ def _get_elevation_cached(lat: float, lon: float) -> Optional[float]:
         resp = requests.get(
             "https://api.opentopodata.org/v1/ned10m,eudem25m,srtm30m",
             params={"locations": f"{lat},{lon}"},
+            headers={"User-Agent": USER_AGENT},
             timeout=10,
         )
         resp.raise_for_status()

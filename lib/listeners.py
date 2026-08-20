@@ -9,7 +9,7 @@ import pandas as pd
 import requests
 import sondehub
 
-from lib.data_utils import parse_sondehub_datetimes
+from lib.data_utils import parse_sondehub_datetimes, USER_AGENT
 
 
 def get_listener_stats(sondeid):
@@ -32,7 +32,12 @@ def get_listener_stats(sondeid):
     warning = None
 
     if len(df) == 0:
-        df = pd.DataFrame(requests.get(f"https://api.v2.sondehub.org/sonde/{sondeid}").json())
+        df = pd.DataFrame(
+            requests.get(
+                f"https://api.v2.sondehub.org/sonde/{sondeid}",
+                headers={"User-Agent": USER_AGENT},
+            ).json()
+        )
         warning = "Using live data API that only returns one listener per data point"
 
     if len(df) == 0:

@@ -32,7 +32,7 @@ import util
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../"))
 import lib.map_utils as map_utils
 from lib.map_utils import setup_contextily_cache
-from lib.data_utils import filter_real_flights, get_landing_rows
+from lib.data_utils import filter_real_flights, get_landing_rows, USER_AGENT
 
 matplotlib.use("Agg")
 
@@ -73,7 +73,7 @@ def reverse_geocode_place(lat: float, lon: float) -> GeocodedPlace:
     rounding would only help distinct sondes that landed near each other, at the
     risk of shifting the point to a neighboring address.
     """
-    geo = geocoder.osm([lat, lon], method="reverse", headers={"User-Agent": DEV_EMAIL})
+    geo = geocoder.osm([lat, lon], method="reverse", headers={"User-Agent": USER_AGENT})
     if not (geo and geo.county):
         return GeocodedPlace(place="", address="")
     place = ""

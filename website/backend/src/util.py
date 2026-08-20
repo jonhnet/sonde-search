@@ -9,7 +9,7 @@ from functools import lru_cache
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../"))
 from lib.map_utils import get_elevation
-from lib.data_utils import parse_sondehub_datetimes
+from lib.data_utils import parse_sondehub_datetimes, USER_AGENT
 
 # Module-level cache for singlesonde API requests
 SONDEHUB_ONESONDE_URL = "https://api.v2.sondehub.org/sonde/"
@@ -19,7 +19,7 @@ SONDEHUB_ONESONDE_URL = "https://api.v2.sondehub.org/sonde/"
 def _fetch_singlesonde_cached(serial: str):
     """Cached fetch of single sonde data from SondeHub API."""
     print(f"SondeHub API: fetching {serial} (not cached)")
-    response = requests.get(SONDEHUB_ONESONDE_URL + serial)
+    response = requests.get(SONDEHUB_ONESONDE_URL + serial, headers={"User-Agent": USER_AGENT})
     response.raise_for_status()
     return response.json()
 
@@ -122,7 +122,9 @@ class LiveSondeHub(SondeHubRetrieverBase):
         super(LiveSondeHub, self).__init__()
 
     def make_telemetry_request(self, params):
-        response = requests.get(self.SONDEHUB_DATA_URL, params=params)
+        response = requests.get(
+            self.SONDEHUB_DATA_URL, params=params, headers={"User-Agent": USER_AGENT}
+        )
         response.raise_for_status()
         return response.json(), pd.Timestamp.now("UTC")
 

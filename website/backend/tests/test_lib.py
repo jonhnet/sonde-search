@@ -9,6 +9,7 @@ import pandas as pd
 
 import lib.map_utils as map_utils
 from lib.map_utils import MapUtils, get_elevation, identify_ground_points
+from lib.data_utils import USER_AGENT
 from website.backend.src.util import FakeSondeHub, SondeHubRetrieverBase
 
 
@@ -212,6 +213,50 @@ class Test_AddBasemap:
         monkeypatch.setattr(map_utils.cx, "add_basemap", lambda *a, **k: calls.append(1))
         assert map_utils.add_basemap(ax=None, zoom=10) is True
         assert len(calls) == 1
+
+    def test_contextily_sends_our_user_agent(self):
+        """OSM serves an "Access blocked" placeholder to unidentified clients.
+
+        contextily's own default is "contextily-<random uuid>", regenerated
+        every process. The block arrives as HTTP 200 wrapping a valid PNG, so
+        nothing downstream can detect it -- identifying ourselves is the only
+        thing that prevents it.
+        """
+        assert map_utils.cx.tile.USER_AGENT == USER_AGENT
+        assert not USER_AGENT.startswith("contextily-")
+        # Must name the app and offer a way to reach whoever runs it.
+        assert "sonde-search" in USER_AGENT and "https://" in USER_AGENT
+
+    def test_does_not_pass_headers_to_add_basemap(self, monkeypatch):
+        """Setting the UA via headers= would silently orphan the whole tile cache.
+
+        contextily memoizes tiles with joblib keyed on the arguments to its
+        fetch function, headers included. Passing headers= changes every cache
+        key at once, stranding the ~170k already-cached tiles and re-fetching
+        them from OSM -- the bulk download their policy forbids. The UA must
+        travel via the module-level default instead, which is not an argument
+        and so is not part of the key.
+        """
+        captured = {}
+        monkeypatch.setattr(map_utils.cx, "add_basemap", lambda *a, **k: captured.update(k))
+        assert map_utils.add_basemap(ax=None, zoom=10) is True
+        assert "headers" not in captured
+
+    def test_user_agent_is_stable_across_processes(self):
+        """A UA that changes per run reads as evasion and gets blocked again."""
+        import subprocess
+
+        code = "import sys; sys.path.insert(0, '.'); from lib.data_utils import USER_AGENT; print(USER_AGENT)"
+        runs = {
+            subprocess.run(
+                [sys.executable, "-c", code],
+                capture_output=True,
+                text=True,
+                cwd=os.path.join(os.path.dirname(__file__), "../../.."),
+            ).stdout.strip()
+            for _ in range(2)
+        }
+        assert runs == {USER_AGENT}
 
     def test_retries_then_succeeds(self, monkeypatch):
         monkeypatch.setattr(map_utils.time, "sleep", lambda s: None)

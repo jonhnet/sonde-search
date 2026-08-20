@@ -2,6 +2,10 @@
 
 import pandas as pd
 
+# Identify ourselves to external services. Keep it stable and specific: OSM
+# blocks generic or per-run-random User-Agents (contextily's default) outright.
+USER_AGENT = "sonde-search (+https://github.com/jonhnet/sonde-search)"
+
 # Minimum peak altitude (meters) to be considered a real flight.
 # Rejects ground-based transmitters and bench tests.
 MIN_MAX_ALT = 5000

@@ -53,6 +53,7 @@ class SondesearchAPI:
     PREFERENCES = ("units", "tzname")
     VALID_UNITS = ("metric", "imperial")
     VERIFY_EMAIL_SUBJ = "Verify your email to receive sonde notifications"
+    USER_TOKEN_COOKIE = "notifier_user_token_v2"
 
     def __init__(self, global_config: GlobalConfig):
         self._g = global_config
@@ -97,10 +98,26 @@ class SondesearchAPI:
         return user_item["uuid"]
 
     def get_user_token_from_request(self):
-        if "notifier_user_token_v2" not in cherrypy.request.cookie:
+        if self.USER_TOKEN_COOKIE not in cherrypy.request.cookie:
             raise ClientError("no user token in request cookies")
 
-        return cherrypy.request.cookie["notifier_user_token_v2"].value
+        return cherrypy.request.cookie[self.USER_TOKEN_COOKIE].value
+
+    def _describe_client(self) -> str:
+        """A compact, greppable summary of who sent the current request.
+
+        Deliberately omits the cookie's value. This replaces logging the whole
+        header dict, which wrote live session tokens into the journal.
+
+        session= is the signal worth having: someone acting on their own
+        subscription arrives with a session cookie, while mail-security
+        scanners that follow unsubscribe links out of a message never carry
+        one. Grep session=no to separate automated traffic from real failures.
+        """
+        headers = cherrypy.request.headers
+        ip = headers.get("X-Forwarded-For") or headers.get("Remote-Addr", "?")
+        session = "yes" if self.USER_TOKEN_COOKIE in cherrypy.request.cookie else "no"
+        return f"ip={ip} session={session} ua={headers.get('User-Agent', '')!r}"
 
     def get_user_data(self):
         user_token = self.get_user_token_from_request()
@@ -334,7 +351,12 @@ class SondesearchAPI:
     # the full config after unsubscription has been processed.
     # If optional user token is given, ensure it matches.
     def _unsubscribe_common(self, uuid, user_token=None):
-        print(f"Unsubscribe headers: {cherrypy.request.headers}")
+        # DynamoDB refuses an empty key attribute, which used to surface as a
+        # 500 and a stack trace. A blank uuid is a malformed request, not a
+        # server fault, so answer 400 and keep the logs quiet.
+        if not uuid:
+            raise ClientError("unsubscribe request with an empty uuid")
+
         # Unsubscribe
         args = {
             "Key": {
@@ -364,9 +386,17 @@ class SondesearchAPI:
     @cherrypy.expose
     @cherrypy.tools.json_out()  # type: ignore[attr-defined]
     @allow_lectrobox_cors
-    def oneclick_unsubscribe(self, uuid):
+    def oneclick_unsubscribe(self, uuid=""):
+        # Nearly always an automated link fetch rather than a person failing to
+        # unsubscribe: mail-security scanners follow the unsubscribe link
+        # without its query string, so the page posts uuid= with no value.
+        # Defaulting the argument keeps a missing one a 400 as well, rather
+        # than the 404 CherryPy raises for an unbound parameter.
+        if not uuid:
+            raise ClientError(f"one-click unsubscribe with no uuid; {self._describe_client()}")
+
         res = self._unsubscribe_common(uuid)
-        print(f"one-click unsubscribe of subscription {uuid}")
+        print(f"one-click unsubscribe of subscription {uuid}; {self._describe_client()}")
         return {
             "success": True,
             "cancelled_sub_lat": float(res["cancelled_sub"]["lat"]),
@@ -380,7 +410,7 @@ class SondesearchAPI:
     @cherrypy.expose
     @cherrypy.tools.json_out()  # type: ignore[attr-defined]
     @allow_lectrobox_cors
-    def managed_unsubscribe(self, uuid):
+    def managed_unsubscribe(self, uuid=""):
         user_token = self.get_user_token_from_request()
         print(f"subscriber {user_token} unsubscribing from subscription {uuid}")
         self._unsubscribe_common(uuid, user_token=user_token)

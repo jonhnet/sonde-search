@@ -574,6 +574,44 @@ class Test_v2:
         assert resp5["subs"][0]["lat"] == sub2["data"]["lat"]
         assert resp5["subs"][0]["lon"] == sub2["data"]["lon"]
 
+    # A mail-security scanner following the unsubscribe link out of a message
+    # fetches it without its query string, so the page posts uuid= with no
+    # value. That used to reach DynamoDB, which rejects an empty key attribute,
+    # producing a 500 and a stack trace for what is a malformed request.
+    def test_oneclick_unsubscribe_empty_uuid_is_client_error(self):
+        resp = post("oneclick_unsubscribe", expected_status=400, data={"uuid": ""})
+        assert b"uuid" in resp.content
+        # The fingerprint that separates scanners from real failures.
+        assert b"session=no" in resp.content
+
+    def test_oneclick_unsubscribe_missing_uuid_is_client_error(self):
+        """A missing argument should also be a 400, not CherryPy's 404."""
+        post("oneclick_unsubscribe", expected_status=400, data={})
+
+    def test_managed_unsubscribe_empty_uuid_is_client_error(self):
+        addr = "emptyuuid@test.com"
+        user_token = self.apiserver.get_user_token_from_email(addr)
+        post(
+            "managed_unsubscribe",
+            expected_status=400,
+            data={"uuid": ""},
+            cookies={"notifier_user_token_v2": user_token},
+        )
+
+    def test_real_oneclick_unsubscribe_still_works(self):
+        """The guard must not break the genuine path -- it has real users."""
+        addr = "stillworks@test.com"
+        user_token = self.apiserver.get_user_token_from_email(addr)
+        sub = self.sub_args(user_token)
+        resp = post("subscribe", **sub).json()
+        uuid = resp["subs"][0]["uuid"]
+
+        done = post("oneclick_unsubscribe", data={"uuid": uuid}).json()
+        assert done["success"] is True
+
+        remaining = get("get_config", cookies={"notifier_user_token_v2": user_token}).json()
+        assert len(remaining["subs"]) == 0
+
     # Make sure we keep two accounts straight
     def test_two_accounts(self, server):
         # user 1

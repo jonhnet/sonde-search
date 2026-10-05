@@ -160,9 +160,11 @@ class MapUtils:
         avg_lon = ground_points["lon"].mean()
         avg_x, avg_y = self.to_mercator_xy(avg_lat, avg_lon)
 
-        # Calculate standard deviation in both degrees and meters
-        std_dev_lat = ground_points["lat"].std()
-        std_dev_lon = ground_points["lon"].std()
+        # Calculate standard deviation in both degrees and meters. Use population
+        # std (ddof=0) to match np.std below; pandas' default ddof=1 gives NaN
+        # for a single point.
+        std_dev_lat = ground_points["lat"].std(ddof=0)
+        std_dev_lon = ground_points["lon"].std(ddof=0)
 
         # Calculate standard deviation in meters
         # Since we're in mercator (meters), we can calculate std dev directly from distances
@@ -174,7 +176,7 @@ class MapUtils:
 
         # Calculate altitude statistics
         avg_alt = ground_points["alt"].mean()
-        std_dev_alt = ground_points["alt"].std()
+        std_dev_alt = ground_points["alt"].std(ddof=0)
 
         # Get ground elevation at the weighted average position
         ground_elev = get_elevation(avg_lat, avg_lon)

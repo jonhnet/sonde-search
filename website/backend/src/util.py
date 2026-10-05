@@ -15,6 +15,12 @@ from lib.data_utils import parse_sondehub_datetimes, USER_AGENT
 SONDEHUB_ONESONDE_URL = "https://api.v2.sondehub.org/sonde/"
 
 
+class SondeNotArchivedYet(Exception):
+    """The single-sonde endpoint redirects to an S3 history file that SondeHub
+    writes some time after landing; until then S3 answers 403. Retrying within
+    a run won't help, so callers should skip the sonde and try again later."""
+
+
 @lru_cache(maxsize=1000)
 def _fetch_singlesonde_cached(serial: str):
     """Cached fetch of single sonde data from SondeHub API."""
@@ -93,6 +99,14 @@ class SondeHubRetrieverBase:
                 else:
                     sondes, now = self.get_telemetry_once(params)
             except Exception as e:
+                if (
+                    "serial" in params
+                    and isinstance(e, requests.HTTPError)
+                    and e.response is not None
+                    and e.response.status_code == 403
+                ):
+                    raise SondeNotArchivedYet(params["serial"]) from e
+
                 if tries >= self.MAX_SONDEHUB_TRIES:
                     print(
                         f"Couldn't get sondehub data, even after {self.MAX_SONDEHUB_TRIES} tries!"

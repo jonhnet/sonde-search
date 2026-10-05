@@ -597,9 +597,16 @@ class EmailNotifier:
             # decide it from the whole trailing run of the detailed trace. We
             # reuse the trace to draw the map, so reported sondes aren't fetched
             # twice, and per-serial fetches are cached across subscribers.
-            flight, _ = self.retriever.get_sonde_data(
-                params={"duration": "1d", "serial": sonde["serial"]}
-            )
+            try:
+                flight, _ = self.retriever.get_sonde_data(
+                    params={"duration": "1d", "serial": sonde["serial"]}
+                )
+            except util.SondeNotArchivedYet:
+                print(
+                    f"{sub['email']}: Skipping sonde {sonde['serial']}; "
+                    f"history not archived yet, will retry next run"
+                )
+                continue
             ground_points = map_utils.identify_ground_points(flight)
 
             # if this sonde is still being tracked, do not report -- unless it's

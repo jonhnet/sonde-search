@@ -143,8 +143,9 @@ class EmailNotifier:
         ]
 
         # If the last receiver has a report lat/lon, plot a line from it to the
-        # landing point
-        if not pd.isna(landing["uploader_position"]):
+        # landing point. The column is absent entirely when no receiver of the
+        # flight reported a position, so use .get rather than indexing.
+        if not pd.isna(landing.get("uploader_position")):
             rx_lat, rx_lon = [float(f) for f in landing["uploader_position"].split(",")]
             rx_x, rx_y = self.map_utils.to_mercator_xy(rx_lat, rx_lon)
             ax.plot([rx_x, sonde_x], [rx_y, sonde_y], color="springgreen", marker="*")
